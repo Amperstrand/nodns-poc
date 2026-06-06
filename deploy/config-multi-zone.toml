@@ -1,0 +1,61 @@
+# NoDNS Bot — Multi-zone configuration
+# Deploy to /opt/nodns-bot/config.toml on VPS
+
+[server]
+bind = "127.0.0.1:9090"
+
+[nostr]
+relays = [
+    "wss://relay.damus.io",
+    "wss://nos.lol",
+    "wss://relay.nostr.band",
+    "wss://nostr.wine",
+]
+zone = "multi"
+reconnect_min = "1s"
+reconnect_max = "60s"
+
+# Three zones: nodns.shop (production), nostr.shop (new), cv (demo)
+[[dns.zones]]
+zone = "nodns.shop"
+knot_address = "127.0.0.1:5353"
+tsig_key_name = "nodns-bot."
+tsig_key_secret = "REPLACE_WITH_REAL_SECRET"
+tsig_algorithm = "hmac-sha256"
+
+[[dns.zones]]
+zone = "nostr.shop"
+knot_address = "127.0.0.1:5353"
+tsig_key_name = "nodns-bot."
+tsig_key_secret = "REPLACE_WITH_REAL_SECRET"
+tsig_algorithm = "hmac-sha256"
+
+[[dns.zones]]
+zone = "cv"
+knot_address = "127.0.0.1:5353"
+tsig_key_name = "nodns-bot."
+tsig_key_secret = "REPLACE_WITH_REAL_SECRET"
+tsig_algorithm = "hmac-sha256"
+
+[policy]
+max_records = 20
+rate_limit = 5
+allowed_types = ["A", "AAAA", "CNAME", "TXT", "MX"]
+block_private_ip = true
+max_txt_length = 512
+
+[store]
+path = "records.db"
+
+# Payment configuration (placeholder — Cashu verification coming soon)
+[payment]
+enabled = false
+required_sats = 250
+update_free = true
+
+# Registrar keys (bootstrap trust before any events are seen)
+# zone → nostr pubkey hex
+[registrar_keys]
+nodns.shop = "REPLACE_WITH_REAL_REGISTRAR_PUBKEY_HEX"
+nostr.shop = "REPLACE_WITH_REAL_REGISTRAR_PUBKEY_HEX"
+cv = "REPLACE_WITH_DEMO_REGISTRAR_PUBKEY_HEX"

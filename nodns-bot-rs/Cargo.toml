@@ -1,0 +1,43 @@
+[package]
+name = "nodns-bot"
+version = "0.1.0"
+edition = "2021"
+description = "NoDNS bot — resolves DNS records from Nostr events"
+
+[dependencies]
+# Nostr
+nostr-sdk = "0.39"
+
+# Cashu (CDK)
+cdk = "0.17.0-rc.3"
+cashu = "0.17.0-rc.3"
+
+# DNS (DDNS + TSIG)
+hickory-client = "0.25"
+
+# SQLite
+rusqlite = { version = "0.34", features = ["bundled"] }
+
+# Config
+serde = { version = "1", features = ["derive"] }
+toml = "0.8"
+
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+
+# HTTP (health endpoint)
+axum = "0.8"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["json"] }
+
+# Lightning (BOLT11 invoice decoding for zap verification)
+lightning-invoice = "0.33"
+
+# CLI
+clap = { version = "4", features = ["derive"] }
+
+# Utilities
+thiserror = "2"
+url = "2"

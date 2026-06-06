@@ -1,0 +1,49 @@
+# Dependencies
+node_modules/
+
+# Build artifacts
+nodns-bot-rs/target/
+nodns-bot/nodns-bot
+nodns-nameserver/bin/
+nodns-nameserver/dist/
+nodns-nameserver/build/
+
+# Rust
+*.swp
+*.swo
+
+# Go
+*.test
+*.out
+coverage.html
+vendor/
+
+# Database & logs
+*.db
+*.db-lock
+*.log
+
+# IDE
+.idea/
+.vscode/
+*~
+.DS_Store
+
+# Environment & secrets
+.env
+.env.local
+config.local.toml
+
+# Test artifacts
+test-results/
+.playwright-mcp/
+
+# OS
+Thumbs.db
+
+# Screenshots (generated during dev)
+*.png
+
+# OpenCode plans
+.omo/
+nodns-nameserver/

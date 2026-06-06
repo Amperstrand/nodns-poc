@@ -1,0 +1,37 @@
+; Zone file for nodns.shop
+; Managed by nodns-bot via DDNS (RFC 2136)
+; DO NOT edit manually — bot manages npub1* and delegated records
+
+$TTL 3600
+$ORIGIN nodns.shop.
+
+@       IN  SOA  ns1.nodns.shop. admin.nodns.shop. (
+            2025060501  ; serial
+            3600        ; refresh
+            900         ; retry
+            604800      ; expire
+            300         ; minimum
+        )
+
+; Nameservers
+@       IN  NS   ns1.nodns.shop.
+@       IN  NS   ns2.nodns.shop.
+@       IN  NS   puck.nether.net.
+
+; Glue records
+ns1     IN  A    46.224.104.12
+ns2     IN  A    46.224.104.12
+
+; Web server
+@       IN  A    46.224.104.12
+www     IN  A    46.224.104.12
+
+; NoDNS registrar key (bootstrap for delegation verification)
+; This is the Nostr pubkey authorized to sign delegation events for nodns.shop
+nodns-registrar IN TXT "nostr:npub1PLACEHOLDER_REPLACE_WITH_REAL_KEY"
+
+; Bot health check
+; health  IN  A    46.224.104.12
+
+; ---- Below this line: records managed by nodns-bot ----
+; npub1* and delegated domain records are added via DDNS

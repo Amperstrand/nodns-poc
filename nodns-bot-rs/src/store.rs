@@ -1,0 +1,594 @@
+//! SQLite persistence layer for processed events.
+//!
+//! Ported 1:1 from `nodns-bot/internal/store/sqlite.go`.
+//! Uses `rusqlite` with a `Mutex<Connection>` for `Send + Sync` safety.
+
+use std::sync::Mutex;
+use std::time::{SystemTime, UNIX_EPOCH};
+
+use rusqlite::{params, Connection, OptionalExtension};
+use thiserror::Error;
+use tracing::info;
+
+use crate::types::{DelegationRecord, EventRecord};
+
+// ---------------------------------------------------------------------------
+// Error type
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Error)]
+pub enum StoreError {
+    #[error("opening sqlite {path}: {source}")]
+    Open {
+        path: String,
+        source: rusqlite::Error,
+    },
+
+    #[error("setting WAL mode: {0}")]
+    WalMode(#[source] rusqlite::Error),
+
+    #[error("creating schema: {0}")]
+    Schema(#[source] rusqlite::Error),
+
+    #[error("saving event {0}: {1}")]
+    SaveEvent(String, #[source] rusqlite::Error),
+
+    #[error("marking event {0} deleted: {1}")]
+    MarkDeleted(String, #[source] rusqlite::Error),
+
+    #[error("getting event {0}: {1}")]
+    GetEvent(String, #[source] rusqlite::Error),
+
+    #[error("querying records for pubkey {0}: {1}")]
+    GetRecordsByPubkey(String, #[source] rusqlite::Error),
+
+    #[error("counting records for pubkey {0}: {1}")]
+    RecordCountByPubkey(String, #[source] rusqlite::Error),
+
+    #[error("counting recent events for pubkey {0}: {1}")]
+    EventsInLastMinute(String, #[source] rusqlite::Error),
+
+    #[error("getting last_seen: {0}")]
+    GetLastSeen(#[source] rusqlite::Error),
+
+    #[error("setting last_seen: {0}")]
+    SetLastSeen(#[source] rusqlite::Error),
+
+    #[error("listing all records: {0}")]
+    ListAllRecords(#[source] rusqlite::Error),
+
+    #[error("saving delegation {0}/{1}: {2}")]
+    SaveDelegation(String, String, #[source] rusqlite::Error),
+
+    #[error("getting delegation {0}/{1}: {2}")]
+    GetActiveDelegation(String, String, #[source] rusqlite::Error),
+
+    #[error("querying delegations for npub {0}: {1}")]
+    GetDelegationsByPubkey(String, #[source] rusqlite::Error),
+
+    #[error("saving registrar key for {0}: {1}")]
+    SaveRegistrarKey(String, #[source] rusqlite::Error),
+
+    #[error("getting registrar key for {0}: {1}")]
+    GetRegistrarKey(String, #[source] rusqlite::Error),
+
+    #[error("checking record existence: {0}")]
+    HasRecord(#[source] rusqlite::Error),
+
+    #[error("scanning record: {0}")]
+    ScanRecord(#[source] rusqlite::Error),
+
+    #[error("closing database: {0}")]
+    Close(#[source] rusqlite::Error),
+}
+
+// ---------------------------------------------------------------------------
+// Store
+// ---------------------------------------------------------------------------
+
+/// SQLite-backed store wrapping a `Mutex<Connection>` for thread safety.
+pub struct Store {
+    conn: Mutex<Connection>,
+}
+
+impl Store {
+    // -----------------------------------------------------------------------
+    // Construction
+    // -----------------------------------------------------------------------
+
+    /// Open (or create) the SQLite database at `path` and enable WAL mode.
+    pub fn new(path: &str) -> Result<Self, StoreError> {
+        let conn = Connection::open(path).map_err(|e| StoreError::Open {
+            path: path.to_string(),
+            source: e,
+        })?;
+
+        conn.execute_batch("PRAGMA journal_mode=WAL")
+            .map_err(StoreError::WalMode)?;
+
+        Ok(Self {
+            conn: Mutex::new(conn),
+        })
+    }
+
+    // -----------------------------------------------------------------------
+    // Schema
+    // -----------------------------------------------------------------------
+
+    /// Create the database schema if it does not already exist.
+    ///
+    /// Schema matches the Go version exactly: same table names, column names,
+    /// types, constraints, and indexes.
+    pub fn init(&self) -> Result<(), StoreError> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute_batch(SCHEMA)
+            .map_err(StoreError::Schema)?;
+        info!("database initialized");
+        Ok(())
+    }
+
+    // -----------------------------------------------------------------------
+    // Events
+    // -----------------------------------------------------------------------
+
+    /// Persist a processed event record (`INSERT OR REPLACE`).
+    pub fn save_event(
+        &self,
+        event_id: &str,
+        npub: &str,
+        pubkey: &str,
+        name: &str,
+        record_type: &str,
+        ttl: u32,
+        rdata: &str,
+        zone: &str,
+        created_at: i64,
+    ) -> Result<(), StoreError> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "INSERT OR REPLACE INTO events (event_id, npub, pubkey, name, record_type, ttl, rdata, zone, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            params![event_id, npub, pubkey, name, record_type, ttl, rdata, zone, created_at],
+        )
+        .map_err(|e| StoreError::SaveEvent(event_id.to_string(), e))?;
+        Ok(())
+    }
+
+    /// Soft-delete an event by setting `deleted = 1`.
+    pub fn mark_deleted(&self, event_id: &str) -> Result<(), StoreError> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "UPDATE events SET deleted = 1 WHERE event_id = ?1",
+            params![event_id],
+        )
+        .map_err(|e| StoreError::MarkDeleted(event_id.to_string(), e))?;
+        Ok(())
+    }
+
+    /// Retrieve a specific event by ID.  Returns `None` when no row matches.
+    pub fn get_event(&self, event_id: &str) -> Result<Option<EventRecord>, StoreError> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn
+            .prepare(
+                "SELECT event_id, npub, pubkey, name, record_type, ttl, rdata, zone, created_at, processed_at, deleted
+                 FROM events WHERE event_id = ?1",
+            )
+            .map_err(|e| StoreError::GetEvent(event_id.to_string(), e))?;
+
+        let result = stmt
+            .query_row(params![event_id], |row| scan_event_row(row))
+            .optional()
+            .map_err(|e| StoreError::GetEvent(event_id.to_string(), e))?;
+
+        Ok(result)
+    }
+
+    /// Return all non-deleted records for a pubkey.
+    pub fn get_records_by_pubkey(&self, pubkey: &str) -> Result<Vec<EventRecord>, StoreError> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn
+            .prepare(
+                "SELECT event_id, npub, pubkey, name, record_type, ttl, rdata, zone, created_at, processed_at, deleted
+                 FROM events WHERE pubkey = ?1 AND deleted = 0",
+            )
+            .map_err(|e| StoreError::GetRecordsByPubkey(pubkey.to_string(), e))?;
+
+        let records = stmt
+            .query_map(params![pubkey], |row| scan_event_row(row))
+            .map_err(|e| StoreError::GetRecordsByPubkey(pubkey.to_string(), e))?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(StoreError::ScanRecord)?;
+
+        Ok(records)
+    }
+
+    /// Return the count of active (non-deleted) records for a pubkey.
+    pub fn record_count_by_pubkey(&self, pubkey: &str) -> Result<usize, StoreError> {
+        let conn = self.conn.lock().unwrap();
+        let count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM events WHERE pubkey = ?1 AND deleted = 0",
+                params![pubkey],
+                |row| row.get(0),
+            )
+            .map_err(|e| StoreError::RecordCountByPubkey(pubkey.to_string(), e))?;
+
+        Ok(count as usize)
+    }
+
+    /// Return the number of events processed for a pubkey in the last 60 seconds.
+    pub fn events_in_last_minute(&self, pubkey: &str) -> Result<usize, StoreError> {
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs() as i64;
+        let cutoff = now - 60;
+
+        let conn = self.conn.lock().unwrap();
+        let count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM events WHERE pubkey = ?1 AND processed_at > ?2",
+                params![pubkey, cutoff],
+                |row| row.get(0),
+            )
+            .map_err(|e| StoreError::EventsInLastMinute(pubkey.to_string(), e))?;
+
+        Ok(count as usize)
+    }
+
+    // -----------------------------------------------------------------------
+    // Meta
+    // -----------------------------------------------------------------------
+
+    /// Get the `last_seen` timestamp from the `meta` table.
+    /// Returns `0` when no row exists.
+    pub fn get_last_seen(&self) -> Result<i64, StoreError> {
+        let conn = self.conn.lock().unwrap();
+        let val: Option<String> = conn
+            .query_row(
+                "SELECT value FROM meta WHERE key = 'last_seen'",
+                [],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(StoreError::GetLastSeen)?
+            .flatten();
+
+        let ts = match val {
+            Some(s) => s.parse::<i64>().unwrap_or(0),
+            None => 0,
+        };
+        Ok(ts)
+    }
+
+    /// Update the `last_seen` timestamp in the `meta` table.
+    pub fn set_last_seen(&self, ts: i64) -> Result<(), StoreError> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "INSERT OR REPLACE INTO meta (key, value) VALUES ('last_seen', ?1)",
+            params![ts.to_string()],
+        )
+        .map_err(StoreError::SetLastSeen)?;
+        Ok(())
+    }
+
+    // -----------------------------------------------------------------------
+    // Lifecycle
+    // -----------------------------------------------------------------------
+
+    /// Close the database connection.
+    pub fn close(self) -> Result<(), StoreError> {
+        let conn = self.conn.into_inner().unwrap();
+        conn.close().map_err(|(_, e)| StoreError::Close(e))
+    }
+
+    // -----------------------------------------------------------------------
+    // Listing
+    // -----------------------------------------------------------------------
+
+    /// Return all non-deleted records ordered by `created_at DESC`.
+    pub fn list_all_records(&self) -> Result<Vec<EventRecord>, StoreError> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn
+            .prepare(
+                "SELECT event_id, npub, pubkey, name, record_type, ttl, rdata, zone, created_at, processed_at, deleted
+                 FROM events WHERE deleted = 0
+                 ORDER BY created_at DESC",
+            )
+            .map_err(StoreError::ListAllRecords)?;
+
+        let records = stmt
+            .query_map([], |row| scan_event_row(row))
+            .map_err(StoreError::ListAllRecords)?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(StoreError::ScanRecord)?;
+
+        Ok(records)
+    }
+
+    // -----------------------------------------------------------------------
+    // Delegations
+    // -----------------------------------------------------------------------
+
+    /// Store a delegation event (`INSERT OR REPLACE`).
+    pub fn save_delegation(
+        &self,
+        event_id: &str,
+        domain: &str,
+        zone: &str,
+        npub: &str,
+        pubkey: &str,
+        valid_from: i64,
+        valid_until: i64,
+        renew_by: i64,
+        registrar_pubkey: &str,
+    ) -> Result<(), StoreError> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "INSERT OR REPLACE INTO delegations (event_id, domain, zone, npub, pubkey, valid_from, valid_until, renew_by, registrar_pubkey, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, unixepoch())",
+            params![event_id, domain, zone, npub, pubkey, valid_from, valid_until, renew_by, registrar_pubkey],
+        )
+        .map_err(|e| StoreError::SaveDelegation(domain.to_string(), zone.to_string(), e))?;
+
+        info!(
+            domain = domain,
+            zone = zone,
+            npub = npub,
+            "delegation saved"
+        );
+        Ok(())
+    }
+
+    /// Return the active (valid, non-expired) delegation for a domain in a zone.
+    /// Returns `None` when no matching delegation exists.
+    pub fn get_active_delegation(
+        &self,
+        domain: &str,
+        zone: &str,
+    ) -> Result<Option<DelegationRecord>, StoreError> {
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs() as i64;
+
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn
+            .prepare(
+                "SELECT event_id, domain, zone, npub, pubkey, valid_from, valid_until, renew_by, registrar_pubkey, created_at, processed_at
+                 FROM delegations
+                 WHERE domain = ?1 AND zone = ?2 AND valid_from <= ?3 AND valid_until > ?4
+                 ORDER BY created_at DESC
+                 LIMIT 1",
+            )
+            .map_err(|e| StoreError::GetActiveDelegation(domain.to_string(), zone.to_string(), e))?;
+
+        let result = stmt
+            .query_row(params![domain, zone, now, now], |row| scan_delegation_row(row))
+            .optional()
+            .map_err(|e| StoreError::GetActiveDelegation(domain.to_string(), zone.to_string(), e))?;
+
+        Ok(result)
+    }
+
+    /// Return all active delegations for an npub.
+    pub fn get_delegations_by_pubkey(
+        &self,
+        npub: &str,
+    ) -> Result<Vec<DelegationRecord>, StoreError> {
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs() as i64;
+
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn
+            .prepare(
+                "SELECT event_id, domain, zone, npub, pubkey, valid_from, valid_until, renew_by, registrar_pubkey, created_at, processed_at
+                 FROM delegations
+                 WHERE npub = ?1 AND valid_from <= ?2 AND valid_until > ?3
+                 ORDER BY created_at DESC",
+            )
+            .map_err(|e| StoreError::GetDelegationsByPubkey(npub.to_string(), e))?;
+
+        let records = stmt
+            .query_map(params![npub, now, now], |row| scan_delegation_row(row))
+            .map_err(|e| StoreError::GetDelegationsByPubkey(npub.to_string(), e))?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(StoreError::ScanRecord)?;
+
+        Ok(records)
+    }
+
+    // -----------------------------------------------------------------------
+    // Registrar keys
+    // -----------------------------------------------------------------------
+
+    /// Store the registrar pubkey for a zone (`INSERT OR REPLACE`).
+    pub fn save_registrar_key(
+        &self,
+        zone: &str,
+        pubkey_hex: &str,
+        npub: &str,
+        source: &str,
+        event_id: &str,
+    ) -> Result<(), StoreError> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "INSERT OR REPLACE INTO registrar_keys (zone, pubkey_hex, npub, source, event_id, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, unixepoch())",
+            params![zone, pubkey_hex, npub, source, event_id],
+        )
+        .map_err(|e| StoreError::SaveRegistrarKey(zone.to_string(), e))?;
+
+        info!(zone = zone, pubkey = pubkey_hex, "registrar key saved");
+        Ok(())
+    }
+
+    /// Return the registrar pubkey hex for a zone, or empty string if not found.
+    pub fn get_registrar_key(&self, zone: &str) -> Result<String, StoreError> {
+        let conn = self.conn.lock().unwrap();
+        let result: Option<String> = conn
+            .query_row(
+                "SELECT pubkey_hex FROM registrar_keys WHERE zone = ?1",
+                params![zone],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(|e| StoreError::GetRegistrarKey(zone.to_string(), e))?
+            .flatten();
+
+        Ok(result.unwrap_or_default())
+    }
+
+    // -----------------------------------------------------------------------
+    // Record existence check
+    // -----------------------------------------------------------------------
+
+    /// Check if a record already exists for the given npub+type+name+zone.
+    pub fn has_record(
+        &self,
+        npub: &str,
+        record_type: &str,
+        name: &str,
+        zone: &str,
+    ) -> Result<bool, StoreError> {
+        let conn = self.conn.lock().unwrap();
+        let count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM events
+                 WHERE npub = ?1 AND record_type = ?2 AND name = ?3 AND zone = ?4 AND deleted = 0",
+                params![npub, record_type, name, zone],
+                |row| row.get(0),
+            )
+            .map_err(StoreError::HasRecord)?;
+
+        Ok(count > 0)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Schema constant — matches Go exactly
+// ---------------------------------------------------------------------------
+
+const SCHEMA: &str = r#"
+    CREATE TABLE IF NOT EXISTS events (
+        event_id TEXT NOT NULL,
+        npub TEXT NOT NULL,
+        pubkey TEXT NOT NULL,
+        name TEXT NOT NULL,
+        record_type TEXT NOT NULL,
+        ttl INTEGER NOT NULL,
+        rdata TEXT NOT NULL,
+        zone TEXT NOT NULL DEFAULT 'nodns.shop',
+        created_at INTEGER NOT NULL,
+        processed_at INTEGER NOT NULL DEFAULT (unixepoch()),
+        deleted INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (event_id, record_type, name)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_events_pubkey ON events(pubkey);
+    CREATE INDEX IF NOT EXISTS idx_events_pubkey_type ON events(pubkey, record_type);
+    CREATE INDEX IF NOT EXISTS idx_events_created ON events(created_at);
+
+    CREATE TABLE IF NOT EXISTS meta (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+    );
+
+    INSERT OR IGNORE INTO meta (key, value) VALUES ('last_seen', '0');
+
+    CREATE TABLE IF NOT EXISTS delegations (
+        event_id TEXT NOT NULL,
+        domain TEXT NOT NULL,
+        zone TEXT NOT NULL,
+        npub TEXT NOT NULL,
+        pubkey TEXT NOT NULL,
+        valid_from INTEGER NOT NULL,
+        valid_until INTEGER NOT NULL,
+        renew_by INTEGER NOT NULL,
+        registrar_pubkey TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        processed_at INTEGER NOT NULL DEFAULT (unixepoch()),
+        PRIMARY KEY (domain, zone)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_delegations_zone ON delegations(zone);
+    CREATE INDEX IF NOT EXISTS idx_delegations_npub ON delegations(npub);
+
+    CREATE TABLE IF NOT EXISTS registrar_keys (
+        zone TEXT PRIMARY KEY,
+        pubkey_hex TEXT NOT NULL,
+        npub TEXT NOT NULL,
+        source TEXT NOT NULL DEFAULT 'nostr',
+        event_id TEXT,
+        updated_at INTEGER NOT NULL DEFAULT (unixepoch())
+    );
+"#;
+
+// ---------------------------------------------------------------------------
+// Row scanners
+// ---------------------------------------------------------------------------
+
+/// Scan a single `events` row into an `EventRecord`.
+fn scan_event_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<EventRecord> {
+    let deleted: i32 = row.get(10)?;
+    let processed_at: i64 = row.get(9)?;
+
+    Ok(EventRecord {
+        event_id: row.get(0)?,
+        npub: row.get(1)?,
+        pubkey: row.get(2)?,
+        name: row.get(3)?,
+        record_type: row.get(4)?,
+        ttl: row.get(5)?,
+        rdata: row.get(6)?,
+        zone: row.get(7)?,
+        created_at: row.get(8)?,
+        processed_at,
+        deleted: deleted != 0,
+    })
+}
+
+/// Scan a single `delegations` row into a `DelegationRecord`.
+fn scan_delegation_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<DelegationRecord> {
+    Ok(DelegationRecord {
+        event_id: row.get(0)?,
+        domain: row.get(1)?,
+        zone: row.get(2)?,
+        npub: row.get(3)?,
+        pubkey: row.get(4)?,
+        valid_from: row.get(5)?,
+        valid_until: row.get(6)?,
+        renew_by: row.get(7)?,
+        registrar_pubkey: row.get(8)?,
+        created_at: row.get(9)?,
+        processed_at: row.get(10)?,
+    })
+}
+
+// ---------------------------------------------------------------------------
+// Utility: get_zone_for_domain (ported from Go)
+// ---------------------------------------------------------------------------
+
+/// Determine which configured zone a domain belongs to.
+///
+/// Returns `(prefix, zone, found)`:
+/// - `prefix` is the subdomain part before the zone suffix.
+/// - `zone` is the matching zone name.
+/// - `found` is `true` when a zone matched.
+pub fn get_zone_for_domain<'a>(domain: &'a str, zones: &'a [String]) -> (&'a str, &'a str, bool) {
+    let domain = domain.trim_end_matches('.');
+    for zone in zones {
+        let suffix = format!(".{zone}");
+        if domain.ends_with(&suffix) {
+            let prefix = &domain[..domain.len() - suffix.len()];
+            return (prefix, zone.as_str(), true);
+        }
+        if domain == zone.as_str() {
+            return ("", zone.as_str(), true);
+        }
+    }
+    ("", "", false)
+}
+
