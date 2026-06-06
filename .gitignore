@@ -33,6 +33,8 @@ vendor/
 .env
 .env.local
 config.local.toml
+nodns-bot/config.toml
+nodns-bot-rs/config.toml
 
 # Test artifacts
 test-results/

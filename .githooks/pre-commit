@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# Block commits containing secrets detected by gitleaks.
+# To bypass in emergencies (NOT recommended): git commit --no-verify
+set -e
+
+if ! command -v gitleaks >/dev/null 2>&1; then
+    echo "[pre-commit] gitleaks not installed; skipping secret scan."
+    echo "[pre-commit] Install with: brew install gitleaks"
+    exit 0
+fi
+
+echo "[pre-commit] Scanning staged changes for secrets..."
+if ! gitleaks git --staged --exit-code 1; then
+    echo ""
+    echo "[pre-commit] FAILED: secrets detected in staged changes."
+    echo "[pre-commit] Remove the secret and re-stage, or use --no-verify to bypass."
+    exit 1
+fi
+echo "[pre-commit] OK - no secrets detected."
