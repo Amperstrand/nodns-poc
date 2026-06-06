@@ -15,6 +15,10 @@ cashu = "0.17.0-rc.3"
 # DNS (DDNS + TSIG)
 hickory-client = "0.25"
 
+# Base64 decoding for TSIG secrets (Knot/BIND store HMAC keys base64-encoded
+# per RFC 4648; hickory's TSigner::new expects raw bytes, so we must decode).
+base64 = "0.22"
+
 # SQLite
 rusqlite = { version = "0.34", features = ["bundled"] }
 

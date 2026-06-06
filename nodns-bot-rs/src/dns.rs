@@ -10,6 +10,8 @@ use std::net::SocketAddr;
 use std::str::FromStr;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use base64::Engine;
+use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
 use hickory_client::proto::dnssec::rdata::tsig::TsigAlgorithm;
 use hickory_client::proto::dnssec::tsig::TSigner;
 use hickory_client::proto::op::{Message, MessageType, OpCode, Query, ResponseCode};
@@ -259,14 +261,16 @@ impl Updater {
             .parse()
             .map_err(|e| DnsError::Dns(format!("invalid knot address: {e}")))?;
 
-        // fudge = 300 matches the Go version's hardcoded value.
-        let tsig_signer = TSigner::new(
-            cfg.tsig_key_secret.as_bytes().to_vec(),
-            algorithm,
-            signer_name,
-            300,
-        )
-        .map_err(|e| DnsError::Dns(format!("TSIG signer creation failed: {e}")))?;
+        let secret_bytes = BASE64_STANDARD
+            .decode(cfg.tsig_key_secret.trim())
+            .map_err(|e| {
+                DnsError::Dns(format!(
+                    "TSIG secret must be base64-encoded (Knot/BIND format): {e}"
+                ))
+            })?;
+
+        let tsig_signer = TSigner::new(secret_bytes, algorithm, signer_name, 300)
+            .map_err(|e| DnsError::Dns(format!("TSIG signer creation failed: {e}")))?;
 
         Ok(Self {
             knot_addr,
