@@ -4,6 +4,7 @@ node_modules/
 # Build artifacts
 nodns-bot-rs/target/
 nodns-bot/nodns-bot
+nodns-bot-archive/nodns-bot
 nodns-nameserver/bin/
 nodns-nameserver/dist/
 nodns-nameserver/build/

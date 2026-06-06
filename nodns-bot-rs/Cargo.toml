@@ -36,12 +36,8 @@ axum = "0.8"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["json"] }
 
-# Lightning (BOLT11 invoice decoding for zap verification)
-lightning-invoice = "0.33"
-
 # CLI
 clap = { version = "4", features = ["derive"] }
 
 # Utilities
 thiserror = "2"
-url = "2"
