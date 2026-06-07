@@ -64,6 +64,12 @@ pub struct Config {
 
     #[serde(default)]
     pub payment: PaymentConfig,
+
+    #[serde(default)]
+    pub dnssec_derivation: DnssecDerivationConfig,
+
+    #[serde(default)]
+    pub acme: AcmeConfig,
 }
 
 // ---------------------------------------------------------------------------
@@ -278,6 +284,32 @@ impl Default for PaymentConfig {
             required_sats: 250,
             update_free: true,
             cashu_mint_url: String::new(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct DnssecDerivationConfig {
+    #[serde(default)]
+    pub enabled: bool,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default)]
+pub struct AcmeConfig {
+    pub enabled: bool,
+    pub directory_url: String,
+    pub contact_email: String,
+    pub challenge_ttl: u32,
+}
+
+impl Default for AcmeConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            directory_url: "https://acme-staging-v02.api.letsencrypt.org/directory".to_string(),
+            contact_email: String::new(),
+            challenge_ttl: 300,
         }
     }
 }

@@ -86,6 +86,20 @@ pub struct DelegationRecord {
     pub processed_at: i64,
 }
 
+/// A stored ACME certificate order (maps to `acme_orders` table).
+#[derive(Debug, Clone)]
+pub struct AcmeOrder {
+    pub id: String,
+    pub domain: String,
+    pub npub: String,
+    pub status: String,
+    pub certificate_pem: Option<String>,
+    pub private_key_pem: Option<String>,
+    pub error: Option<String>,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
 /// Metrics tracked by the bot.
 #[derive(Debug, Default)]
 pub struct Metrics {

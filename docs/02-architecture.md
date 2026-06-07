@@ -2,34 +2,31 @@
 
 ## Design Principle: Zero Modifications to Existing DNS Infrastructure
 
-The entire approach is built on one constraint: ARME/DNS.PT should not need to change their existing Knot DNS setup. No plugins, no custom builds, no patches. The NoDNS layer is a separate daemon that feeds zone data into Knot through standard DNS protocols.
+The entire approach is built on one constraint: the DNS operator should not need to change their existing Knot DNS setup. No plugins, no custom builds, no patches. The NoDNS layer is a separate daemon that feeds zone data into Knot through standard DNS protocols.
 
 ## System Diagram
 
 ```
-                          ┌──────────────────────────────────────────┐
-                          │              VPS / Server                │
-                          │                                          │
-Nostr Relays              │  ┌─────────────┐     ┌───────────────┐  │
- wss://relay.damus.io     │  │  nodns-bot  │     │   Knot DNS    │  │
- wss://nos.lol        ────┼──│  (Go daemon) │────▶│               │  │
- wss://relay.nostr.band   │  │             │DDNS │  nostr.cv zone │──┼──▶ Internet
- wss://nostr.wine         │  │ - Subscribe │     │  DNSSEC signed │  │
-                          │  │ - Validate  │     │  RCU (lockless)│  │
-                          │  │ - Parse     │     └───────┬───────┘  │
-                          │  │ - knsupdate │             │NOTIFY    │
-                          │  └─────────────┘             │          │
-                          └──────────────────────────────┼──────────┘
-                                                        │
-                                                        ▼
-                                              ┌──────────────────┐
-                                              │   Secondaries    │
-                                              │ (via AXFR/IXFR)  │
-                                              │ - DNS.PT servers │
-                                              │ - AFNIC          │
-                                              │ - ISC            │
-                                              │ - Netnod anycast │
-                                              └──────────────────┘
+                           ┌──────────────────────────────────────────┐
+                           │              VPS / Server                │
+                           │                                          │
+ Nostr Relays              │  ┌─────────────┐     ┌───────────────┐  │
+  wss://relay.damus.io     │  │ nodns-bot-rs│     │   Knot DNS    │  │
+  wss://nos.lol        ────┼──│  (Rust)      │────▶│               │  │
+  wss://relay.nostr.band   │  │             │DDNS │ nodns.shop     │──┼──▶ Internet
+  wss://nostr.wine         │  │ - Subscribe │     │  DNSSEC signed │  │
+                           │  │ - Validate  │     │  RCU (lockless)│  │
+                           │  │ - Parse     │     └───────┬───────┘  │
+                           │  │ - DDNS push │             │NOTIFY    │
+                           │  └─────────────┘             │          │
+                           └──────────────────────────────┼──────────┘
+                                                         │
+                                                         ▼
+                                               ┌──────────────────┐
+                                               │   Secondaries    │
+                                               │ (via AXFR/IXFR)  │
+                                               │ - puck.nether.net│
+                                               └──────────────────┘
 ```
 
 ## Architecture Models Evaluated
@@ -44,7 +41,7 @@ Every DNS query triggers a Nostr relay lookup. This is what the existing `nodns-
 - DNS resolvers expect <100ms responses
 
 ### Model B: Nostr Listener Bot + DNS Server (Selected)
-A separate daemon subscribes to Nostr relays, parses events, and pushes DNS records to an authoritative server via DDNS.
+A separate Rust daemon subscribes to Nostr relays, parses events, and pushes DNS records to an authoritative server via DDNS.
 
 **Selected because**:
 - Zero modifications to existing DNS infrastructure

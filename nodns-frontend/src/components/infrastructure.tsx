@@ -1,0 +1,43 @@
+export function Infrastructure() {
+  const infraCards = [
+    {
+      title: "nodns-bot",
+      desc: "Rust daemon. Subscribes to Nostr relays, validates kind 11111 events, pushes to Knot DNS via DDNS.",
+    },
+    {
+      title: "Knot DNS",
+      desc: "Authoritative nameserver. Zone: nodns.shop. DDNS updates via RFC 2136.",
+    },
+    {
+      title: "Relay Pool",
+      desc: "relay.damus.io, nos.lol, nostr.wine, relay.ngit.dev, relay.tollgate.me. Events propagate across all relays.",
+    },
+    {
+      title: "SQLite",
+      desc: "Local state store. DNS records, delegations, registrar keys, rate limiting per npub.",
+    },
+  ];
+
+  return (
+    <section id="infra" className="px-6 py-16">
+      <div className="mx-auto max-w-[960px]">
+        <h2 className="mb-6 text-[1.75rem] font-bold tracking-tight">
+          Infrastructure
+        </h2>
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-3">
+          {infraCards.map((card) => (
+            <div
+              key={card.title}
+              className="rounded-lg border border-[#222] bg-[#141414] p-4"
+            >
+              <h4 className="mb-1 text-sm font-semibold text-[#e0e0e0]">
+                {card.title}
+              </h4>
+              <p className="mb-0 text-xs text-[#666]">{card.desc}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}

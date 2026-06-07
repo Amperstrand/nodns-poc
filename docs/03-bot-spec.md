@@ -1,8 +1,15 @@
 # nodns-bot Specification
 
+> **Note**: This document describes the original Go bot. The Go bot is archived in `nodns-bot-archive/`. The current production bot is written in Rust — see `nodns-bot-rs/src/` for the authoritative implementation. Key differences:
+> - Language: Rust (not Go)
+> - Dependencies: `nostr-sdk` 0.39, `hickory-client` 0.25, `cdk` 0.17 (Cashu), `rusqlite` 0.34, `axum` 0.8
+> - Module layout: `main.rs`, `auth.rs`, `config.rs`, `dns.rs`, `parser.rs`, `payment.rs`, `store.rs`, `subscriber.rs`, `types.rs`
+> - Cashu payment verification: Fully implemented using CDK crate (gated off by config)
+> - Multi-zone support: Via `[[dns.zones]]` TOML arrays with backward compatibility
+
 ## Overview
 
-`nodns-bot` is a Go daemon that bridges Nostr relays and Knot DNS. It subscribes to kind 11111 events, validates them against policy rules, and pushes DNS records to Knot via DDNS updates.
+`nodns-bot` is a daemon that bridges Nostr relays and Knot DNS. It subscribes to kind 11111 events, validates them against policy rules, and pushes DNS records to Knot via DDNS updates.
 
 ## Module Layout
 

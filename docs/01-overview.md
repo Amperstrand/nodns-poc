@@ -1,45 +1,48 @@
-# NoDNS for .cv — Project Overview
+# NoDNS — Project Overview
 
 ## What is NoDNS?
 
 NoDNS is a protocol that resolves DNS records from Nostr events. Instead of registering domains through a traditional registrar and configuring DNS through a control panel, users publish cryptographically-signed events to Nostr relays. A NoDNS-compatible nameserver reads these events and serves them as standard DNS responses.
 
-Protocol spec: https://relay.ngit.dev (repos: `no-dns`, `nodns-protocol-spec`)
+**Live at [nodns.shop](https://nodns.shop)** — DNSSEC-validated, Rust-powered, production-ready.
 
 Core event type: **kind 11111** — DNS record events with a fixed 11-element `record` tag.
 
-## Why .cv?
+Protocol spec: [11-protocol-spec-v0.1.md](11-protocol-spec-v0.1.md)
 
-- **Cape Verde's ccTLD**, operated by ARME (Agência Reguladora Multissetorial da Economia) with technical backend provided by DNS.PT
-- **Relaunched globally in 2024** for personal/CV websites
-- **ARME is open to innovation** — active talks about implementing NoDNS
-- **Small ccTLD** — ideal proving ground before scaling to larger TLDs
-- **DNSSEC in progress** — KSK+ZSK published (ECDSAP256SHA256), NSEC3 `1 0 0 -`, DS record pending in root zone via ICANN DNSSEC Roadshow
+## Current Status
 
-## DNS Infrastructure Fingerprint
+| Component | Status |
+|---|---|
+| **Rust bot** | Deployed, running as systemd service |
+| **Knot DNS** | Serving `nodns.shop` zone on `46.224.104.12` |
+| **DNSSEC** | Fully validated — `ad` flag confirmed on Google, Cloudflare, Quad9 |
+| **Frontend** | Monolithic HTML at nodns.shop (Next.js rebuild in progress) |
+| **Cashu payments** | Code complete, gated off pending mint configuration |
+| **Secondary DNS** | `puck.nether.net` (Michigan, USA) via AXFR/IXFR |
 
-| Server | IP | Software | Notes |
+## Infrastructure
+
+| Server | IP | Software | Role |
 |---|---|---|---|
-| `ns.dns.cv` | 41.221.192.220 | Unknown | Primary master, ARME facilities, Cape Verde |
-| `curiosity.dns.pt` | 193.137.12.78 | Knot DNS | DNS.PT primary |
-| `curiosity2.dns.pt` | 193.137.12.79 | Knot DNS | DNS.PT secondary |
-| `ns2.dns.pt` | 193.137.12.80 | Knot DNS | DNS.PT secondary |
-| `nsx.dns.pt` | 194.117.18.164 | Knot DNS | DNS.PT secondary |
-| `ns2.nic.fr` | 192.93.0.4 | Knot DNS | AFNIC secondary for .cv |
-| `ns3.nic.fr` | 192.134.0.49 | Knot DNS | AFNIC secondary for .cv |
-| `sns-pb.isc.org` | 192.5.4.1 | BIND 9 | ISC secondary for .cv |
-| `sec3.apnic.net` | 202.12.28.140 | Unknown | APNIC secondary for .cv |
-| `ns-ext.nlnetlabs.nl` | 194.0.28.53 | Unknown | NLnet Labs secondary for .cv |
-| `ns-yv.ipv4.zele.comm.cx` | 91.205.151.241 | Unknown | Secondary for .cv |
+| `ns1.nodns.shop` | 46.224.104.12 | Knot DNS 3.3.4 | Primary authoritative |
+| `puck.nether.net` | 204.42.254.5 | BIND | Secondary (AXFR) |
 
-**Key finding**: DNS.PT (the technical operator) uses Knot DNS across all their servers. Knot DNS has native DDNS support and RCU-based lock-free zone updates — ideal for dynamic Nostr-driven updates.
+Knot DNS uses RCU-based lock-free zone updates and automatic DNSSEC re-signing after every DDNS update.
 
 ## Project Goals
 
-1. **Demo**: Stand up `nostr.cv` as a delegated subdomain running NoDNS — prove the concept works without touching production `.cv` infrastructure
-2. **Integration path**: Define how ARME could integrate NoDNS natively into `.cv` zone management
-3. **Protocol compliance**: Implement the NoDNS protocol spec (kind 11111 events, 11-element record tags)
-4. **DNSSEC**: Sign the NoDNS zone, prepare for chain-of-trust when `.cv` DS lands in root
+1. **Production PoC**: `nodns.shop` as a live, DNSSEC-signed, Nostr-driven DNS zone
+2. **Polished demos**: Interactive web UI + CLI demos for mixed audiences
+3. **Protocol compliance**: Kind 11111 events with record, delegation, registrar, and payment tags
+4. **DNSSEC**: Full chain of trust (Root → .shop → nodns.shop) with `ad` flag
+5. **Open source**: Clean codebase, comprehensive docs, reproducible deployment
+
+## Future
+
+- `.cv` integration remains aspirational — see [10-cv-integration.md](10-cv-integration.md)
+- Custom name registration with Cashu payments — see [09-custom-names.md](09-custom-names.md)
+- SLIP-10 nsec→DNSSEC key derivation — see [15-nsec-to-dnssec-analysis.md](15-nsec-to-dnssec-analysis.md)
 
 ## Document Index
 
@@ -47,8 +50,11 @@ Core event type: **kind 11111** — DNS record events with a fixed 11-element `r
 |---|---|
 | [01-overview.md](01-overview.md) | This file — project context and goals |
 | [02-architecture.md](02-architecture.md) | System design, Knot DNS analysis, DDNS mechanism |
-| [03-bot-spec.md](03-bot-spec.md) | nodns-bot detailed specification |
-| [04-demo-setup.md](04-demo-setup.md) | Step-by-step demo setup for nostr.cv |
-| [05-arme-delegation.md](05-arme-delegation.md) | What ARME needs to do (delegation instructions) |
-| [06-rollout-phases.md](06-rollout-phases.md) | Phased rollout from demo to production |
-| [07-abuse-philosophy.md](07-abuse-philosophy.md) | Abuse handling philosophy |
+| [03-bot-spec.md](03-bot-spec.md) | Bot specification (Go — archived; see Rust source for current spec) |
+| [08-deployment-status.md](08-deployment-status.md) | VPS setup, zone file, propagation verification |
+| [09-custom-names.md](09-custom-names.md) | Custom name registration with Cashu payments |
+| [11-protocol-spec-v0.1.md](11-protocol-spec-v0.1.md) | Protocol specification v0.1 |
+| [12-dnssec-setup.md](12-dnssec-setup.md) | Production DNSSEC deployment reference |
+| [13-nostr-dnssec-derivation.md](13-nostr-dnssec-derivation.md) | SLIP-10 key derivation research |
+| [14-demo-recipes.md](14-demo-recipes.md) | 7 demo scripts with exact commands |
+| [15-nsec-to-dnssec-analysis.md](15-nsec-to-dnssec-analysis.md) | 5-approach nsec→DNSSEC tradeoff analysis |

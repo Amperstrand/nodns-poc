@@ -10,7 +10,7 @@ use rusqlite::{params, Connection, OptionalExtension};
 use thiserror::Error;
 use tracing::info;
 
-use crate::types::{DelegationRecord, EventRecord};
+use crate::types::{AcmeOrder, DelegationRecord, EventRecord};
 
 // ---------------------------------------------------------------------------
 // Error type
@@ -80,6 +80,27 @@ pub enum StoreError {
 
     #[error("closing database: {0}")]
     Close(#[source] rusqlite::Error),
+
+    #[error("saving ACME order {0}: {1}")]
+    SaveAcmeOrder(String, #[source] rusqlite::Error),
+
+    #[error("updating ACME order {0}: {1}")]
+    UpdateAcmeOrder(String, #[source] rusqlite::Error),
+
+    #[error("getting ACME order {0}: {1}")]
+    GetAcmeOrder(String, #[source] rusqlite::Error),
+
+    #[error("listing ACME orders for npub {0}: {1}")]
+    ListAcmeOrdersByNpub(String, #[source] rusqlite::Error),
+
+    #[error("scanning ACME order: {0}")]
+    ScanAcmeOrder(#[source] rusqlite::Error),
+
+    #[error("getting meta value: {0}")]
+    GetMeta(#[source] rusqlite::Error),
+
+    #[error("setting meta value: {0}")]
+    SetMeta(#[source] rusqlite::Error),
 }
 
 // ---------------------------------------------------------------------------
@@ -465,6 +486,107 @@ impl Store {
 
         Ok(count > 0)
     }
+
+    // -----------------------------------------------------------------------
+    // ACME orders
+    // -----------------------------------------------------------------------
+
+    pub fn save_acme_order(
+        &self,
+        id: &str,
+        domain: &str,
+        npub: &str,
+        status: &str,
+    ) -> Result<(), StoreError> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "INSERT INTO acme_orders (id, domain, npub, status) VALUES (?1, ?2, ?3, ?4)",
+            params![id, domain, npub, status],
+        )
+        .map_err(|e| StoreError::SaveAcmeOrder(id.to_string(), e))?;
+        Ok(())
+    }
+
+    pub fn update_acme_order_status(
+        &self,
+        id: &str,
+        status: &str,
+        certificate_pem: Option<&str>,
+        private_key_pem: Option<&str>,
+        error: Option<&str>,
+    ) -> Result<(), StoreError> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "UPDATE acme_orders SET status = ?1, certificate_pem = ?2, private_key_pem = ?3, error = ?4, updated_at = unixepoch() WHERE id = ?5",
+            params![status, certificate_pem, private_key_pem, error, id],
+        )
+        .map_err(|e| StoreError::UpdateAcmeOrder(id.to_string(), e))?;
+        Ok(())
+    }
+
+    pub fn get_acme_order(&self, id: &str) -> Result<Option<AcmeOrder>, StoreError> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, domain, npub, status, certificate_pem, private_key_pem, error, created_at, updated_at
+                 FROM acme_orders WHERE id = ?1",
+            )
+            .map_err(|e| StoreError::GetAcmeOrder(id.to_string(), e))?;
+
+        let result = stmt
+            .query_row(params![id], |row| scan_acme_order_row(row))
+            .optional()
+            .map_err(|e| StoreError::GetAcmeOrder(id.to_string(), e))?;
+
+        Ok(result)
+    }
+
+    pub fn list_acme_orders_by_npub(&self, npub: &str) -> Result<Vec<AcmeOrder>, StoreError> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, domain, npub, status, certificate_pem, private_key_pem, error, created_at, updated_at
+                 FROM acme_orders WHERE npub = ?1
+                 ORDER BY created_at DESC",
+            )
+            .map_err(|e| StoreError::ListAcmeOrdersByNpub(npub.to_string(), e))?;
+
+        let records = stmt
+            .query_map(params![npub], |row| scan_acme_order_row(row))
+            .map_err(|e| StoreError::ListAcmeOrdersByNpub(npub.to_string(), e))?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(StoreError::ScanAcmeOrder)?;
+
+        Ok(records)
+    }
+
+    // -----------------------------------------------------------------------
+    // Meta (generic key/value)
+    // -----------------------------------------------------------------------
+
+    pub fn get_meta(&self, key: &str) -> Result<Option<String>, StoreError> {
+        let conn = self.conn.lock().unwrap();
+        let result: Option<String> = conn
+            .query_row(
+                "SELECT value FROM meta WHERE key = ?1",
+                params![key],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(StoreError::GetMeta)?
+            .flatten();
+        Ok(result)
+    }
+
+    pub fn set_meta(&self, key: &str, value: &str) -> Result<(), StoreError> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "INSERT OR REPLACE INTO meta (key, value) VALUES (?1, ?2)",
+            params![key, value],
+        )
+        .map_err(StoreError::SetMeta)?;
+        Ok(())
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -524,6 +646,20 @@ const SCHEMA: &str = r#"
         event_id TEXT,
         updated_at INTEGER NOT NULL DEFAULT (unixepoch())
     );
+
+    CREATE TABLE IF NOT EXISTS acme_orders (
+        id TEXT PRIMARY KEY,
+        domain TEXT NOT NULL,
+        npub TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pending',
+        certificate_pem TEXT,
+        private_key_pem TEXT,
+        error TEXT,
+        created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+        updated_at INTEGER NOT NULL DEFAULT (unixepoch())
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_acme_orders_npub ON acme_orders(npub);
 "#;
 
 // ---------------------------------------------------------------------------
@@ -564,6 +700,20 @@ fn scan_delegation_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<DelegationRe
         registrar_pubkey: row.get(8)?,
         created_at: row.get(9)?,
         processed_at: row.get(10)?,
+    })
+}
+
+fn scan_acme_order_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<AcmeOrder> {
+    Ok(AcmeOrder {
+        id: row.get(0)?,
+        domain: row.get(1)?,
+        npub: row.get(2)?,
+        status: row.get(3)?,
+        certificate_pem: row.get(4)?,
+        private_key_pem: row.get(5)?,
+        error: row.get(6)?,
+        created_at: row.get(7)?,
+        updated_at: row.get(8)?,
     })
 }
 

@@ -1,6 +1,9 @@
+mod acme;
 mod auth;
 mod config;
 mod dns;
+mod dnssec_derivation;
+mod nip05;
 mod parser;
 mod payment;
 mod store;
@@ -13,11 +16,12 @@ use std::sync::atomic::{AtomicI64, Ordering};
 use std::time::Instant;
 
 use axum::extract::State as AxumState;
-use axum::response::Json;
+use axum::response::{IntoResponse, Json, Response};
+use axum::extract::Path;
 use clap::Parser;
 use nostr_sdk::nips::nip19::ToBech32;
 use nostr_sdk::Event;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tokio::signal;
 use tracing::{error, info, warn};
 
@@ -45,6 +49,8 @@ struct Cli {
 
 struct AppState {
     store: Arc<Store>,
+    nip05: Arc<nip05::Nip05State>,
+    acme: Option<Arc<acme::AcmeService>>,
     metrics: Metrics,
     start_time: Instant,
 }
@@ -99,6 +105,27 @@ struct RecordsResponse {
     count: usize,
 }
 
+#[derive(Deserialize)]
+struct AcmeOrderRequest {
+    domain: String,
+}
+
+#[derive(Serialize)]
+struct AcmeOrderResponse {
+    order_id: String,
+    status: String,
+}
+
+#[derive(Serialize)]
+struct AcmeCertResponse {
+    order_id: String,
+    status: String,
+    domain: String,
+    certificate_pem: Option<String>,
+    private_key_pem: Option<String>,
+    error: Option<String>,
+}
+
 // ---------------------------------------------------------------------------
 // Axum handlers
 // ---------------------------------------------------------------------------
@@ -142,6 +169,99 @@ async fn records_handler(AxumState(state): AxumState<Arc<AppState>>) -> Json<Rec
         Err(e) => {
             error!(error = %e, "failed to list records");
             Json(RecordsResponse { records: vec![], count: 0 })
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// ACME handlers
+// ---------------------------------------------------------------------------
+
+async fn acme_order_handler(
+    AxumState(state): AxumState<Arc<AppState>>,
+    Json(body): Json<AcmeOrderRequest>,
+) -> Response {
+    let Some(ref acme_service) = state.acme else {
+        return (
+            axum::http::StatusCode::SERVICE_UNAVAILABLE,
+            Json(serde_json::json!({"error": "ACME is disabled"})),
+        )
+            .into_response();
+    };
+
+    let domain = body.domain.trim().to_lowercase();
+
+    let records = match state.store.list_all_records() {
+        Ok(r) => r,
+        Err(e) => {
+            error!(error = %e, "failed to list records for ACME validation");
+            return (
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": "store error"})),
+            )
+                .into_response();
+        }
+    };
+
+    let domain_matches = records.iter().any(|r| {
+        let fqdn = build_fqdn(&r.npub, &r.name, &r.zone);
+        fqdn.trim_end_matches('.').eq_ignore_ascii_case(&domain)
+    });
+
+    if !domain_matches {
+        return (
+            axum::http::StatusCode::NOT_FOUND,
+            Json(serde_json::json!({"error": "domain not found in records"})),
+        )
+            .into_response();
+    }
+
+    let acme = acme_service.clone();
+    let domain_clone = domain.clone();
+    let order_id = uuid::Uuid::new_v4().to_string();
+    let resp_id = order_id.clone();
+
+    tokio::spawn(async move {
+        if let Err(e) = acme.request_certificate(&domain_clone, "api").await {
+            error!(error = %e, "ACME order failed");
+        }
+    });
+
+    info!(order_id = %order_id, domain = %domain, "ACME order accepted (background)");
+
+    Json(AcmeOrderResponse {
+        order_id: resp_id,
+        status: "pending".to_string(),
+    })
+    .into_response()
+}
+
+async fn acme_cert_handler(
+    AxumState(state): AxumState<Arc<AppState>>,
+    Path(id): Path<String>,
+) -> Response {
+    match state.store.get_acme_order(&id) {
+        Ok(Some(order)) => Json(AcmeCertResponse {
+            order_id: order.id,
+            status: order.status,
+            domain: order.domain,
+            certificate_pem: order.certificate_pem,
+            private_key_pem: order.private_key_pem,
+            error: order.error,
+        })
+        .into_response(),
+        Ok(None) => (
+            axum::http::StatusCode::NOT_FOUND,
+            Json(serde_json::json!({"error": "order not found"})),
+        )
+            .into_response(),
+        Err(e) => {
+            error!(error = %e, "failed to get ACME order");
+            (
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": "store error"})),
+            )
+                .into_response()
         }
     }
 }
@@ -195,9 +315,32 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     let updaters = Arc::new(updaters);
 
+    // ── ACME ──
+    let acme_service: Option<Arc<acme::AcmeService>> = if cfg.acme.enabled {
+        let zones = cfg.dns.zones.iter().map(|z| z.zone.clone()).collect();
+        let svc = Arc::new(acme::AcmeService::new(
+            cfg.acme.clone(),
+            updaters.clone(),
+            store.clone(),
+            zones,
+        ));
+        info!("ACME enabled, directory_url = {}", cfg.acme.directory_url);
+        Some(svc)
+    } else {
+        None
+    };
+
     // ── HTTP health server ──
+    let nip05_state = Arc::new(nip05::Nip05State {
+        store: store.clone(),
+        registrar_pubkeys: cfg.registrar_keys.clone(),
+        relays: cfg.nostr.relays.clone(),
+        zones: cfg.dns.zones.iter().map(|z| z.zone.clone()).collect(),
+    });
     let app_state = Arc::new(AppState {
         store: store.clone(),
+        nip05: nip05_state,
+        acme: acme_service,
         metrics: Metrics::default(),
         start_time: Instant::now(),
     });
@@ -205,8 +348,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let http_state = app_state.clone();
     let http_handle = tokio::spawn(async move {
         let app = axum::Router::new()
+            .route("/.well-known/nostr.json", axum::routing::get(nip05::nip05_handler))
             .route("/health", axum::routing::get(health_handler))
             .route("/api/records", axum::routing::get(records_handler))
+            .route("/api/acme/order", axum::routing::post(acme_order_handler))
+            .route("/api/acme/order/{id}", axum::routing::get(acme_cert_handler))
             .with_state(http_state);
         let listener = tokio::net::TcpListener::bind(&bind).await.unwrap();
         info!(bind = %bind, "health server listening");
