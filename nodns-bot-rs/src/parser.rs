@@ -5,13 +5,14 @@
 //! from Nostr event tags.
 
 use std::collections::HashSet;
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+use std::net::IpAddr;
+use std::str::FromStr;
 
 use nostr_sdk::prelude::*;
 use thiserror::Error;
 
 use crate::types::{
-    Delegation, DnsRecord, Payment, ParsedEvent, RegistrarKey, DEFAULT_TTL, KIND_DNS_RECORD,
+    Delegation, DeleteRequest, DnsRecord, Payment, ParsedEvent, RegistrarKey, DEFAULT_TTL, KIND_DNS_RECORD,
 };
 
 #[derive(Error, Debug)]
@@ -24,79 +25,36 @@ pub enum ParserError {
     TagError { index: usize, message: String },
     #[error("{0}")]
     Validation(String),
-    #[error("no recognized tags found (need record, delegation, or registrar)")]
+    #[error("no recognized tags found (need record, delete, delegation, or registrar)")]
     NoRecognizedTags,
     #[error("content must be empty string")]
     ContentNotEmpty,
     #[error("no record tags found")]
     NoRecordTags,
+    #[error("CNAME records cannot coexist with other record types at the same name")]
+    CannotCoexistWithCname,
 }
 
 /// Private/reserved IP networks that should be blocked.
-const PRIVATE_IPV4_NETS: &[(&str, u8)] = &[
-    ("10.0.0.0", 8),
-    ("172.16.0.0", 12),
-    ("192.168.0.0", 16),
-    ("127.0.0.0", 8),
-    ("169.254.0.0", 16),
-    ("0.0.0.0", 8),
-    ("100.64.0.0", 10),
+const PRIVATE_NETWORKS: &[&str] = &[
+    "10.0.0.0/8",
+    "172.16.0.0/12",
+    "192.168.0.0/16",
+    "127.0.0.0/8",
+    "169.254.0.0/16",
+    "0.0.0.0/8",
+    "100.64.0.0/10",
+    "fc00::/7",
+    "fe80::/10",
+    "::1/128",
 ];
-
-const PRIVATE_IPV6_NETS: &[(&str, u8)] = &[
-    ("fc00::", 7),  // Unique local addresses
-    ("fe80::", 10), // Link-local addresses
-    ("::1", 128),   // Loopback
-];
-
-/// Check if an IPv4 address is in a given CIDR network.
-fn ipv4_in_network(ip: Ipv4Addr, network_addr: &str, prefix_len: u8) -> bool {
-    let net_ip: Ipv4Addr = network_addr.parse().expect("valid IPv4");
-    if prefix_len == 0 {
-        return true;
-    }
-    let mask = if prefix_len >= 32 {
-        u32::MAX
-    } else {
-        !((1u32 << (32 - prefix_len)) - 1)
-    };
-    (u32::from(ip) & mask) == (u32::from(net_ip) & mask)
-}
-
-/// Check if an IPv6 address is in a given CIDR network.
-fn ipv6_in_network(ip: Ipv6Addr, network_addr: &str, prefix_len: u8) -> bool {
-    let net_ip: Ipv6Addr = network_addr.parse().expect("valid IPv6");
-    if prefix_len == 0 {
-        return true;
-    }
-    let mask = if prefix_len >= 128 {
-        u128::MAX
-    } else {
-        !((1u128 << (128 - prefix_len)) - 1)
-    };
-    (u128::from(ip) & mask) == (u128::from(net_ip) & mask)
-}
 
 /// Check if an IP address is in a private/reserved range.
 fn is_private_ip(ip: IpAddr) -> bool {
-    match ip {
-        IpAddr::V4(v4) => {
-            for &(addr, prefix) in PRIVATE_IPV4_NETS {
-                if ipv4_in_network(v4, addr, prefix) {
-                    return true;
-                }
-            }
-            false
-        }
-        IpAddr::V6(v6) => {
-            for &(addr, prefix) in PRIVATE_IPV6_NETS {
-                if ipv6_in_network(v6, addr, prefix) {
-                    return true;
-                }
-            }
-            false
-        }
-    }
+    PRIVATE_NETWORKS
+        .iter()
+        .filter_map(|cidr| ipnet::IpNet::from_str(cidr).ok())
+        .any(|net| net.contains(&ip))
 }
 
 /// Parse all tags and classify the event.
@@ -117,6 +75,7 @@ pub fn classify_event(
 
     let mut result = ParsedEvent {
         records: Vec::new(),
+        deletes: Vec::new(),
         delegation: None,
         registrar: None,
         payments: Vec::new(),
@@ -162,6 +121,13 @@ pub fn classify_event(
                 })?;
                 result.registrar = Some(r);
             }
+            "delete" => {
+                let del = parse_delete_tag(slice).map_err(|e| ParserError::TagError {
+                    index: i,
+                    message: e.to_string(),
+                })?;
+                result.deletes.push(del);
+            }
             _ => {}
         }
     }
@@ -173,10 +139,30 @@ pub fn classify_event(
     result.payments = payments;
 
     if result.records.is_empty()
+        && result.deletes.is_empty()
         && result.delegation.is_none()
         && result.registrar.is_none()
     {
         return Err(ParserError::NoRecognizedTags);
+    }
+
+    // RFC 1912: CNAME cannot coexist with other record types at the same name.
+    // We check per-name groups since each name forms its own RRset.
+    {
+        let mut names_with_cname: HashSet<&str> = HashSet::new();
+        let mut names_with_others: HashSet<&str> = HashSet::new();
+        for rec in &result.records {
+            if rec.record_type == "CNAME" {
+                names_with_cname.insert(&rec.name);
+            } else {
+                names_with_others.insert(&rec.name);
+            }
+        }
+        for name in &names_with_cname {
+            if names_with_others.contains(name) {
+                return Err(ParserError::CannotCoexistWithCname);
+            }
+        }
     }
 
     Ok(result)
@@ -273,6 +259,42 @@ pub fn parse_registrar_tag(tag: &[String]) -> Result<RegistrarKey, ParserError> 
     Ok(RegistrarKey {
         zone: tag[1].clone(),
         pubkey_hex: tag[2].clone(),
+    })
+}
+
+pub fn parse_delete_tag(tag: &[String]) -> Result<DeleteRequest, ParserError> {
+    if tag.len() < 3 {
+        return Err(ParserError::Validation(format!(
+            "delete tag must have 3 elements, got {}",
+            tag.len()
+        )));
+    }
+    if tag[0] != "delete" {
+        return Err(ParserError::Validation(
+            "first element must be 'delete'".to_string(),
+        ));
+    }
+    let rtype = tag[1].to_uppercase();
+    if rtype.is_empty() {
+        return Err(ParserError::Validation(
+            "delete record type cannot be empty".to_string(),
+        ));
+    }
+    let known = ["A", "AAAA", "CNAME", "TXT", "MX", "SRV", "NS", "PTR"];
+    if !known.contains(&rtype.as_str()) {
+        return Err(ParserError::Validation(format!(
+            "unsupported delete type: {}",
+            rtype
+        )));
+    }
+    let name = if tag[2].is_empty() {
+        "@".to_string()
+    } else {
+        tag[2].clone()
+    };
+    Ok(DeleteRequest {
+        record_type: rtype,
+        name,
     })
 }
 
@@ -376,6 +398,8 @@ fn parse_new_format(
         tag[2].clone()
     };
 
+    validate_dns_label(&name)?;
+
     let rdata = tag[4].clone();
 
     let mut ttl = DEFAULT_TTL;
@@ -428,6 +452,8 @@ fn parse_legacy_format(
         tag[2].clone()
     };
 
+    validate_dns_label(&name)?;
+
     // Reconstruct rdata from positions 3-9 (indices 3..=9) by joining non-empty values
     let rdata_parts: Vec<&str> = (3..=9).filter(|&i| !tag[i].is_empty()).map(|i| tag[i].as_str()).collect();
     let rdata = rdata_parts.join(" ");
@@ -456,6 +482,49 @@ fn parse_legacy_format(
     Ok(rec)
 }
 
+/// Validate a DNS label (the `name` field that becomes a subdomain label).
+///
+/// Returns Ok for "@" (apex) and empty strings. Otherwise enforces:
+/// - max 63 characters
+/// - only lowercase alphanumeric and hyphens
+/// - cannot start or end with a hyphen
+pub fn validate_dns_label(name: &str) -> Result<(), ParserError> {
+    if name == "@" || name.is_empty() {
+        return Ok(());
+    }
+    if name.len() > 63 {
+        return Err(ParserError::Validation(format!(
+            "DNS label too long: {} characters (max 63)",
+            name.len()
+        )));
+    }
+    if name.starts_with('-') {
+        return Err(ParserError::Validation(
+            "DNS label cannot start with a hyphen".to_string(),
+        ));
+    }
+    if name.ends_with('-') {
+        return Err(ParserError::Validation(
+            "DNS label cannot end with a hyphen".to_string(),
+        ));
+    }
+    for ch in name.chars() {
+        if !ch.is_ascii_lowercase() && !ch.is_ascii_digit() && ch != '-' {
+            if ch.is_ascii_uppercase() {
+                return Err(ParserError::Validation(format!(
+                    "DNS label must be lowercase, found uppercase: '{}'",
+                    ch
+                )));
+            }
+            return Err(ParserError::Validation(format!(
+                "DNS label contains invalid character: '{}'",
+                ch
+            )));
+        }
+    }
+    Ok(())
+}
+
 /// Perform type-specific validation on a parsed record.
 fn validate_record(
     rec: &DnsRecord,
@@ -481,19 +550,13 @@ fn validate_record(
 
     match rec.record_type.as_str() {
         "A" => {
-            let ip: IpAddr = rec
+            let a: hickory_proto::rr::rdata::A = rec
                 .rdata
                 .parse()
                 .map_err(|_| {
                     ParserError::Validation(format!("invalid IPv4 address: {}", rec.rdata))
                 })?;
-            if !ip.is_ipv4() {
-                return Err(ParserError::Validation(format!(
-                    "invalid IPv4 address: {}",
-                    rec.rdata
-                )));
-            }
-            if block_private_ip && is_private_ip(ip) {
+            if block_private_ip && is_private_ip(IpAddr::from(*a)) {
                 return Err(ParserError::Validation(format!(
                     "private IP address blocked: {}",
                     rec.rdata
@@ -501,13 +564,13 @@ fn validate_record(
             }
         }
         "AAAA" => {
-            let ip: IpAddr = rec
+            let aaaa: hickory_proto::rr::rdata::AAAA = rec
                 .rdata
                 .parse()
                 .map_err(|_| {
                     ParserError::Validation(format!("invalid IPv6 address: {}", rec.rdata))
                 })?;
-            if block_private_ip && is_private_ip(ip) {
+            if block_private_ip && is_private_ip(IpAddr::from(*aaaa)) {
                 return Err(ParserError::Validation(format!(
                     "private IP address blocked: {}",
                     rec.rdata
@@ -521,9 +584,34 @@ fn validate_record(
                     rec.record_type
                 )));
             }
+            rec.rdata
+                .parse::<hickory_proto::rr::domain::Name>()
+                .map_err(|_| {
+                    ParserError::Validation(format!(
+                        "invalid {} domain name: {}",
+                        rec.record_type, rec.rdata
+                    ))
+                })?;
         }
         "TXT" => {
-            // Any content allowed, length already checked above
+            if rec.name == "_dmarc" {
+                return Err(ParserError::Validation(
+                    "TXT record with name '_dmarc' is reserved (DMARC spoofing protection)"
+                        .to_string(),
+                ));
+            }
+            if rec.name.starts_with("_domainkey") {
+                return Err(ParserError::Validation(
+                    "TXT record with name starting with '_domainkey' is reserved (DKIM spoofing protection)"
+                        .to_string(),
+                ));
+            }
+            if rec.name == "@" && rec.rdata.trim().starts_with("v=spf1") {
+                return Err(ParserError::Validation(
+                    "TXT record at apex with SPF data is reserved (SPF spoofing protection)"
+                        .to_string(),
+                ));
+            }
         }
         "MX" => {
             if fields.len() < 2 {
@@ -534,6 +622,14 @@ fn validate_record(
             let _priority: u16 = fields[0].parse().map_err(|_| {
                 ParserError::Validation(format!("invalid MX priority: {}", fields[0]))
             })?;
+            fields[1]
+                .parse::<hickory_proto::rr::domain::Name>()
+                .map_err(|_| {
+                    ParserError::Validation(format!(
+                        "invalid MX exchange domain: {}",
+                        fields[1]
+                    ))
+                })?;
         }
         "SRV" => {
             if fields.len() < 4 {
@@ -549,6 +645,14 @@ fn validate_record(
                     ))
                 })?;
             }
+            fields[3]
+                .parse::<hickory_proto::rr::domain::Name>()
+                .map_err(|_| {
+                    ParserError::Validation(format!(
+                        "invalid SRV target domain: {}",
+                        fields[3]
+                    ))
+                })?;
         }
         _ => {
             return Err(ParserError::Validation(format!(
@@ -798,5 +902,305 @@ mod tests {
         assert_eq!(payments[0].token, "receipt_event_id");
         assert_eq!(payments[0].mint_url, "");
         assert_eq!(payments[0].amount, 500);
+    }
+
+    #[test]
+    fn test_parse_delete_tag_valid() {
+        let tag: Vec<String> = vec![
+            "delete".to_string(),
+            "A".to_string(),
+            "".to_string(),
+        ];
+        let del = parse_delete_tag(&tag).unwrap();
+        assert_eq!(del.record_type, "A");
+        assert_eq!(del.name, "@");
+    }
+
+    #[test]
+    fn test_parse_delete_tag_with_subdomain() {
+        let tag: Vec<String> = vec![
+            "delete".to_string(),
+            "TXT".to_string(),
+            "www".to_string(),
+        ];
+        let del = parse_delete_tag(&tag).unwrap();
+        assert_eq!(del.record_type, "TXT");
+        assert_eq!(del.name, "www");
+    }
+
+    #[test]
+    fn test_parse_delete_tag_too_short() {
+        let tag: Vec<String> = vec![
+            "delete".to_string(),
+            "A".to_string(),
+        ];
+        let err = parse_delete_tag(&tag).unwrap_err();
+        assert!(err.to_string().contains("must have 3 elements"));
+    }
+
+    #[test]
+    fn test_parse_delete_tag_unknown_type() {
+        let tag: Vec<String> = vec![
+            "delete".to_string(),
+            "UNKNOWN".to_string(),
+            "".to_string(),
+        ];
+        let err = parse_delete_tag(&tag).unwrap_err();
+        assert!(err.to_string().contains("unsupported delete type"));
+    }
+
+    // ── I-036: validate_dns_label tests ──
+
+    #[test]
+    fn test_validate_dns_label_apex_ok() {
+        assert!(validate_dns_label("@").is_ok());
+    }
+
+    #[test]
+    fn test_validate_dns_label_empty_ok() {
+        assert!(validate_dns_label("").is_ok());
+    }
+
+    #[test]
+    fn test_validate_dns_label_simple_alnum() {
+        assert!(validate_dns_label("www").is_ok());
+    }
+
+    #[test]
+    fn test_validate_dns_label_with_hyphens() {
+        assert!(validate_dns_label("my-sub-domain").is_ok());
+    }
+
+    #[test]
+    fn test_validate_dns_label_with_digits() {
+        assert!(validate_dns_label("sub123").is_ok());
+    }
+
+    #[test]
+    fn test_validate_dns_label_max_63_chars() {
+        let label = "a".repeat(63);
+        assert!(validate_dns_label(&label).is_ok());
+    }
+
+    #[test]
+    fn test_validate_dns_label_too_long() {
+        let label = "a".repeat(64);
+        let err = validate_dns_label(&label).unwrap_err();
+        assert!(err.to_string().contains("too long"));
+    }
+
+    #[test]
+    fn test_validate_dns_label_starts_with_hyphen() {
+        let err = validate_dns_label("-bad").unwrap_err();
+        assert!(err.to_string().contains("start with a hyphen"));
+    }
+
+    #[test]
+    fn test_validate_dns_label_ends_with_hyphen() {
+        let err = validate_dns_label("bad-").unwrap_err();
+        assert!(err.to_string().contains("end with a hyphen"));
+    }
+
+    #[test]
+    fn test_validate_dns_label_uppercase_rejected() {
+        let err = validate_dns_label("WWW").unwrap_err();
+        assert!(err.to_string().contains("uppercase"));
+    }
+
+    #[test]
+    fn test_validate_dns_label_special_chars_rejected() {
+        let err = validate_dns_label("sub.domain").unwrap_err();
+        assert!(err.to_string().contains("invalid character"));
+    }
+
+    #[test]
+    fn test_validate_dns_label_underscore_rejected() {
+        let err = validate_dns_label("_dmarc").unwrap_err();
+        assert!(err.to_string().contains("invalid character"));
+    }
+
+    #[test]
+    fn test_dns_label_validated_in_new_format() {
+        let tag: Vec<String> = vec![
+            "record".to_string(),
+            "A".to_string(),
+            "WWW".to_string(),
+            "3600".to_string(),
+            "1.2.3.4".to_string(),
+        ];
+        let err = parse_record_tag(&tag, &[], false, 0).unwrap_err();
+        assert!(err.to_string().contains("uppercase"));
+    }
+
+    #[test]
+    fn test_dns_label_validated_in_legacy_format() {
+        let tag: Vec<String> = vec![
+            "record".to_string(),
+            "A".to_string(),
+            "-bad".to_string(),
+            "".to_string(),
+            "".to_string(),
+            "".to_string(),
+            "".to_string(),
+            "".to_string(),
+            "".to_string(),
+            "1.2.3.4".to_string(),
+            "3600".to_string(),
+        ];
+        let err = parse_record_tag(&tag, &[], false, 0).unwrap_err();
+        assert!(err.to_string().contains("start with a hyphen"));
+    }
+
+    // ── I-034: Reserved TXT name protection tests ──
+
+    #[test]
+    fn test_txt_dmarc_blocked() {
+        let rec = DnsRecord {
+            record_type: "TXT".to_string(),
+            name: "_dmarc".to_string(),
+            ttl: 3600,
+            rdata: "v=DMARC1; p=none".to_string(),
+        };
+        let err = validate_record(&rec, false, 0).unwrap_err();
+        assert!(err.to_string().contains("_dmarc") && err.to_string().contains("reserved"));
+    }
+
+    #[test]
+    fn test_txt_domainkey_blocked() {
+        let rec = DnsRecord {
+            record_type: "TXT".to_string(),
+            name: "_domainkey".to_string(),
+            ttl: 3600,
+            rdata: "o=-".to_string(),
+        };
+        let err = validate_record(&rec, false, 0).unwrap_err();
+        assert!(err.to_string().contains("_domainkey") && err.to_string().contains("reserved"));
+    }
+
+    #[test]
+    fn test_txt_domainkey_subdomain_blocked() {
+        let rec = DnsRecord {
+            record_type: "TXT".to_string(),
+            name: "_domainkey.selector".to_string(),
+            ttl: 3600,
+            rdata: "p=MIGfMA0...".to_string(),
+        };
+        let err = validate_record(&rec, false, 0).unwrap_err();
+        assert!(err.to_string().contains("_domainkey") && err.to_string().contains("reserved"));
+    }
+
+    #[test]
+    fn test_txt_spf_at_apex_blocked() {
+        let rec = DnsRecord {
+            record_type: "TXT".to_string(),
+            name: "@".to_string(),
+            ttl: 3600,
+            rdata: "v=spf1 include:_spf.google.com ~all".to_string(),
+        };
+        let err = validate_record(&rec, false, 0).unwrap_err();
+        assert!(err.to_string().contains("SPF") && err.to_string().contains("reserved"));
+    }
+
+    #[test]
+    fn test_txt_spf_with_leading_whitespace_blocked() {
+        let rec = DnsRecord {
+            record_type: "TXT".to_string(),
+            name: "@".to_string(),
+            ttl: 3600,
+            rdata: "  v=spf1 include:example.com ~all".to_string(),
+        };
+        let err = validate_record(&rec, false, 0).unwrap_err();
+        assert!(err.to_string().contains("SPF"));
+    }
+
+    #[test]
+    fn test_txt_non_reserved_ok() {
+        let rec = DnsRecord {
+            record_type: "TXT".to_string(),
+            name: "@".to_string(),
+            ttl: 3600,
+            rdata: "just a normal txt record".to_string(),
+        };
+        assert!(validate_record(&rec, false, 0).is_ok());
+    }
+
+    #[test]
+    fn test_txt_spf_not_at_apex_ok() {
+        let rec = DnsRecord {
+            record_type: "TXT".to_string(),
+            name: "something".to_string(),
+            ttl: 3600,
+            rdata: "v=spf1 include:example.com ~all".to_string(),
+        };
+        assert!(validate_record(&rec, false, 0).is_ok());
+    }
+
+    // ── I-035: CNAME coexistence tests ──
+
+    #[test]
+    fn test_cname_alone_ok() {
+        let cname = DnsRecord {
+            record_type: "CNAME".to_string(),
+            name: "@".to_string(),
+            ttl: 3600,
+            rdata: "target.example.com".to_string(),
+        };
+        assert!(validate_record(&cname, false, 0).is_ok());
+    }
+
+    #[test]
+    fn test_cname_coexist_with_a_same_name() {
+        let keys = Keys::generate();
+        let event = EventBuilder::new(Kind::Custom(11111), "")
+            .tags(vec![
+                Tag::parse(["record", "A", "@", "3600", "1.2.3.4"]).unwrap(),
+                Tag::parse(["record", "CNAME", "@", "3600", "target.example.com"]).unwrap(),
+            ])
+            .sign_with_keys(&keys)
+            .unwrap();
+        let err = classify_event(&event, &[], false, 0).unwrap_err();
+        assert!(matches!(err, ParserError::CannotCoexistWithCname));
+    }
+
+    #[test]
+    fn test_cname_coexist_with_txt_same_name() {
+        let keys = Keys::generate();
+        let event = EventBuilder::new(Kind::Custom(11111), "")
+            .tags(vec![
+                Tag::parse(["record", "TXT", "@", "3600", "hello"]).unwrap(),
+                Tag::parse(["record", "CNAME", "@", "3600", "target.example.com"]).unwrap(),
+            ])
+            .sign_with_keys(&keys)
+            .unwrap();
+        let err = classify_event(&event, &[], false, 0).unwrap_err();
+        assert!(matches!(err, ParserError::CannotCoexistWithCname));
+    }
+
+    #[test]
+    fn test_cname_different_name_ok() {
+        let keys = Keys::generate();
+        let event = EventBuilder::new(Kind::Custom(11111), "")
+            .tags(vec![
+                Tag::parse(["record", "A", "@", "3600", "1.2.3.4"]).unwrap(),
+                Tag::parse(["record", "CNAME", "www", "3600", "target.example.com"]).unwrap(),
+            ])
+            .sign_with_keys(&keys)
+            .unwrap();
+        let result = classify_event(&event, &[], false, 0).unwrap();
+        assert_eq!(result.records.len(), 2);
+    }
+
+    #[test]
+    fn test_cname_only_single_record_ok() {
+        let keys = Keys::generate();
+        let event = EventBuilder::new(Kind::Custom(11111), "")
+            .tags(vec![
+                Tag::parse(["record", "CNAME", "@", "3600", "target.example.com"]).unwrap(),
+            ])
+            .sign_with_keys(&keys)
+            .unwrap();
+        let result = classify_event(&event, &[], false, 0).unwrap();
+        assert_eq!(result.records.len(), 1);
+        assert_eq!(result.records[0].record_type, "CNAME");
     }
 }

@@ -6,7 +6,6 @@ export const RELAYS = [
   'wss://relay.tollgate.me',
 ];
 
-export const ZONES = ['nodns.shop'];
 export const DEFAULT_ZONE = 'nodns.shop';
 
 export const DNS_TYPES: Record<number, string> = {

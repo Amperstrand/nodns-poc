@@ -14,6 +14,10 @@ cashu = "0.17.0-rc.3"
 
 # DNS (DDNS + TSIG)
 hickory-client = "0.25"
+hickory-proto = "0.25"
+
+# IP network matching (CIDR validation)
+ipnet = "2"
 
 # Base64 decoding for TSIG secrets (Knot/BIND store HMAC keys base64-encoded
 # per RFC 4648; hickory's TSigner::new expects raw bytes, so we must decode).
@@ -31,6 +35,8 @@ tokio = { version = "1", features = ["full"] }
 
 # HTTP (health endpoint)
 axum = "0.8"
+http = "1"
+tower = "0.5"
 
 # Logging
 tracing = "0.1"
@@ -42,17 +48,31 @@ clap = { version = "4", features = ["derive"] }
 # Utilities
 thiserror = "2"
 
-# SLIP-10 key derivation (nsec → DNSSEC key)
+# Key derivation
 hmac = "0.12"
+hkdf = "0.12"
 sha2 = "0.10"
 p256 = { version = "0.13", features = ["pkcs8", "ecdsa"] }
 pkcs8 = { version = "0.10", features = ["pem"] }
 
 # ACME (Let's Encrypt DNS-01)
-instant-acme = "0.8"
+instant-acme = { version = "0.8", default-features = false, features = ["hyper-rustls", "ring"] }
+
+# Encryption at rest for ACME private keys
+aes-gcm = "0.10"
 
 # UUID generation for ACME order IDs
 uuid = { version = "1", features = ["v4"] }
 
 # JSON (for serializing ACME credentials to meta table)
 serde_json = "1"
+
+# TLS crypto provider (required by rustls used by instant-acme and nostr-sdk)
+rustls = { version = "0.23", default-features = false, features = ["ring", "logging", "std", "tls12"] }
+
+# Rate limiting
+tower_governor = { version = "0.8", features = ["axum"] }
+
+# Security response headers
+tower-http = { version = "0.6", features = ["set-header", "cors"] }
+humantime = "2.3.0"

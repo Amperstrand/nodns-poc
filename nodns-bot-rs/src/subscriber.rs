@@ -113,7 +113,10 @@ impl Subscriber {
                 maintain_connection(&url, filter, tx, stopped, reconnect_min, reconnect_max).await;
             });
 
-            self.tasks.lock().unwrap().push(handle);
+            self.tasks.lock().unwrap_or_else(|e| {
+                tracing::error!("Task list mutex poisoned, recovering: {}", e);
+                e.into_inner()
+            }).push(handle);
         }
 
         // Drop our sender so the receiver sees "closed" once every task finishes.
@@ -128,7 +131,10 @@ impl Subscriber {
     pub fn stop(&self) {
         tracing::info!("stopping subscriber");
         self.stopped.store(true, Ordering::SeqCst);
-        let tasks = std::mem::take(&mut *self.tasks.lock().unwrap());
+        let tasks = std::mem::take(&mut *self.tasks.lock().unwrap_or_else(|e| {
+            tracing::error!("Task list mutex poisoned, recovering: {}", e);
+            e.into_inner()
+        }));
         for handle in tasks {
             handle.abort();
         }

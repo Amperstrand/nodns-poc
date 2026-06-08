@@ -115,7 +115,7 @@ impl Verifier {
         &self,
         token_string: &str,
         required_amount: i64,
-    ) -> Result<(), PaymentError> {
+    ) -> Result<u64, PaymentError> {
         // 1. Decode token
         let token = Token::from_str(token_string)
             .map_err(|e| PaymentError::TokenDecode(e.to_string()))?;
@@ -124,10 +124,12 @@ impl Verifier {
         let token_mint = token
             .mint_url()
             .map_err(|e| PaymentError::TokenDecode(e.to_string()))?;
-        if token_mint.to_string() != self.mint_url {
+        let token_mint_str = token_mint.to_string().trim_end_matches('/').to_string();
+        let configured_mint = self.mint_url.trim_end_matches('/').to_string();
+        if token_mint_str != configured_mint {
             return Err(PaymentError::MintMismatch {
-                token_mint: token_mint.to_string(),
-                configured_mint: self.mint_url.clone(),
+                token_mint: token_mint_str,
+                configured_mint,
             });
         }
 
@@ -195,7 +197,7 @@ impl Verifier {
             "cashu token verified"
         );
 
-        Ok(())
+        Ok(token_amount)
     }
 }
 
@@ -249,16 +251,19 @@ pub async fn check_event_payment(
             continue;
         }
         let remaining = total_required - total_verified;
-        if let Err(e) = verifier.verify_payment(&p.token, remaining).await {
-            warn!(
-                error = %e,
-                mint = %p.mint_url,
-                "cashu token verification failed"
-            );
-            continue;
+        match verifier.verify_payment(&p.token, remaining).await {
+            Ok(verified_amount) => {
+                total_verified += verified_amount as i64;
+            }
+            Err(e) => {
+                warn!(
+                    error = %e,
+                    mint = %p.mint_url,
+                    "cashu token verification failed"
+                );
+                continue;
+            }
         }
-        // Token already validated inside verify_payment; trust the declared amount
-        total_verified += p.amount;
         if total_verified >= total_required {
             return Ok(());
         }

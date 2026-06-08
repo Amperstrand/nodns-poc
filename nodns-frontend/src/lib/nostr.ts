@@ -26,11 +26,6 @@ export function keyPairFromNsec(nsec: string): KeyPair {
   return { secretKey: sk, publicKey: pk, npub, nsec };
 }
 
-export function hexToSecretKey(hex: string): Uint8Array {
-  const bytes = new Uint8Array(hex.match(/.{2}/g)?.map((b: string) => parseInt(b, 16)) ?? []);
-  return bytes;
-}
-
 export function secretKeyToHex(sk: Uint8Array): string {
   return bytesToHex(sk);
 }
@@ -55,6 +50,27 @@ export async function publishDnsEvent(
   if (cashuToken) {
     tags.push(buildCashuTag(cashuToken, 'https://testnut.cashu.space', '250'));
   }
+
+  const template = {
+    kind: 11111,
+    created_at: Math.floor(Date.now() / 1000),
+    tags,
+    content: '',
+  };
+
+  const event = finalizeEvent(template, secretKey);
+
+  const pubs = pool.publish(RELAYS, event);
+  await Promise.any(pubs);
+
+  return event as NostrEvent;
+}
+
+export async function publishDeleteEvent(
+  deletes: { type: string; name: string }[],
+  secretKey: Uint8Array,
+): Promise<NostrEvent> {
+  const tags = deletes.map((d) => ['delete', d.type, d.name || '@']);
 
   const template = {
     kind: 11111,

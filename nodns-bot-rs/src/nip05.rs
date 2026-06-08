@@ -103,8 +103,14 @@ fn registrar_response(state: &Nip05State, name: &str) -> Response {
     let mut names = HashMap::new();
     let mut relays = HashMap::new();
 
-    // Use the first available registrar pubkey
-    if let Some(hex) = state.registrar_pubkeys.values().next() {
+    // Deterministic selection: sort registrar keys lexicographically, pick first
+    let hex = state
+        .registrar_pubkeys
+        .keys()
+        .min()
+        .and_then(|key| state.registrar_pubkeys.get(key));
+
+    if let Some(hex) = hex {
         names.insert(name.to_string(), hex.clone());
         if !state.relays.is_empty() {
             relays.insert(hex.clone(), state.relays.clone());
@@ -214,5 +220,23 @@ mod tests {
             relays: HashMap::new(),
         };
         assert!(resp.relays.is_empty());
+    }
+
+    #[test]
+    fn registrar_pubkey_selection_is_deterministic() {
+        let mut pubkeys: HashMap<String, String> = HashMap::new();
+        pubkeys.insert("zone-b".to_string(), "bbbb".to_string());
+        pubkeys.insert("zone-a".to_string(), "aaaa".to_string());
+        pubkeys.insert("zone-c".to_string(), "cccc".to_string());
+
+        let selected_key = pubkeys.keys().min().unwrap();
+        let selected_hex = pubkeys.get(selected_key).unwrap();
+
+        // Repeating the same selection must always yield the same result
+        for _ in 0..10 {
+            let key = pubkeys.keys().min().unwrap();
+            assert_eq!(key, "zone-a");
+            assert_eq!(pubkeys.get(key).unwrap(), selected_hex);
+        }
     }
 }

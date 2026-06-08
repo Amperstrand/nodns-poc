@@ -8,6 +8,14 @@ use std::fmt;
 pub const KIND_DNS_RECORD: u64 = 11111;
 pub const DEFAULT_TTL: u32 = 3600;
 
+/// A parsed delete request from a Nostr delete tag.
+/// Format: ["delete", TYPE, NAME]
+#[derive(Debug, Clone)]
+pub struct DeleteRequest {
+    pub record_type: String,
+    pub name: String,  // "@" for root, or subdomain name
+}
+
 /// A parsed DNS record from a Nostr record tag.
 #[derive(Debug, Clone)]
 pub struct DnsRecord {
@@ -49,6 +57,7 @@ pub struct Payment {
 #[derive(Debug, Clone)]
 pub struct ParsedEvent {
     pub records: Vec<DnsRecord>,
+    pub deletes: Vec<DeleteRequest>,
     pub delegation: Option<Delegation>,
     pub registrar: Option<RegistrarKey>,
     pub payments: Vec<Payment>,
@@ -96,8 +105,21 @@ pub struct AcmeOrder {
     pub certificate_pem: Option<String>,
     pub private_key_pem: Option<String>,
     pub error: Option<String>,
+    pub csr_der: Option<String>,
+    pub environment: Option<String>,
     pub created_at: i64,
     pub updated_at: i64,
+}
+
+/// A stored ACME order progress log entry (maps to `acme_order_logs` table).
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct AcmeOrderLog {
+    pub id: i64,
+    pub order_id: String,
+    pub stage: String,
+    pub message: String,
+    pub details: Option<String>,
+    pub created_at: i64,
 }
 
 /// Metrics tracked by the bot.

@@ -25,14 +25,11 @@ export function LiveFeed() {
   useEffect(() => {
     const cleanup = subscribeToDnsEvents(handleEvent);
 
-
-    const timeout = setTimeout(() => {
-      setConnected(true);
-    }, 10000);
+    // Only mark connected when we actually receive an event (handleEvent sets connected=true)
+    // Remove the premature 10s timeout that marked connected regardless
 
     return () => {
       cleanup();
-      clearTimeout(timeout);
     };
   }, [handleEvent]);
 
@@ -54,7 +51,7 @@ export function LiveFeed() {
         <h2 className="mb-6 text-[1.75rem] font-bold tracking-tight">
           Live Event Feed
         </h2>
-        <div className="max-h-[300px] overflow-y-auto rounded-[10px] border border-[#222] bg-[#141414]">
+        <div data-testid="live-feed-entries" className="max-h-[300px] overflow-y-auto rounded-[10px] border border-[#222] bg-[#141414]">
           {!connected ? (
             <div className="py-8 text-center text-sm text-[#666]">
               Connecting to relays...

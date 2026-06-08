@@ -1,4 +1,7 @@
+import { RELAYS } from "@/lib/constants";
+
 export function Infrastructure() {
+  const relayList = RELAYS.map((r) => r.replace("wss://", "")).join(", ");
   const infraCards = [
     {
       title: "nodns-bot",
@@ -10,7 +13,7 @@ export function Infrastructure() {
     },
     {
       title: "Relay Pool",
-      desc: "relay.damus.io, nos.lol, nostr.wine, relay.ngit.dev, relay.tollgate.me. Events propagate across all relays.",
+      desc: `${relayList}. Events propagate across all relays.`,
     },
     {
       title: "SQLite",

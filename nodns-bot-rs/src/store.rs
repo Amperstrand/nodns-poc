@@ -6,11 +6,54 @@
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use aes_gcm::{
+    aead::{Aead, AeadCore, KeyInit, OsRng},
+    Aes256Gcm, Nonce,
+};
+use base64::Engine;
 use rusqlite::{params, Connection, OptionalExtension};
+use sha2::{Digest, Sha256};
 use thiserror::Error;
 use tracing::info;
 
-use crate::types::{AcmeOrder, DelegationRecord, EventRecord};
+use crate::types::{AcmeOrder, AcmeOrderLog, DelegationRecord, EventRecord};
+
+// ---------------------------------------------------------------------------
+// AES-256-GCM encryption helpers
+// ---------------------------------------------------------------------------
+
+/// Derive a 32-byte AES key from a secret string via SHA-256.
+fn derive_key(secret: &str) -> [u8; 32] {
+    let mut hasher = Sha256::new();
+    hasher.update(secret.as_bytes());
+    hasher.finalize().into()
+}
+
+/// Encrypt `plaintext` with AES-256-GCM. Returns base64(nonce || ciphertext).
+fn encrypt_aes_gcm(key: &[u8; 32], plaintext: &str) -> Result<String, aes_gcm::Error> {
+    let cipher = Aes256Gcm::new_from_slice(key).expect("key is 32 bytes");
+    let nonce = Aes256Gcm::generate_nonce(&mut OsRng);
+    let ciphertext = cipher.encrypt(&nonce, plaintext.as_bytes())?;
+    let mut combined = Vec::with_capacity(12 + ciphertext.len());
+    combined.extend_from_slice(&nonce);
+    combined.extend_from_slice(&ciphertext);
+    Ok(base64::engine::general_purpose::STANDARD.encode(&combined))
+}
+
+/// Decrypt base64(nonce || ciphertext) with AES-256-GCM. Returns plaintext.
+fn decrypt_aes_gcm(key: &[u8; 32], encoded: &str) -> Result<String, aes_gcm::Error> {
+    let cipher = Aes256Gcm::new_from_slice(key).expect("key is 32 bytes");
+    let combined = base64::engine::general_purpose::STANDARD
+        .decode(encoded)
+        .map_err(|_| aes_gcm::Error)?;
+    if combined.len() < 13 {
+        return Err(aes_gcm::Error);
+    }
+    let nonce = Nonce::from_slice(&combined[..12]);
+    let ciphertext = &combined[12..];
+    let plaintext = cipher.decrypt(nonce, ciphertext)?;
+    String::from_utf8(plaintext).map_err(|_| aes_gcm::Error)
+}
 
 // ---------------------------------------------------------------------------
 // Error type
@@ -96,6 +139,15 @@ pub enum StoreError {
     #[error("scanning ACME order: {0}")]
     ScanAcmeOrder(#[source] rusqlite::Error),
 
+    #[error("saving ACME order log for {0}: {1}")]
+    SaveAcmeOrderLog(String, #[source] rusqlite::Error),
+
+    #[error("getting ACME order logs for {0}: {1}")]
+    GetAcmeOrderLogs(String, #[source] rusqlite::Error),
+
+    #[error("scanning ACME order log: {0}")]
+    ScanAcmeOrderLog(#[source] rusqlite::Error),
+
     #[error("getting meta value: {0}")]
     GetMeta(#[source] rusqlite::Error),
 
@@ -110,6 +162,7 @@ pub enum StoreError {
 /// SQLite-backed store wrapping a `Mutex<Connection>` for thread safety.
 pub struct Store {
     conn: Mutex<Connection>,
+    acme_encryption_key: Option<[u8; 32]>,
 }
 
 impl Store {
@@ -117,8 +170,7 @@ impl Store {
     // Construction
     // -----------------------------------------------------------------------
 
-    /// Open (or create) the SQLite database at `path` and enable WAL mode.
-    pub fn new(path: &str) -> Result<Self, StoreError> {
+    pub fn new(path: &str, acme_encryption_key: Option<&str>) -> Result<Self, StoreError> {
         let conn = Connection::open(path).map_err(|e| StoreError::Open {
             path: path.to_string(),
             source: e,
@@ -127,8 +179,18 @@ impl Store {
         conn.execute_batch("PRAGMA journal_mode=WAL")
             .map_err(StoreError::WalMode)?;
 
+        let acme_encryption_key = acme_encryption_key.map(|k| derive_key(k));
+
         Ok(Self {
             conn: Mutex::new(conn),
+            acme_encryption_key,
+        })
+    }
+
+    fn conn(&self) -> std::sync::MutexGuard<'_, Connection> {
+        self.conn.lock().unwrap_or_else(|e| {
+            tracing::error!("SQLite mutex poisoned, recovering: {}", e);
+            e.into_inner()
         })
     }
 
@@ -141,9 +203,76 @@ impl Store {
     /// Schema matches the Go version exactly: same table names, column names,
     /// types, constraints, and indexes.
     pub fn init(&self) -> Result<(), StoreError> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn();
         conn.execute_batch(SCHEMA)
             .map_err(StoreError::Schema)?;
+
+        // Migrations for existing databases that predate schema changes.
+        // These are idempotent — ALTER TABLE ADD COLUMN is a no-op if the
+        // column already exists (SQLite has no IF NOT EXISTS for columns,
+        // so we catch and ignore the "duplicate column" error).
+        let migrations = [
+            "ALTER TABLE acme_orders ADD COLUMN csr_der TEXT",
+            "ALTER TABLE acme_orders ADD COLUMN environment TEXT",
+        ];
+        for sql in &migrations {
+            match conn.execute(sql, []) {
+                Ok(_) => info!("migration applied: {}", sql),
+                Err(rusqlite::Error::ExecuteReturnedResults) => {}
+                Err(e) if e.to_string().contains("duplicate column") => {}
+                Err(e) if e.to_string().contains("already exists") => {}
+                Err(e) => return Err(StoreError::Schema(e)),
+            }
+        }
+
+        // Migration: add 'zone' to events primary key.
+        // SQLite doesn't support ALTER TABLE to change a PK, so we rebuild.
+        // Idempotent: checks sqlite_master for the old 3-column PK first.
+        {
+            let pk_has_zone: bool = conn
+                .query_row(
+                    "SELECT sql FROM sqlite_master WHERE type='table' AND name='events'",
+                    [],
+                    |row| {
+                        let sql: String = row.get(0)?;
+                        // If the CREATE TABLE statement contains our new PK,
+                        // the migration is already applied.
+                        Ok(sql.contains("event_id, record_type, name, zone)"))
+                    },
+                )
+                .unwrap_or(false);
+
+            if !pk_has_zone {
+                info!("migrating events table: adding zone to primary key");
+                conn.execute_batch(
+                    "
+                    ALTER TABLE events RENAME TO _events_old;
+                    CREATE TABLE events (
+                        event_id TEXT NOT NULL,
+                        npub TEXT NOT NULL,
+                        pubkey TEXT NOT NULL,
+                        name TEXT NOT NULL,
+                        record_type TEXT NOT NULL,
+                        ttl INTEGER NOT NULL,
+                        rdata TEXT NOT NULL,
+                        zone TEXT NOT NULL DEFAULT 'nodns.shop',
+                        created_at INTEGER NOT NULL,
+                        processed_at INTEGER NOT NULL DEFAULT (unixepoch()),
+                        deleted INTEGER NOT NULL DEFAULT 0,
+                        PRIMARY KEY (event_id, record_type, name, zone)
+                    );
+                    INSERT INTO events SELECT * FROM _events_old;
+                    DROP TABLE _events_old;
+                    CREATE INDEX IF NOT EXISTS idx_events_pubkey ON events(pubkey);
+                    CREATE INDEX IF NOT EXISTS idx_events_pubkey_type ON events(pubkey, record_type);
+                    CREATE INDEX IF NOT EXISTS idx_events_created ON events(created_at);
+                    ",
+                )
+                .map_err(StoreError::Schema)?;
+                info!("migration complete: zone added to events primary key");
+            }
+        }
+
         info!("database initialized");
         Ok(())
     }
@@ -165,7 +294,7 @@ impl Store {
         zone: &str,
         created_at: i64,
     ) -> Result<(), StoreError> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn();
         conn.execute(
             "INSERT OR REPLACE INTO events (event_id, npub, pubkey, name, record_type, ttl, rdata, zone, created_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
@@ -177,7 +306,7 @@ impl Store {
 
     /// Soft-delete an event by setting `deleted = 1`.
     pub fn mark_deleted(&self, event_id: &str) -> Result<(), StoreError> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn();
         conn.execute(
             "UPDATE events SET deleted = 1 WHERE event_id = ?1",
             params![event_id],
@@ -186,9 +315,24 @@ impl Store {
         Ok(())
     }
 
+    pub fn delete_records_by_key(
+        &self,
+        npub: &str,
+        record_type: &str,
+        name: &str,
+        zone: &str,
+    ) -> Result<(), StoreError> {
+        let conn = self.conn();
+        conn.execute(
+            "UPDATE events SET deleted = 1 WHERE npub = ?1 AND record_type = ?2 AND name = ?3 AND zone = ?4 AND deleted = 0",
+            params![npub, record_type, name, zone],
+        ).map_err(|e| StoreError::MarkDeleted(format!("{}-{}-{}-{}", npub, record_type, name, zone), e))?;
+        Ok(())
+    }
+
     /// Retrieve a specific event by ID.  Returns `None` when no row matches.
     pub fn get_event(&self, event_id: &str) -> Result<Option<EventRecord>, StoreError> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn();
         let mut stmt = conn
             .prepare(
                 "SELECT event_id, npub, pubkey, name, record_type, ttl, rdata, zone, created_at, processed_at, deleted
@@ -206,7 +350,7 @@ impl Store {
 
     /// Return all non-deleted records for a pubkey.
     pub fn get_records_by_pubkey(&self, pubkey: &str) -> Result<Vec<EventRecord>, StoreError> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn();
         let mut stmt = conn
             .prepare(
                 "SELECT event_id, npub, pubkey, name, record_type, ttl, rdata, zone, created_at, processed_at, deleted
@@ -225,7 +369,7 @@ impl Store {
 
     /// Return the count of active (non-deleted) records for a pubkey.
     pub fn record_count_by_pubkey(&self, pubkey: &str) -> Result<usize, StoreError> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn();
         let count: i64 = conn
             .query_row(
                 "SELECT COUNT(*) FROM events WHERE pubkey = ?1 AND deleted = 0",
@@ -245,7 +389,7 @@ impl Store {
             .as_secs() as i64;
         let cutoff = now - 60;
 
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn();
         let count: i64 = conn
             .query_row(
                 "SELECT COUNT(*) FROM events WHERE pubkey = ?1 AND processed_at > ?2",
@@ -264,7 +408,7 @@ impl Store {
     /// Get the `last_seen` timestamp from the `meta` table.
     /// Returns `0` when no row exists.
     pub fn get_last_seen(&self) -> Result<i64, StoreError> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn();
         let val: Option<String> = conn
             .query_row(
                 "SELECT value FROM meta WHERE key = 'last_seen'",
@@ -284,7 +428,7 @@ impl Store {
 
     /// Update the `last_seen` timestamp in the `meta` table.
     pub fn set_last_seen(&self, ts: i64) -> Result<(), StoreError> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn();
         conn.execute(
             "INSERT OR REPLACE INTO meta (key, value) VALUES ('last_seen', ?1)",
             params![ts.to_string()],
@@ -297,9 +441,25 @@ impl Store {
     // Lifecycle
     // -----------------------------------------------------------------------
 
+    fn decrypt_private_key(&self, mut order: AcmeOrder) -> AcmeOrder {
+        if let (Some(encrypted), Some(key)) = (&order.private_key_pem, &self.acme_encryption_key) {
+            match decrypt_aes_gcm(key, encrypted) {
+                Ok(plain) => order.private_key_pem = Some(plain),
+                Err(_) => {
+                    tracing::error!(order_id = %order.id, "failed to decrypt private_key_pem, clearing");
+                    order.private_key_pem = None;
+                }
+            }
+        }
+        order
+    }
+
     /// Close the database connection.
     pub fn close(self) -> Result<(), StoreError> {
-        let conn = self.conn.into_inner().unwrap();
+        let conn = self.conn.into_inner().unwrap_or_else(|e| {
+            tracing::error!("SQLite mutex poisoned on close: {}", e);
+            e.into_inner()
+        });
         conn.close().map_err(|(_, e)| StoreError::Close(e))
     }
 
@@ -309,7 +469,7 @@ impl Store {
 
     /// Return all non-deleted records ordered by `created_at DESC`.
     pub fn list_all_records(&self) -> Result<Vec<EventRecord>, StoreError> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn();
         let mut stmt = conn
             .prepare(
                 "SELECT event_id, npub, pubkey, name, record_type, ttl, rdata, zone, created_at, processed_at, deleted
@@ -344,7 +504,7 @@ impl Store {
         renew_by: i64,
         registrar_pubkey: &str,
     ) -> Result<(), StoreError> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn();
         conn.execute(
             "INSERT OR REPLACE INTO delegations (event_id, domain, zone, npub, pubkey, valid_from, valid_until, renew_by, registrar_pubkey, created_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, unixepoch())",
@@ -373,7 +533,7 @@ impl Store {
             .unwrap_or_default()
             .as_secs() as i64;
 
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn();
         let mut stmt = conn
             .prepare(
                 "SELECT event_id, domain, zone, npub, pubkey, valid_from, valid_until, renew_by, registrar_pubkey, created_at, processed_at
@@ -402,7 +562,7 @@ impl Store {
             .unwrap_or_default()
             .as_secs() as i64;
 
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn();
         let mut stmt = conn
             .prepare(
                 "SELECT event_id, domain, zone, npub, pubkey, valid_from, valid_until, renew_by, registrar_pubkey, created_at, processed_at
@@ -434,7 +594,7 @@ impl Store {
         source: &str,
         event_id: &str,
     ) -> Result<(), StoreError> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn();
         conn.execute(
             "INSERT OR REPLACE INTO registrar_keys (zone, pubkey_hex, npub, source, event_id, updated_at)
              VALUES (?1, ?2, ?3, ?4, ?5, unixepoch())",
@@ -448,7 +608,7 @@ impl Store {
 
     /// Return the registrar pubkey hex for a zone, or empty string if not found.
     pub fn get_registrar_key(&self, zone: &str) -> Result<String, StoreError> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn();
         let result: Option<String> = conn
             .query_row(
                 "SELECT pubkey_hex FROM registrar_keys WHERE zone = ?1",
@@ -474,7 +634,7 @@ impl Store {
         name: &str,
         zone: &str,
     ) -> Result<bool, StoreError> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn();
         let count: i64 = conn
             .query_row(
                 "SELECT COUNT(*) FROM events
@@ -497,11 +657,13 @@ impl Store {
         domain: &str,
         npub: &str,
         status: &str,
+        csr_der: Option<&str>,
+        environment: Option<&str>,
     ) -> Result<(), StoreError> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn();
         conn.execute(
-            "INSERT INTO acme_orders (id, domain, npub, status) VALUES (?1, ?2, ?3, ?4)",
-            params![id, domain, npub, status],
+            "INSERT INTO acme_orders (id, domain, npub, status, csr_der, environment) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![id, domain, npub, status, csr_der, environment],
         )
         .map_err(|e| StoreError::SaveAcmeOrder(id.to_string(), e))?;
         Ok(())
@@ -515,20 +677,27 @@ impl Store {
         private_key_pem: Option<&str>,
         error: Option<&str>,
     ) -> Result<(), StoreError> {
-        let conn = self.conn.lock().unwrap();
+        let encrypted_key = match (private_key_pem, &self.acme_encryption_key) {
+            (Some(pem), Some(key)) => Some(encrypt_aes_gcm(key, pem).map_err(|_| {
+                StoreError::UpdateAcmeOrder(id.to_string(), rusqlite::Error::InvalidParameterName("encryption failed".into()))
+            })?),
+            (Some(pem), None) => Some(pem.to_string()),
+            (None, _) => None,
+        };
+        let conn = self.conn();
         conn.execute(
             "UPDATE acme_orders SET status = ?1, certificate_pem = ?2, private_key_pem = ?3, error = ?4, updated_at = unixepoch() WHERE id = ?5",
-            params![status, certificate_pem, private_key_pem, error, id],
+            params![status, certificate_pem, encrypted_key, error, id],
         )
         .map_err(|e| StoreError::UpdateAcmeOrder(id.to_string(), e))?;
         Ok(())
     }
 
     pub fn get_acme_order(&self, id: &str) -> Result<Option<AcmeOrder>, StoreError> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn();
         let mut stmt = conn
             .prepare(
-                "SELECT id, domain, npub, status, certificate_pem, private_key_pem, error, created_at, updated_at
+                "SELECT id, domain, npub, status, certificate_pem, private_key_pem, error, csr_der, environment, created_at, updated_at
                  FROM acme_orders WHERE id = ?1",
             )
             .map_err(|e| StoreError::GetAcmeOrder(id.to_string(), e))?;
@@ -538,14 +707,24 @@ impl Store {
             .optional()
             .map_err(|e| StoreError::GetAcmeOrder(id.to_string(), e))?;
 
-        Ok(result)
+        Ok(result.map(|o| self.decrypt_private_key(o)))
+    }
+
+    pub fn clear_acme_private_key(&self, id: &str) -> Result<(), StoreError> {
+        let conn = self.conn();
+        conn.execute(
+            "UPDATE acme_orders SET private_key_pem = NULL WHERE id = ?1",
+            params![id],
+        )
+        .map_err(|e| StoreError::UpdateAcmeOrder(id.to_string(), e))?;
+        Ok(())
     }
 
     pub fn list_acme_orders_by_npub(&self, npub: &str) -> Result<Vec<AcmeOrder>, StoreError> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn();
         let mut stmt = conn
             .prepare(
-                "SELECT id, domain, npub, status, certificate_pem, private_key_pem, error, created_at, updated_at
+                "SELECT id, domain, npub, status, certificate_pem, private_key_pem, error, csr_der, environment, created_at, updated_at
                  FROM acme_orders WHERE npub = ?1
                  ORDER BY created_at DESC",
             )
@@ -557,6 +736,41 @@ impl Store {
             .collect::<Result<Vec<_>, _>>()
             .map_err(StoreError::ScanAcmeOrder)?;
 
+        Ok(records.into_iter().map(|o| self.decrypt_private_key(o)).collect())
+    }
+
+    pub fn save_acme_order_log(
+        &self,
+        order_id: &str,
+        stage: &str,
+        message: &str,
+        details: Option<&str>,
+    ) -> Result<(), StoreError> {
+        let conn = self.conn();
+        conn.execute(
+            "INSERT INTO acme_order_logs (order_id, stage, message, details) VALUES (?1, ?2, ?3, ?4)",
+            params![order_id, stage, message, details],
+        )
+        .map_err(|e| StoreError::SaveAcmeOrderLog(order_id.to_string(), e))?;
+        Ok(())
+    }
+
+    pub fn get_acme_order_logs(&self, order_id: &str) -> Result<Vec<AcmeOrderLog>, StoreError> {
+        let conn = self.conn();
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, order_id, stage, message, details, created_at
+                 FROM acme_order_logs WHERE order_id = ?1
+                 ORDER BY id ASC",
+            )
+            .map_err(|e| StoreError::GetAcmeOrderLogs(order_id.to_string(), e))?;
+
+        let records = stmt
+            .query_map(params![order_id], |row| scan_acme_order_log_row(row))
+            .map_err(|e| StoreError::GetAcmeOrderLogs(order_id.to_string(), e))?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(StoreError::ScanAcmeOrderLog)?;
+
         Ok(records)
     }
 
@@ -565,7 +779,7 @@ impl Store {
     // -----------------------------------------------------------------------
 
     pub fn get_meta(&self, key: &str) -> Result<Option<String>, StoreError> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn();
         let result: Option<String> = conn
             .query_row(
                 "SELECT value FROM meta WHERE key = ?1",
@@ -579,7 +793,7 @@ impl Store {
     }
 
     pub fn set_meta(&self, key: &str, value: &str) -> Result<(), StoreError> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn();
         conn.execute(
             "INSERT OR REPLACE INTO meta (key, value) VALUES (?1, ?2)",
             params![key, value],
@@ -606,7 +820,7 @@ const SCHEMA: &str = r#"
         created_at INTEGER NOT NULL,
         processed_at INTEGER NOT NULL DEFAULT (unixepoch()),
         deleted INTEGER NOT NULL DEFAULT 0,
-        PRIMARY KEY (event_id, record_type, name)
+        PRIMARY KEY (event_id, record_type, name, zone)
     );
 
     CREATE INDEX IF NOT EXISTS idx_events_pubkey ON events(pubkey);
@@ -655,11 +869,24 @@ const SCHEMA: &str = r#"
         certificate_pem TEXT,
         private_key_pem TEXT,
         error TEXT,
+        csr_der TEXT,
         created_at INTEGER NOT NULL DEFAULT (unixepoch()),
         updated_at INTEGER NOT NULL DEFAULT (unixepoch())
     );
 
     CREATE INDEX IF NOT EXISTS idx_acme_orders_npub ON acme_orders(npub);
+
+    CREATE TABLE IF NOT EXISTS acme_order_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        order_id TEXT NOT NULL,
+        stage TEXT NOT NULL,
+        message TEXT NOT NULL,
+        details TEXT,
+        created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+        FOREIGN KEY (order_id) REFERENCES acme_orders(id)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_acme_order_logs_order ON acme_order_logs(order_id);
 "#;
 
 // ---------------------------------------------------------------------------
@@ -712,8 +939,21 @@ fn scan_acme_order_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<AcmeOrder> {
         certificate_pem: row.get(4)?,
         private_key_pem: row.get(5)?,
         error: row.get(6)?,
-        created_at: row.get(7)?,
-        updated_at: row.get(8)?,
+        csr_der: row.get(7)?,
+        environment: row.get(8)?,
+        created_at: row.get(9)?,
+        updated_at: row.get(10)?,
+    })
+}
+
+fn scan_acme_order_log_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<AcmeOrderLog> {
+    Ok(AcmeOrderLog {
+        id: row.get(0)?,
+        order_id: row.get(1)?,
+        stage: row.get(2)?,
+        message: row.get(3)?,
+        details: row.get(4)?,
+        created_at: row.get(5)?,
     })
 }
 
@@ -740,5 +980,90 @@ pub fn get_zone_for_domain<'a>(domain: &'a str, zones: &'a [String]) -> (&'a str
         }
     }
     ("", "", false)
+}
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn encrypt_decrypt_roundtrip() {
+        let key = derive_key("test-secret");
+        let plaintext = "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQC=\n-----END PRIVATE KEY-----";
+        let encrypted = encrypt_aes_gcm(&key, plaintext).unwrap();
+        let decrypted = decrypt_aes_gcm(&key, &encrypted).unwrap();
+        assert_eq!(decrypted, plaintext);
+    }
+
+    #[test]
+    fn wrong_key_returns_error() {
+        let key_a = derive_key("secret-a");
+        let key_b = derive_key("secret-b");
+        let plaintext = "sensitive data";
+        let encrypted = encrypt_aes_gcm(&key_a, plaintext).unwrap();
+        assert!(decrypt_aes_gcm(&key_b, &encrypted).is_err());
+    }
+
+    #[test]
+    fn corrupted_ciphertext_returns_error() {
+        let key = derive_key("test-secret");
+        let encrypted = encrypt_aes_gcm(&key, "hello").unwrap();
+        let corrupted = &encrypted[..encrypted.len() - 4];
+        assert!(decrypt_aes_gcm(&key, corrupted).is_err());
+    }
+
+    #[test]
+    fn encrypt_produces_different_ciphertexts() {
+        let key = derive_key("test-secret");
+        let plaintext = "same plaintext";
+        let enc1 = encrypt_aes_gcm(&key, plaintext).unwrap();
+        let enc2 = encrypt_aes_gcm(&key, plaintext).unwrap();
+        assert_ne!(enc1, enc2, "random nonce should produce different ciphertexts");
+        assert_eq!(decrypt_aes_gcm(&key, &enc1).unwrap(), plaintext);
+        assert_eq!(decrypt_aes_gcm(&key, &enc2).unwrap(), plaintext);
+    }
+
+    #[test]
+    fn store_encrypt_decrypt_private_key_roundtrip() {
+        let store = Store::new(":memory:", Some("my-encryption-secret")).unwrap();
+        store.init().unwrap();
+
+        let order_id = "test-order-encrypt-1";
+        store
+            .save_acme_order(order_id, "example.com", "npub123", "pending", None, None)
+            .unwrap();
+
+        let private_key = "-----BEGIN PRIVATE KEY-----\nSECRETKEYDATA\n-----END PRIVATE KEY-----";
+        store
+            .update_acme_order_status(order_id, "valid", Some("cert-pem"), Some(private_key), None)
+            .unwrap();
+
+        let order = store.get_acme_order(order_id).unwrap().unwrap();
+        assert_eq!(order.private_key_pem.as_deref(), Some(private_key));
+        assert_eq!(order.certificate_pem.as_deref(), Some("cert-pem"));
+    }
+
+    #[test]
+    fn store_no_encryption_key_passes_through() {
+        let store = Store::new(":memory:", None).unwrap();
+        store.init().unwrap();
+
+        let order_id = "test-order-noenc-1";
+        store
+            .save_acme_order(order_id, "example.com", "npub123", "pending", None, None)
+            .unwrap();
+
+        let private_key = "plain-key-data";
+        store
+            .update_acme_order_status(order_id, "valid", None, Some(private_key), None)
+            .unwrap();
+
+        let order = store.get_acme_order(order_id).unwrap().unwrap();
+        assert_eq!(order.private_key_pem.as_deref(), Some(private_key));
+    }
 }
 

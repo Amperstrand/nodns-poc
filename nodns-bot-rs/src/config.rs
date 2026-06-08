@@ -102,37 +102,19 @@ impl TryFrom<toml::Value> for HumaneDuration {
 
     fn try_from(value: toml::Value) -> Result<Self, Self::Error> {
         match value {
-            toml::Value::Integer(secs) => Ok(HumaneDuration(Duration::from_secs(secs as u64))),
-            toml::Value::String(s) => parse_duration::parse_human(&s)
+            toml::Value::Integer(secs) => {
+                if secs <= 0 {
+                    return Err(format!(
+                        "duration must be a positive integer, got {secs}"
+                    ));
+                }
+                Ok(HumaneDuration(Duration::from_secs(secs as u64)))
+            }
+            toml::Value::String(s) => humantime::parse_duration(&s)
                 .map(HumaneDuration)
                 .map_err(|e| format!("invalid duration '{s}': {e}")),
             other => Err(format!("expected integer or string for duration, got {other:?}")),
         }
-    }
-}
-
-/// Minimal human-readable duration parser (supports `1s`, `5m`, `1h`, plain integer).
-mod parse_duration {
-    use std::time::Duration;
-
-    pub fn parse_human(s: &str) -> Result<Duration, String> {
-        let s = s.trim();
-        // Try pure integer seconds
-        if let Ok(secs) = s.parse::<u64>() {
-            return Ok(Duration::from_secs(secs));
-        }
-        let bytes = s.as_bytes();
-        if bytes.is_empty() {
-            return Err("empty duration".into());
-        }
-        let (num_str, suffix) = match &bytes[bytes.len() - 1] {
-            b's' => (&s[..s.len() - 1], 1u64),
-            b'm' => (&s[..s.len() - 1], 60),
-            b'h' => (&s[..s.len() - 1], 3600),
-            _ => return Err(format!("unknown duration suffix in '{s}'")),
-        };
-        let num: u64 = num_str.trim().parse().map_err(|_| format!("invalid number in '{s}'"))?;
-        Ok(Duration::from_secs(num * suffix))
     }
 }
 
@@ -298,18 +280,37 @@ pub struct DnssecDerivationConfig {
 #[serde(default)]
 pub struct AcmeConfig {
     pub enabled: bool,
+    /// "staging" (default) or "production". Used to resolve directory_url if not explicitly set.
+    pub environment: String,
+    /// ACME directory URL. If empty, resolved from `environment` during apply_defaults().
+    /// If explicitly set in config, overrides the environment-based URL.
     pub directory_url: String,
+    /// Default contact email for ACME account. Can be empty (will use cert@nodns.shop).
     pub contact_email: String,
     pub challenge_ttl: u32,
+    /// Default CA: "letsencrypt-staging" (default), "zerossl", "letsencrypt-production"
+    pub ca: String,
+    /// ZeroSSL EAB Key ID (required for ZeroSSL)
+    pub zerossl_eab_kid: String,
+    /// ZeroSSL EAB HMAC key (base64-encoded, required for ZeroSSL)
+    pub zerossl_eab_hmac_key: String,
+    /// Hex-encoded 32-byte key for encrypting ACME private keys at rest.
+    /// If empty, a random key is generated at startup (keys unreadable after restart).
+    pub encryption_key: Option<String>,
 }
 
 impl Default for AcmeConfig {
     fn default() -> Self {
         Self {
             enabled: false,
-            directory_url: "https://acme-staging-v02.api.letsencrypt.org/directory".to_string(),
+            environment: "staging".to_string(),
+            directory_url: String::new(),
             contact_email: String::new(),
             challenge_ttl: 300,
+            ca: "letsencrypt-staging".to_string(),
+            zerossl_eab_kid: String::new(),
+            zerossl_eab_hmac_key: String::new(),
+            encryption_key: None,
         }
     }
 }
@@ -414,6 +415,17 @@ impl Config {
                 self.payment.required_sats = 250;
             }
             self.payment.update_free = true;
+        }
+
+        // ACME: resolve directory_url from environment if not explicitly set
+        if self.acme.environment.is_empty() {
+            self.acme.environment = "staging".to_string();
+        }
+        if self.acme.directory_url.is_empty() {
+            self.acme.directory_url = match self.acme.environment.as_str() {
+                "production" => "https://acme-v02.api.letsencrypt.org/directory".to_string(),
+                _ => "https://acme-staging-v02.api.letsencrypt.org/directory".to_string(),
+            };
         }
     }
 
@@ -602,5 +614,42 @@ zone = "nodns.shop"
         cfg.apply_defaults();
         let err = cfg.validate().unwrap_err();
         assert!(err.to_string().contains("relay"));
+    }
+
+    #[test]
+    fn duration_negative_integer_rejected() {
+        let val = toml::Value::Integer(-1);
+        let result = HumaneDuration::try_from(val);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("positive"));
+    }
+
+    #[test]
+    fn duration_zero_integer_rejected() {
+        let val = toml::Value::Integer(0);
+        let result = HumaneDuration::try_from(val);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("positive"));
+    }
+
+    #[test]
+    fn duration_positive_integer_accepted() {
+        let val = toml::Value::Integer(60);
+        let dur = HumaneDuration::try_from(val).unwrap();
+        assert_eq!(dur.0, Duration::from_secs(60));
+    }
+
+    #[test]
+    fn duration_negative_string_rejected() {
+        let val = toml::Value::String("-1s".to_string());
+        let result = HumaneDuration::try_from(val);
+        assert!(result.is_err(), "negative duration string should be rejected");
+    }
+
+    #[test]
+    fn duration_valid_string_accepted() {
+        let val = toml::Value::String("5m".to_string());
+        let dur = HumaneDuration::try_from(val).unwrap();
+        assert_eq!(dur.0, Duration::from_secs(300));
     }
 }

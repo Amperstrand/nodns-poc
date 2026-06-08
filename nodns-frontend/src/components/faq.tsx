@@ -15,9 +15,9 @@ export function FAQ() {
             If your record looks like this in the browser:
           </p>
           <pre className="mb-3 overflow-x-auto rounded-lg border border-[#222] bg-[#0a0a0a] p-4 text-[0.85rem] leading-relaxed">
-            <code>
-              bitcoin.npub15nf3pd...npub.cc.npub13udukn...pgx.nodns.shop
-            </code>
+              <code>
+                blog.alice.nodns.shop.npub13udukn...pgx.nodns.shop
+              </code>
           </pre>
           <p className="mb-3 text-[#bbb]">
             <strong>
@@ -64,18 +64,18 @@ export function FAQ() {
                   <td className="px-3 py-2.5 text-[#2ecc71]">✓ Subdomain</td>
                 </tr>
                 <tr className="border-b border-[#222]">
-                  <td className="px-3 py-2.5 font-mono text-xs">bitcoin</td>
+                  <td className="px-3 py-2.5 font-mono text-xs">blog</td>
                   <td className="px-3 py-2.5 font-mono text-xs">
-                    bitcoin.npub1abc...xyz.nodns.shop
+                    blog.npub1abc...xyz.nodns.shop
                   </td>
                   <td className="px-3 py-2.5 text-[#2ecc71]">✓ Subdomain</td>
                 </tr>
                 <tr className="border-b border-[#222]">
                   <td className="px-3 py-2.5 font-mono text-xs text-[#e74c3c]">
-                    bitcoin.alice.nodns.shop
+                    blog.alice.nodns.shop
                   </td>
                   <td className="px-3 py-2.5 font-mono text-xs text-[#e74c3c]">
-                    bitcoin.alice.nodns.shop.npub1abc...xyz.nodns.shop
+                    blog.alice.nodns.shop.npub1abc...xyz.nodns.shop
                   </td>
                   <td className="px-3 py-2.5 text-[#e74c3c]">✗ Wrong!</td>
                 </tr>
@@ -83,19 +83,18 @@ export function FAQ() {
             </table>
           </div>
           <p className="mb-3 text-[#bbb]">
-            <strong>What happened:</strong> A user wanted to publish crypto
-            payment addresses (Bitcoin, Ethereum, Solana) as TXT records. They
-            put a full domain path like{" "}
-            <code className="font-mono text-[#ff6b35]">bitcoin.alice.nodns.shop</code> in the name
+            <strong>What happened:</strong> A user wanted to publish a subdomain
+            record for their delegated name. They put a full domain path like{" "}
+            <code className="font-mono text-[#ff6b35]">blog.alice.nodns.shop</code> in the name
             field, probably intending to create records under a delegated name.
             But the bot treated the entire string as a subdomain label and
             appended their own npub and zone on top.
           </p>
           <p className="text-[#bbb]">
             <strong>How to fix it:</strong> Use just{" "}
-            <code className="font-mono text-[#ff6b35]">bitcoin</code>,{" "}
-            <code className="font-mono text-[#ff6b35]">ethereum</code>, or{" "}
-            <code className="font-mono text-[#ff6b35]">solana</code> as the name. If you have a
+            <code className="font-mono text-[#ff6b35]">blog</code>,{" "}
+            <code className="font-mono text-[#ff6b35]">api</code>, or{" "}
+            <code className="font-mono text-[#ff6b35]">www</code> as the name. If you have a
             delegated name (e.g.{" "}
             <code className="font-mono text-[#ff6b35]">alice.nodns.shop</code>), just use the name
             part that was delegated to you.

@@ -1,3 +1,5 @@
+import { RELAYS } from "@/lib/constants";
+
 export function Architecture() {
   return (
     <section id="architecture" className="px-6 py-16">
@@ -12,21 +14,11 @@ export function Architecture() {
               <div className="mb-2.5 border-b border-[#222] pb-2 text-sm font-bold text-[#e0e0e0]">
                 Nostr Relays
               </div>
-              <div className="text-xs text-[#666] leading-relaxed">
-                wss://relay.damus.io
-              </div>
-              <div className="text-xs text-[#666] leading-relaxed">
-                wss://nos.lol
-              </div>
-              <div className="text-xs text-[#666] leading-relaxed">
-                wss://relay.nostr.band
-              </div>
-              <div className="text-xs text-[#666] leading-relaxed">
-                wss://nostr.wine
-              </div>
-              <div className="text-xs text-[#666] leading-relaxed">
-                wss://relay.tollgate.me
-              </div>
+              {RELAYS.map((relay) => (
+                <div key={relay} className="text-xs text-[#666] leading-relaxed">
+                  {relay}
+                </div>
+              ))}
             </div>
 
             {/* Arrow */}

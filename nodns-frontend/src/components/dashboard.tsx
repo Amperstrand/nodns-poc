@@ -5,10 +5,12 @@ import {
   generateEphemeralKeyPair,
   keyPairFromNsec,
   publishDnsEvent,
+  publishDeleteEvent,
 } from "@/lib/nostr";
 import { queryDoh } from "@/lib/dns";
 import { DEFAULT_ZONE } from "@/lib/constants";
-import type { KeyPair, PendingRecord, FeedbackType } from "@/lib/types";
+import { validateRecord } from "@/lib/validation";
+import type { KeyPair, PendingRecord, DnsRecord, FeedbackType } from "@/lib/types";
 import {
   PublishPipeline,
   type PipelineStatus,
@@ -48,13 +50,24 @@ export function Dashboard() {
   const [pipelineFqdn, setPipelineFqdn] = useState("");
   const [pipelineEventId, setPipelineEventId] = useState<string | null>(null);
 
+  const [publishedRecords, setPublishedRecords] = useState<DnsRecord[]>([]);
+  const [deleting, setDeleting] = useState(false);
+
   const pipelineTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pipelineStartRef = useRef<number>(0);
   const dnsPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const keyPairRef = useRef<KeyPair | null>(null);
+  const pipelineContainerRef = useRef<HTMLDivElement | null>(null);
+
+  const pipelineTimeoutRefs = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const deleteTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const domainDisplay = keyPair
     ? `${keyPair.npub.slice(0, 20)}...${"." + DEFAULT_ZONE}`
+    : "";
+
+  const fullDomain = keyPair
+    ? `${keyPair.npub}.${DEFAULT_ZONE}`
     : "";
 
   const handleCopy = useCallback((text: string) => {
@@ -70,6 +83,10 @@ export function Dashboard() {
       clearInterval(dnsPollRef.current);
       dnsPollRef.current = null;
     }
+    for (const t of pipelineTimeoutRefs.current) {
+      clearTimeout(t);
+    }
+    pipelineTimeoutRefs.current = [];
   }, []);
 
   const startPipelineDnsPolling = useCallback(
@@ -115,14 +132,20 @@ export function Dashboard() {
         setPipelineElapsed((Date.now() - pipelineStartRef.current) / 1000);
       }, 100);
 
-      setTimeout(() => {
+      const t1 = setTimeout(() => {
+        pipelineContainerRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 100);
+
+      const t2 = setTimeout(() => {
         setPipelineStatus("processing");
       }, 1000);
 
-      setTimeout(() => {
+      const t3 = setTimeout(() => {
         setPipelineStatus("resolving");
         startPipelineDnsPolling(fqdn);
       }, 3000);
+
+      pipelineTimeoutRefs.current = [t1, t2, t3];
     },
     [stopPipelineTimers, startPipelineDnsPolling],
   );
@@ -206,6 +229,10 @@ export function Dashboard() {
   useEffect(() => {
     return () => {
       stopPipelineTimers();
+      if (deleteTimeoutRef.current) {
+        clearTimeout(deleteTimeoutRef.current);
+        deleteTimeoutRef.current = null;
+      }
     };
   }, [stopPipelineTimers]);
 
@@ -241,18 +268,27 @@ export function Dashboard() {
   }, [stopPipelineTimers]);
 
   const handleAddRecord = useCallback(() => {
-    if (!recValue.trim()) {
+    const name = recName.trim();
+    const value = recValue.trim();
+
+    if (!value) {
       setFeedback({ message: "Value is required.", type: "error" });
       return;
     }
-    const name = recName.trim();
+
+    const validationError = validateRecord(recType, name, value);
+    if (validationError) {
+      setFeedback({ message: validationError, type: "error" });
+      return;
+    }
+
     const displayName = name === "@" || name === "" ? "@ (root)" : name;
     setPendingRecords((prev) => [
       ...prev,
       {
         type: recType,
         name: name === "@" ? "" : name,
-        value: recValue.trim(),
+        value,
         ttl: recTtl,
         displayName,
       },
@@ -287,6 +323,48 @@ export function Dashboard() {
       setVerifyResult("DNS query failed. Try again in a moment.");
     }
   }, [keyPair]);
+
+  const fetchRecords = useCallback(async () => {
+    if (!keyPair) return;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 30_000);
+    try {
+      const res = await fetch("/api/records", { signal: controller.signal });
+      if (!res.ok) return;
+      const data = await res.json();
+      const mine = (data.records || []).filter((r: DnsRecord) => r.npub === keyPair.npub);
+      setPublishedRecords(mine);
+    } catch {
+      // Silently fail — not critical
+    } finally {
+      clearTimeout(timer);
+    }
+  }, [keyPair]);
+
+  const handleDelete = useCallback(async (record: DnsRecord) => {
+    if (!keyPair) return;
+    setDeleting(true);
+    try {
+      await publishDeleteEvent(
+        [{ type: record.type, name: record.name === "@" ? "" : record.name }],
+        keyPair.secretKey,
+      );
+      setFeedback({ message: `Delete event published for ${record.type} record`, type: "success" });
+      deleteTimeoutRef.current = setTimeout(() => fetchRecords(), 3000);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Delete failed";
+      setFeedback({ message: msg, type: "error" });
+    }
+    setDeleting(false);
+  }, [keyPair, fetchRecords]);
+
+  useEffect(() => {
+    if (!keyPair) {
+      setPublishedRecords([]);
+      return;
+    }
+    fetchRecords();
+  }, [keyPair, fetchRecords]);
 
   return (
     <section
@@ -326,7 +404,7 @@ export function Dashboard() {
               </div>
             ) : (
               <>
-                <div className="mb-4 rounded-lg border border-[rgba(255,107,53,0.3)] bg-[rgba(255,107,53,0.15)] p-3.5 text-center font-mono text-base font-semibold text-[#ff6b35]">
+                <div data-testid="domain-display" className="mb-4 rounded-lg border border-[rgba(255,107,53,0.3)] bg-[rgba(255,107,53,0.15)] p-3.5 text-center font-mono text-base font-semibold text-[#ff6b35]">
                   {domainDisplay}
                 </div>
 
@@ -334,7 +412,7 @@ export function Dashboard() {
                   <div className="mb-1 font-sans text-[0.7rem] uppercase tracking-wider text-[#666]">
                     Public Key (npub)
                   </div>
-                  <div>{keyPair.npub}</div>
+                  <div data-testid="npub-value">{keyPair.npub}</div>
                   <button
                     onClick={() => handleCopy(keyPair.npub)}
                     className="absolute right-2 top-2 rounded bg-[#222] px-2 py-1 text-[0.7rem] text-[#666] hover:text-[#e0e0e0]"
@@ -352,7 +430,7 @@ export function Dashboard() {
                   <div className="mb-1 font-sans text-[0.7rem] uppercase tracking-wider text-[#666]">
                     Secret Key (nsec)
                   </div>
-                  <div>{keyPair.nsec}</div>
+                  <div data-testid="nsec-value">{keyPair.nsec}</div>
                   <button
                     onClick={() => handleCopy(keyPair.nsec)}
                     className="absolute right-2 top-2 rounded bg-[#222] px-2 py-1 text-[0.7rem] text-[#666] hover:text-[#e0e0e0]"
@@ -452,6 +530,7 @@ export function Dashboard() {
                       Type
                     </label>
                     <select
+                      data-testid="rec-type"
                       value={recType}
                       onChange={(e) => setRecType(e.target.value)}
                       className="w-full rounded-lg border border-[#222] bg-[#0a0a0a] px-3 py-2.5 text-sm text-[#e0e0e0] outline-none focus:border-[#ff6b35]"
@@ -469,6 +548,7 @@ export function Dashboard() {
                     </label>
                     <input
                       type="text"
+                      data-testid="rec-name"
                       value={recName}
                       onChange={(e) => setRecName(e.target.value)}
                       placeholder="@ for root, or subdomain"
@@ -481,6 +561,7 @@ export function Dashboard() {
                     </label>
                     <input
                       type="text"
+                      data-testid="rec-value"
                       value={recValue}
                       onChange={(e) => setRecValue(e.target.value)}
                       placeholder="IP, hostname, or text"
@@ -521,7 +602,7 @@ export function Dashboard() {
                 </div>
 
                 {pendingRecords.length > 0 && (
-                  <div className="mb-3.5 max-h-[200px] overflow-y-auto rounded-lg border border-[#222]">
+                  <div data-testid="record-list" className="mb-3.5 max-h-[200px] overflow-y-auto rounded-lg border border-[#222]">
                     {pendingRecords.map((r, i) => (
                       <div
                         key={i}
@@ -535,6 +616,7 @@ export function Dashboard() {
                           <span className="text-[#666]">(TTL {r.ttl})</span>
                         </span>
                         <button
+                          data-testid="remove-record-btn"
                           onClick={() => handleRemoveRecord(i)}
                           className="px-1 text-[#e74c3c] opacity-60 hover:opacity-100"
                         >
@@ -546,7 +628,7 @@ export function Dashboard() {
                 )}
 
                 {pendingRecords.length > 0 && (
-                  <p className="mb-3 text-xs text-[#666]">
+                  <p data-testid="record-count" className="mb-3 text-xs text-[#666]">
                     {pendingRecords.length} record
                     {pendingRecords.length > 1 ? "s" : ""} queued
                   </p>
@@ -589,6 +671,7 @@ export function Dashboard() {
 
                 {feedback && (
                   <div
+                    data-testid="publish-feedback"
                     className={`mt-3 rounded-lg border px-3.5 py-2.5 text-sm ${
                       feedback.type === "success"
                         ? "border-[rgba(46,204,113,0.25)] bg-[rgba(46,204,113,0.1)] text-[#2ecc71]"
@@ -629,7 +712,34 @@ export function Dashboard() {
           </div>
         </div>
 
-        <div className="mt-6">
+        {keyPair && publishedRecords.length > 0 && (
+          <div className="mt-4 rounded-[10px] border border-[#222] bg-[#141414] p-6">
+            <h3 className="mb-4 text-lg font-semibold">Your Records</h3>
+            <div className="space-y-2">
+              {publishedRecords.map((r, i) => (
+                <div key={i} className="flex items-center justify-between rounded-lg border border-[#222] px-3 py-2">
+                  <span className="text-sm">
+                    <span className="mr-2 rounded bg-[rgba(255,107,53,0.15)] px-1.5 py-0.5 text-[0.7rem] font-semibold text-[#ff6b35]">
+                      {r.type}
+                    </span>
+                    <span className="text-[#e0e0e0]">{r.name === "@" ? "(root)" : r.name}</span>
+                    <span className="mx-2 text-[#666]">→</span>
+                    <span className="text-[#bbb]">{r.rdata}</span>
+                  </span>
+                  <button
+                    onClick={() => handleDelete(r)}
+                    disabled={deleting}
+                    className="rounded px-2 py-1 text-xs font-semibold text-[#e74c3c] transition-colors hover:bg-[rgba(231,76,60,0.15)] disabled:opacity-50"
+                  >
+                    Delete
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div ref={pipelineContainerRef} className="mt-6">
           <PublishPipeline
             status={pipelineStatus}
             elapsed={pipelineElapsed}
@@ -641,9 +751,11 @@ export function Dashboard() {
 
         {keyPair && (
           <CertRequest
-            key={domainDisplay}
-            domain={domainDisplay}
+            key={fullDomain}
+            domain={fullDomain}
             disabled={pipelineStatus !== "success"}
+            nsecBytes={keyPair.secretKey}
+            npub={keyPair.npub}
           />
         )}
       </div>

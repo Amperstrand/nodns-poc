@@ -4,12 +4,12 @@ export function SiteFooter() {
       <p>NoDNS &mdash; DNS from Nostr. Open protocol, no central authority.</p>
       <p className="mt-2">
         <a
-          href="https://relay.ngit.dev"
+          href="https://github.com/nbd-wtf/nostr-tools"
           target="_blank"
           rel="noopener noreferrer"
           className="text-[#ff6b35] hover:underline"
         >
-          Protocol Spec
+          Powered by nostr-tools
         </a>
         {" "}&middot;{" "}
         <a

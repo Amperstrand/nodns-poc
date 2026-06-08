@@ -12,10 +12,11 @@ import { FAQ } from "@/components/faq";
 import { Roadmap } from "@/components/roadmap";
 import { Infrastructure } from "@/components/infrastructure";
 import { SiteFooter } from "@/components/site-footer";
+import { ErrorBoundary } from "@/components/error-boundary";
 
 export default function Home() {
   return (
-    <>
+    <ErrorBoundary>
       <SiteHeader />
       <main>
         <Hero />
@@ -32,6 +33,6 @@ export default function Home() {
         <Infrastructure />
       </main>
       <SiteFooter />
-    </>
+    </ErrorBoundary>
   );
 }

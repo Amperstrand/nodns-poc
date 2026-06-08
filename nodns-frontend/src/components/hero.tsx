@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 const DEMO_MESSAGES = [
   "NoDNS was here! 🌍",
@@ -16,6 +16,13 @@ function getRandomMessage(): string {
 
 export function Hero() {
   const [launching, setLaunching] = useState(false);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    };
+  }, []);
 
   const handleTryIt = useCallback(() => {
     if (launching) return;
@@ -25,7 +32,7 @@ export function Hero() {
 
     document.getElementById("dashboard")?.scrollIntoView({ behavior: "smooth" });
 
-    setTimeout(() => {
+    timeoutRef.current = setTimeout(() => {
       window.dispatchEvent(
         new CustomEvent("nodns-demo-publish", {
           detail: { message },

@@ -26,8 +26,14 @@ export function RecordBrowser() {
   const [dohLoading, setDohLoading] = useState(false);
 
   const fetchRecords = useCallback(async () => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 30_000);
     try {
-      const resp = await fetch("https://nodns.shop/api/records");
+      const resp = await fetch("/api/records", { signal: controller.signal });
+      if (!resp.ok) {
+        setRecords([]);
+        return;
+      }
       const data: ApiRecordsResponse = await resp.json();
       const recs = data.records || [];
       setRecords(recs);
@@ -40,11 +46,18 @@ export function RecordBrowser() {
         types: types.length,
       });
 
-      setExpandedGroups(new Set(npubs));
+      setExpandedGroups((prev) => {
+        const next = new Set(prev);
+        for (const npub of npubs) {
+          if (!next.has(npub)) next.add(npub);
+        }
+        return next;
+      });
     } catch {
       setRecords([]);
     } finally {
       setLoading(false);
+      clearTimeout(timer);
     }
   }, []);
 
@@ -186,7 +199,7 @@ export function RecordBrowser() {
                 { value: stats.types, label: "Record Types" },
               ].map((s) => (
                 <div key={s.label} className="min-w-[120px] flex-1 rounded-lg border border-[#222] bg-[#141414] px-4 py-3">
-                  <div className="text-2xl font-bold text-[#ff6b35]">
+                  <div data-testid={s.label === "Total Records" ? "stat-total" : undefined} className="text-2xl font-bold text-[#ff6b35]">
                     {loading ? "—" : s.value}
                   </div>
                   <div className="text-[0.75rem] uppercase tracking-wider text-[#666]">
@@ -209,6 +222,7 @@ export function RecordBrowser() {
               Object.entries(grouped).map(([npub, recs]) => (
                 <div key={npub} className="mb-1">
                   <div
+                    data-testid="npub-group-header"
                     onClick={() => toggleGroup(npub)}
                     className="flex cursor-pointer items-center justify-between rounded-lg border border-[#222] bg-[#141414] px-4 py-3 font-mono text-sm select-none hover:bg-[#1a1a1a]"
                   >
@@ -224,7 +238,7 @@ export function RecordBrowser() {
                     </span>
                   </div>
                   {expandedGroups.has(npub) && (
-                    <div className="overflow-x-auto">
+                    <div data-testid="npub-group-records" className="overflow-x-auto">
                       <table className="w-full text-sm">
                         <thead>
                           <tr>

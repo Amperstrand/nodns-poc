@@ -1,30 +1,20 @@
 //! ACME DNS-01 certificate automation via Let's Encrypt.
-//!
-//! Automates certificate issuance using DNS-01 challenges. When a user
-//! requests a cert the bot:
-//! 1. Creates an ACME order
-//! 2. Publishes `_acme-challenge` TXT via DDNS UPDATE
-//! 3. Tells LE to verify
-//! 4. Retrieves and stores the issued certificate
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use instant_acme::{
-    Account, AccountCredentials, AuthorizationStatus, ChallengeType, Identifier, NewAccount,
-    NewOrder, OrderStatus, RetryPolicy,
+    Account, AccountCredentials, AuthorizationStatus, ChallengeType, ExternalAccountKey,
+    Identifier, NewAccount, NewOrder, OrderStatus, RetryPolicy,
 };
 use thiserror::Error;
 use tracing::{error, info, warn};
-use uuid::Uuid;
 
 use crate::config::AcmeConfig;
 use crate::dns::Updater;
 use crate::store::Store;
-
-// ---------------------------------------------------------------------------
-// Error type
-// ---------------------------------------------------------------------------
+use base64::Engine;
+use sha2::{Sha256, Digest};
 
 #[derive(Debug, Error)]
 pub enum AcmeError {
@@ -44,16 +34,13 @@ pub enum AcmeError {
     StoreError(String),
 }
 
-// ---------------------------------------------------------------------------
-// AcmeService
-// ---------------------------------------------------------------------------
-
 pub struct AcmeService {
-    account: Arc<Mutex<Option<Account>>>,
+    account: Arc<Mutex<HashMap<String, Account>>>,
     config: AcmeConfig,
     updaters: Arc<HashMap<String, Updater>>,
     store: Arc<Store>,
     zones: Vec<String>,
+    zerossl_eab: Option<ExternalAccountKey>,
 }
 
 impl AcmeService {
@@ -63,46 +50,82 @@ impl AcmeService {
         store: Arc<Store>,
         zones: Vec<String>,
     ) -> Self {
+        let zerossl_eab = if !config.zerossl_eab_kid.is_empty() && !config.zerossl_eab_hmac_key.is_empty() {
+            match base64::engine::general_purpose::STANDARD.decode(&config.zerossl_eab_hmac_key) {
+                Ok(key_bytes) => {
+                    info!("ZeroSSL EAB credentials loaded (kid: {}...)", &config.zerossl_eab_kid[..8.min(config.zerossl_eab_kid.len())]);
+                    Some(ExternalAccountKey::new(config.zerossl_eab_kid.clone(), &key_bytes))
+                }
+                Err(e) => {
+                    warn!(error = %e, "failed to decode ZeroSSL EAB HMAC key — ZeroSSL will not be available");
+                    None
+                }
+            }
+        } else {
+            None
+        };
+
         Self {
-            account: Arc::new(Mutex::new(None)),
+            account: Arc::new(Mutex::new(HashMap::new())),
             config,
             updaters,
             store,
             zones,
+            zerossl_eab,
         }
     }
 
-    // -------------------------------------------------------------------
-    // Account management
-    // -------------------------------------------------------------------
+    fn log_stage(
+        &self,
+        order_id: &str,
+        stage: &str,
+        message: &str,
+        details: Option<&str>,
+    ) {
+        if let Err(e) = self.store.save_acme_order_log(order_id, stage, message, details) {
+            warn!(order_id = %order_id, error = %e, "failed to save ACME order log");
+        }
+    }
 
-    async fn get_or_create_account(&self) -> Result<Account, AcmeError> {
+    async fn get_or_create_account(&self, order_id: &str, directory_url: &str) -> Result<Account, AcmeError> {
         {
-            let guard = self.account.lock().unwrap();
-            if let Some(ref acct) = *guard {
+            let guard = self.account.lock().unwrap_or_else(|e| {
+                tracing::error!("ACME account cache mutex poisoned, recovering: {}", e);
+                e.into_inner()
+            });
+            if let Some(acct) = guard.get(directory_url) {
                 return Ok(acct.clone());
             }
         }
 
-        let account = match self.restore_account()? {
+        let account = match self.restore_account(order_id, directory_url)? {
             Some(acct) => acct,
-            None => self.create_account().await?,
+            None => self.create_account(order_id, directory_url).await?,
         };
 
         {
-            let mut guard = self.account.lock().unwrap();
-            *guard = Some(account.clone());
+            let mut guard = self.account.lock().unwrap_or_else(|e| {
+                tracing::error!("ACME account cache mutex poisoned, recovering: {}", e);
+                e.into_inner()
+            });
+            if let Some(existing) = guard.get(directory_url) {
+                return Ok(existing.clone());
+            }
+            guard.insert(directory_url.to_string(), account.clone());
         }
 
         Ok(account)
     }
 
-    fn restore_account(&self) -> Result<Option<Account>, AcmeError> {
-        let json = match self.store.get_meta("acme_credentials") {
+    fn restore_account(&self, order_id: &str, directory_url: &str) -> Result<Option<Account>, AcmeError> {
+        let meta_key = format!("acme_creds:{}", directory_url);
+        let json = match self.store.get_meta(&meta_key) {
             Ok(Some(v)) => v,
             Ok(None) => return Ok(None),
             Err(e) => return Err(AcmeError::StoreError(e.to_string())),
         };
+
+        self.log_stage(order_id, "account_restore", "Restoring existing ACME account from stored credentials", None);
 
         let credentials: AccountCredentials =
             serde_json::from_str(&json).map_err(|e| AcmeError::AccountError(e.to_string()))?;
@@ -117,17 +140,34 @@ impl AcmeService {
             })
         })?;
 
-        info!("restored existing ACME account");
+        info!("restored existing ACME account for {}", directory_url);
         Ok(Some(account))
     }
 
-    async fn create_account(&self) -> Result<Account, AcmeError> {
-        let contact: Vec<String> = if self.config.contact_email.is_empty() {
-            vec![]
+    async fn create_account(&self, order_id: &str, directory_url: &str) -> Result<Account, AcmeError> {
+        let email = if self.config.contact_email.is_empty() {
+            "cert@nodns.shop".to_string()
         } else {
-            vec![format!("mailto:{}", self.config.contact_email)]
+            self.config.contact_email.clone()
         };
+
+        let ca_name = if directory_url.contains("zerossl.com") { "ZeroSSL" } else { "Let's Encrypt" };
+
+        self.log_stage(
+            order_id,
+            "account_create",
+            &format!("Creating ACME account with {}", ca_name),
+            Some(&serde_json::json!({ "email": email, "directory_url": directory_url, "ca": ca_name }).to_string()),
+        );
+
+        let contact = vec![format!("mailto:{}", email)];
         let contact_refs: Vec<&str> = contact.iter().map(|s| s.as_str()).collect();
+
+        let eab = if directory_url.contains("zerossl.com") {
+            self.zerossl_eab.as_ref()
+        } else {
+            None
+        };
 
         let (account, credentials) = Account::builder()
             .map_err(|e| AcmeError::AccountError(e.to_string()))?
@@ -137,42 +177,39 @@ impl AcmeService {
                     terms_of_service_agreed: true,
                     only_return_existing: false,
                 },
-                self.config.directory_url.clone(),
-                None,
+                directory_url.to_string(),
+                eab,
             )
             .await
             .map_err(|e| AcmeError::AccountError(e.to_string()))?;
 
+        let meta_key = format!("acme_creds:{}", directory_url);
         let json = serde_json::to_string(&credentials)
             .map_err(|e| AcmeError::StoreError(e.to_string()))?;
         self.store
-            .set_meta("acme_credentials", &json)
+            .set_meta(&meta_key, &json)
             .map_err(|e| AcmeError::StoreError(e.to_string()))?;
 
-        info!("created new ACME account");
+        info!("created new ACME account for {}", directory_url);
         Ok(account)
     }
 
-    // -------------------------------------------------------------------
-    // Certificate issuance
-    // -------------------------------------------------------------------
-
     pub async fn request_certificate(
         &self,
+        order_id: &str,
         domain: &str,
-        npub: &str,
+        _npub: &str,
+        csr_der: Option<Vec<u8>>,
+        directory_url_override: Option<&str>,
     ) -> Result<String, AcmeError> {
-        let order_id = Uuid::new_v4().to_string();
-
-        self.store
-            .save_acme_order(&order_id, domain, npub, "pending")
-            .map_err(|e| AcmeError::StoreError(e.to_string()))?;
-
         info!(order_id = %order_id, domain = %domain, "starting ACME order");
 
-        if let Err(e) = self.run_acme_flow(&order_id, domain).await {
+        let directory_url = directory_url_override.unwrap_or(&self.config.directory_url);
+
+        if let Err(e) = self.run_acme_flow(order_id, domain, csr_der.as_deref(), directory_url).await {
             let err_msg = e.to_string();
             error!(order_id = %order_id, error = %err_msg, "ACME order failed");
+            self.log_stage(order_id, "error", &format!("Order failed: {}", err_msg), None);
             if let Err(se) = self.store.update_acme_order_status(
                 &order_id,
                 "failed",
@@ -185,22 +222,63 @@ impl AcmeService {
             return Err(e);
         }
 
-        Ok(order_id)
+        Ok(order_id.to_string())
     }
 
-    async fn run_acme_flow(&self, order_id: &str, domain: &str) -> Result<(), AcmeError> {
-        let account = self.get_or_create_account().await?;
+    async fn run_acme_flow(
+        &self,
+        order_id: &str,
+        domain: &str,
+        csr_der: Option<&[u8]>,
+        directory_url: &str,
+    ) -> Result<(), AcmeError> {
+        // Stage 1: Account
+        info!(order_id = %order_id, domain = %domain, "stage 1: getting ACME account");
+
+        let account = self
+            .get_or_create_account(order_id, directory_url)
+            .await
+            .map_err(|e| {
+                error!(order_id = %order_id, error = %e, "stage 1 failed: account creation");
+                e
+            })?;
+
+        // Stage 2: Order
+        let identifiers = [Identifier::Dns(domain.to_string())];
+        let identifier_names: Vec<String> = identifiers.iter().map(|i| match i {
+            Identifier::Dns(s) => s.clone(),
+            _ => format!("{:?}", i),
+        }).collect();
+
+        self.log_stage(
+            order_id,
+            "order_create",
+            "Creating certificate order",
+            Some(&serde_json::json!({
+                "domain": domain,
+                "identifiers": identifier_names,
+            }).to_string()),
+        );
+
+        info!(order_id = %order_id, "stage 2: creating ACME order");
 
         let mut order = account
-            .new_order(&NewOrder::new(&[Identifier::Dns(domain.to_string())]))
+            .new_order(&NewOrder::new(&identifiers))
             .await
-            .map_err(|e| AcmeError::OrderFailed(e.to_string()))?;
+            .map_err(|e| {
+                error!(order_id = %order_id, error = %e, "stage 2 failed: new_order");
+                AcmeError::OrderFailed(e.to_string())
+            })?;
 
-        info!(order_id = %order_id, "ACME order created, processing authorizations");
+        // Stage 3: Challenges
+        info!(order_id = %order_id, "stage 3: processing DNS-01 challenges");
 
         let mut authorizations = order.authorizations();
         while let Some(result) = authorizations.next().await {
-            let mut authz = result.map_err(|e| AcmeError::ChallengeFailed(e.to_string()))?;
+            let mut authz = result.map_err(|e| {
+                error!(order_id = %order_id, error = %e, "stage 3 failed: authorization fetch");
+                AcmeError::ChallengeFailed(e.to_string())
+            })?;
             match authz.status {
                 AuthorizationStatus::Pending => {}
                 AuthorizationStatus::Valid => continue,
@@ -219,10 +297,15 @@ impl AcmeService {
             let dns_value = challenge.key_authorization().dns_value();
             let challenge_name = format!("_acme-challenge.{}", challenge.identifier());
 
-            info!(
-                order_id = %order_id,
-                challenge_name = %challenge_name,
-                "publishing DNS-01 challenge TXT record"
+            self.log_stage(
+                order_id,
+                "challenge_prepare",
+                "Preparing DNS-01 challenge",
+                Some(&serde_json::json!({
+                    "challenge_name": challenge_name,
+                    "challenge_value": dns_value,
+                    "identifier": challenge.identifier().to_string(),
+                }).to_string()),
             );
 
             let zone = self
@@ -238,25 +321,68 @@ impl AcmeService {
                 AcmeError::DnsUpdateFailed(format!("no updater for zone {}", zone))
             })?;
 
+            let fqdn = format!("{}.", challenge_name);
+
+            self.log_stage(
+                order_id,
+                "challenge_publish",
+                "Publishing _acme-challenge TXT record via DDNS",
+                Some(&serde_json::json!({
+                    "fqdn": fqdn,
+                    "ttl": self.config.challenge_ttl,
+                    "rdata": dns_value,
+                }).to_string()),
+            );
+
+            info!(
+                order_id = %order_id,
+                challenge_name = %challenge_name,
+                "stage 3: publishing DNS-01 challenge TXT"
+            );
+
             updater
                 .update_record(&challenge_name, self.config.challenge_ttl, 16, &dns_value)
                 .await
-                .map_err(|e| AcmeError::DnsUpdateFailed(e.to_string()))?;
+                .map_err(|e| {
+                    error!(order_id = %order_id, error = %e, "stage 3 failed: DDNS update");
+                    AcmeError::DnsUpdateFailed(e.to_string())
+                })?;
 
-            info!(order_id = %order_id, "challenge TXT published, signaling ready");
+            self.log_stage(
+                order_id,
+                "challenge_signal",
+                "Signaling CA to verify",
+                None,
+            );
+
+            info!(order_id = %order_id, "stage 3: challenge TXT published, signaling ready");
 
             challenge
                 .set_ready()
                 .await
-                .map_err(|e| AcmeError::ChallengeFailed(e.to_string()))?;
+                .map_err(|e| {
+                    error!(order_id = %order_id, error = %e, "stage 3 failed: set_ready");
+                    AcmeError::ChallengeFailed(e.to_string())
+                })?;
         }
 
-        info!(order_id = %order_id, "polling for order readiness");
+        // Stage 4: Poll
+        self.log_stage(
+            order_id,
+            "challenge_verify",
+            "Polling CA for verification result",
+            None,
+        );
+
+        info!(order_id = %order_id, "stage 4: polling for order readiness");
 
         let status = order
             .poll_ready(&RetryPolicy::default())
             .await
-            .map_err(|e| AcmeError::OrderFailed(e.to_string()))?;
+            .map_err(|e| {
+                error!(order_id = %order_id, error = %e, "stage 4 failed: poll_ready");
+                AcmeError::OrderFailed(e.to_string())
+            })?;
 
         if status != OrderStatus::Ready {
             return Err(AcmeError::OrderFailed(format!(
@@ -265,21 +391,63 @@ impl AcmeService {
             )));
         }
 
-        info!(order_id = %order_id, "finalizing order");
+        // Stage 5: Finalize
+        let finalize_mode = if csr_der.is_some() { "csr_provided" } else { "key_generated" };
+        self.log_stage(
+            order_id,
+            "order_finalize",
+            "Finalizing order",
+            Some(&serde_json::json!({ "mode": finalize_mode }).to_string()),
+        );
 
-        let private_key_pem = order
-            .finalize()
-            .await
-            .map_err(|e| AcmeError::OrderFailed(e.to_string()))?;
+        info!(order_id = %order_id, "stage 5: finalizing order and downloading certificate");
 
-        info!(order_id = %order_id, "polling for certificate");
+        let private_key_pem = if let Some(csr) = csr_der {
+            order
+                .finalize_csr(csr)
+                .await
+                .map_err(|e| {
+                    error!(order_id = %order_id, error = %e, "stage 5 failed: finalize_csr");
+                    AcmeError::OrderFailed(e.to_string())
+                })?;
+            None
+        } else {
+            Some(order
+                .finalize()
+                .await
+                .map_err(|e| {
+                    error!(order_id = %order_id, error = %e, "stage 5 failed: finalize");
+                    AcmeError::OrderFailed(e.to_string())
+                })?)
+        };
+
+        info!(order_id = %order_id, "stage 5: order finalized, polling for certificate");
 
         let cert_chain_pem = order
             .poll_certificate(&RetryPolicy::default())
             .await
-            .map_err(|e| AcmeError::OrderFailed(e.to_string()))?;
+            .map_err(|e| {
+                error!(order_id = %order_id, error = %e, "stage 5 failed: poll_certificate");
+                AcmeError::OrderFailed(e.to_string())
+            })?;
 
-        // Clean up challenge TXT record
+        let cert_fingerprint = {
+            let mut hasher = Sha256::new();
+            hasher.update(cert_chain_pem.as_bytes());
+            let hash = hasher.finalize();
+            hash.iter().map(|b| format!("{b:02x}")).collect::<String>()
+        };
+
+        self.log_stage(
+            order_id,
+            "cert_download",
+            "Certificate issued successfully",
+            Some(&serde_json::json!({
+                "cert_fingerprint_sha256": cert_fingerprint,
+            }).to_string()),
+        );
+
+        // Cleanup
         let challenge_fqdn = format!("_acme-challenge.{}", domain);
         if let Some(zone) = self.find_zone_for_domain(&challenge_fqdn) {
             if let Some(updater) = self.updaters.get(&zone) {
@@ -289,8 +457,15 @@ impl AcmeService {
                         error = %e,
                         "failed to clean up challenge TXT record"
                     );
+                    self.log_stage(
+                        order_id,
+                        "cleanup",
+                        "Failed to clean up challenge TXT record",
+                        Some(&serde_json::json!({ "error": e.to_string() }).to_string()),
+                    );
                 } else {
                     info!(order_id = %order_id, "challenge TXT record cleaned up");
+                    self.log_stage(order_id, "cleanup", "Cleaned up challenge TXT record", None);
                 }
             }
         }
@@ -300,7 +475,7 @@ impl AcmeService {
                 order_id,
                 "issued",
                 Some(&cert_chain_pem),
-                Some(&private_key_pem),
+                private_key_pem.as_deref(),
                 None,
             )
             .map_err(|e| AcmeError::StoreError(e.to_string()))?;
@@ -308,10 +483,6 @@ impl AcmeService {
         info!(order_id = %order_id, domain = %domain, "certificate issued successfully");
         Ok(())
     }
-
-    // -------------------------------------------------------------------
-    // Zone matching
-    // -------------------------------------------------------------------
 
     fn find_zone_for_domain(&self, domain: &str) -> Option<String> {
         let domain = domain.trim_end_matches('.');

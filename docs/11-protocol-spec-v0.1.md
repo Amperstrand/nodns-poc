@@ -19,6 +19,10 @@ All operations use **kind 11111** events. The event type is determined by the ta
 
 The most common event. A pubkey publishes DNS records for domains they control.
 
+### Type 1b: DNS Record Delete
+
+Removes a specific DNS record. The sender must be the same pubkey that created the record (or the delegated owner).
+
 **Authority rules:**
 - `npub1*.zone` — always allowed (free names, bound to your pubkey). Anti-spam fee may apply.
 - `alice.zone` — only allowed if a delegation event exists assigning `alice.zone` to your pubkey, and the delegation has not expired.
@@ -58,6 +62,41 @@ With a subdomain:
 ["record", "CNAME", "www", "npub1ykal2...pa3dl.nodns.shop", "", "", "", "", "", "", "3600"]
 ```
 Creates: `www.npub1ykal2...pa3dl.nodns.shop` → `CNAME npub1ykal2...pa3dl.nodns.shop`
+
+### Type 1b: DNS Record Delete
+
+Removes a specific DNS record. Only the pubkey that owns the subdomain (or the delegated owner) can delete records.
+
+**Tags:**
+
+```
+["delete", TYPE, NAME]
+```
+
+- Position 0: literal string `"delete"`
+- Position 1: DNS record type to delete (`"A"`, `"AAAA"`, `"CNAME"`, `"TXT"`, `"MX"`)
+- Position 2: Subdomain name (`""` or `"@"` for apex, `"www"` for www.subdomain)
+
+**Authority rules:** Same as Type 1 — the sender must own the subdomain via npub binding or active delegation.
+
+**Example:**
+
+```json
+{
+  "kind": 11111,
+  "content": "DNS record delete",
+  "tags": [
+    ["delete", "A", ""],
+    ["delete", "TXT", "www"]
+  ]
+}
+```
+
+This removes:
+- `A` record at `npub1ykal2...pa3dl.nodns.shop` (apex)
+- `TXT` record at `www.npub1ykal2...pa3dl.nodns.shop`
+
+Multiple delete tags may be included in a single event. Deletes are processed after records in the same event (if both are present), allowing atomic replace semantics.
 
 ### Type 2: Domain Delegation
 
@@ -282,6 +321,7 @@ This creates a dual-layer system: traditional DNS for normal resolution, Nostr a
 kind: 11111
 
 Record tag:        ["record",    TYPE, NAME, RDATA, "", "", "", "", "", "", TTL]
+Delete tag:        ["delete",    TYPE, NAME]
 Delegation tag:    ["delegation", DOMAIN, NPUB, VALID_FROM, VALID_UNTIL, RENEW_BY]
 Registrar tag:     ["registrar", ZONE, PUBKEY_HEX]
 Cashu payment tag: ["cashu",     TOKEN, MINT_URL, AMOUNT]

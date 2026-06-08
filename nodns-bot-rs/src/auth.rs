@@ -298,7 +298,7 @@ mod tests {
     }
 
     fn setup_store() -> Arc<Store> {
-        let store = Store::new(":memory:").expect("open in-memory db");
+        let store = Store::new(":memory:", None).expect("open in-memory db");
         store.init().expect("init schema");
         Arc::new(store)
     }
