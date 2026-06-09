@@ -1,9 +1,7 @@
 import { Manager, ConsoleLogger } from 'coco-cashu-core';
 import { IndexedDbRepositories } from 'coco-cashu-indexeddb';
 
-export const MINT_URL = typeof window !== 'undefined' && window.location.hostname === 'beta.nodns.shop'
-  ? `${window.location.origin}/mint-proxy`
-  : 'https://testnut.cashu.space';
+export const MINT_URL = 'https://nofee.testnut.cashu.space';
 
 export interface WalletInitResult {
   manager: Manager;
