@@ -143,6 +143,55 @@ impl Default for NostrConfig {
     }
 }
 
+/// Per-zone payment configuration.
+///
+/// Each zone can have its own pricing, mint URL, and mint filter.
+/// If a zone has `enabled = false` (the default), the global `[payment]`
+/// section is used as fallback via `apply_defaults()`.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default)]
+pub struct ZonePaymentConfig {
+    pub enabled: bool,
+    pub create_price: u64,
+    pub update_price: u64,
+    pub delete_price: u64,
+    pub npub_names_free: bool,
+    pub mint_url: String,
+    pub mint_filter: String,
+}
+
+impl Default for ZonePaymentConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            create_price: 2,
+            update_price: 0,
+            delete_price: 0,
+            npub_names_free: true,
+            mint_url: "https://testnut.cashu.space".to_string(),
+            mint_filter: "testnut".to_string(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default)]
+pub struct ZoneLeaseConfig {
+    pub grace_period_days: u32,
+    pub max_lease_days: u32,
+    pub operator_lease_expires: Option<String>,
+}
+
+impl Default for ZoneLeaseConfig {
+    fn default() -> Self {
+        Self {
+            grace_period_days: 30,
+            max_lease_days: 365,
+            operator_lease_expires: None,
+        }
+    }
+}
+
 /// DNS connection details for a single zone.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
@@ -154,6 +203,10 @@ pub struct ZoneConfig {
     pub tsig_algorithm: String,
     pub default_ttl: u32,
     pub negative_ttl: u32,
+    #[serde(default)]
+    pub payment: ZonePaymentConfig,
+    #[serde(default)]
+    pub lease: ZoneLeaseConfig,
 }
 
 impl Default for ZoneConfig {
@@ -166,6 +219,8 @@ impl Default for ZoneConfig {
             tsig_algorithm: "hmac-sha256".to_string(),
             default_ttl: 3600,
             negative_ttl: 60,
+            payment: ZonePaymentConfig::default(),
+            lease: ZoneLeaseConfig::default(),
         }
     }
 }
@@ -368,6 +423,8 @@ impl Config {
                 tsig_algorithm: self.dns.tsig_algorithm.clone(),
                 default_ttl: self.dns.default_ttl,
                 negative_ttl: self.dns.negative_ttl,
+                payment: ZonePaymentConfig::default(),
+                lease: ZoneLeaseConfig::default(),
             });
         }
 
@@ -381,6 +438,29 @@ impl Config {
             }
             if z.tsig_algorithm.is_empty() {
                 z.tsig_algorithm = self.dns.tsig_algorithm.clone();
+            }
+        }
+
+        // Propagate global [payment] to zones that don't have zone-level payment enabled.
+        if self.payment.enabled {
+            for z in &mut self.dns.zones {
+                if !z.payment.enabled {
+                    z.payment.enabled = true;
+                    z.payment.create_price = if self.payment.required_sats > 0 {
+                        self.payment.required_sats as u64
+                    } else {
+                        250
+                    };
+                    z.payment.update_price = if self.payment.update_free { 0 } else { self.payment.required_sats as u64 };
+                    z.payment.delete_price = 0;
+                    z.payment.npub_names_free = true;
+                    z.payment.mint_url = if self.payment.cashu_mint_url.is_empty() {
+                        "https://testnut.cashu.space".to_string()
+                    } else {
+                        self.payment.cashu_mint_url.clone()
+                    };
+                    z.payment.mint_filter = String::new();
+                }
             }
         }
 
@@ -651,5 +731,191 @@ zone = "nodns.shop"
         let val = toml::Value::String("5m".to_string());
         let dur = HumaneDuration::try_from(val).unwrap();
         assert_eq!(dur.0, Duration::from_secs(300));
+    }
+
+    #[test]
+    fn zone_payment_config_defaults() {
+        let cfg = ZonePaymentConfig::default();
+        assert!(!cfg.enabled);
+        assert_eq!(cfg.create_price, 2);
+        assert_eq!(cfg.update_price, 0);
+        assert_eq!(cfg.delete_price, 0);
+        assert!(cfg.npub_names_free);
+        assert_eq!(cfg.mint_url, "https://testnut.cashu.space");
+        assert_eq!(cfg.mint_filter, "testnut");
+    }
+
+    #[test]
+    fn per_zone_payment_config_parsing() {
+        let toml = r#"
+[nostr]
+relays = ["wss://relay.example.com"]
+zone = "nodns.shop"
+
+[[dns.zones]]
+knot_address = "127.0.0.1:5353"
+zone = "nodns.shop"
+tsig_key_name = "key1."
+tsig_key_secret = "secret1"
+
+[dns.zones.payment]
+enabled = true
+create_price = 5
+update_price = 1
+delete_price = 0
+npub_names_free = false
+mint_url = "https://mint.example.com"
+mint_filter = "mint.example"
+"#;
+        let mut cfg: Config = toml::from_str(toml).unwrap();
+        cfg.apply_defaults();
+        cfg.validate().unwrap();
+
+        assert_eq!(cfg.dns.zones.len(), 1);
+        let zp = &cfg.dns.zones[0].payment;
+        assert!(zp.enabled);
+        assert_eq!(zp.create_price, 5);
+        assert_eq!(zp.update_price, 1);
+        assert_eq!(zp.delete_price, 0);
+        assert!(!zp.npub_names_free);
+        assert_eq!(zp.mint_url, "https://mint.example.com");
+        assert_eq!(zp.mint_filter, "mint.example");
+    }
+
+    #[test]
+    fn global_payment_backward_compat_propagates_to_zones() {
+        let toml = r#"
+[nostr]
+relays = ["wss://relay.example.com"]
+zone = "nodns.shop"
+
+[[dns.zones]]
+knot_address = "127.0.0.1:5353"
+zone = "nodns.shop"
+tsig_key_name = "key1."
+tsig_key_secret = "secret1"
+
+[payment]
+enabled = true
+required_sats = 500
+update_free = false
+cashu_mint_url = "https://mint.example.com"
+"#;
+        let mut cfg: Config = toml::from_str(toml).unwrap();
+        cfg.apply_defaults();
+        cfg.validate().unwrap();
+
+        assert_eq!(cfg.dns.zones.len(), 1);
+        let zp = &cfg.dns.zones[0].payment;
+        assert!(zp.enabled);
+        assert_eq!(zp.create_price, 500);
+        assert_eq!(zp.update_price, 500);
+        assert_eq!(zp.delete_price, 0);
+        assert!(zp.npub_names_free);
+        assert_eq!(zp.mint_url, "https://mint.example.com");
+        assert!(zp.mint_filter.is_empty());
+    }
+
+    #[test]
+    fn zone_payment_overrides_global() {
+        let toml = r#"
+[nostr]
+relays = ["wss://relay.example.com"]
+zone = "nodns.shop"
+
+[[dns.zones]]
+knot_address = "127.0.0.1:5353"
+zone = "nodns.shop"
+tsig_key_name = "key1."
+tsig_key_secret = "secret1"
+
+[dns.zones.payment]
+enabled = true
+create_price = 10
+update_price = 0
+delete_price = 0
+npub_names_free = true
+mint_url = "https://testnut.cashu.space"
+mint_filter = "testnut"
+
+[payment]
+enabled = true
+required_sats = 500
+update_free = true
+cashu_mint_url = "https://other-mint.example.com"
+"#;
+        let mut cfg: Config = toml::from_str(toml).unwrap();
+        cfg.apply_defaults();
+        cfg.validate().unwrap();
+
+        let zp = &cfg.dns.zones[0].payment;
+        assert_eq!(zp.create_price, 10);
+        assert_eq!(zp.mint_url, "https://testnut.cashu.space");
+        assert_eq!(zp.mint_filter, "testnut");
+    }
+
+    #[test]
+    fn zone_lease_config_defaults() {
+        let cfg = ZoneLeaseConfig::default();
+        assert_eq!(cfg.grace_period_days, 30);
+        assert_eq!(cfg.max_lease_days, 365);
+        assert!(cfg.operator_lease_expires.is_none());
+    }
+
+    #[test]
+    fn zone_config_lease_defaults() {
+        let cfg = ZoneConfig::default();
+        assert_eq!(cfg.lease.grace_period_days, 30);
+        assert_eq!(cfg.lease.max_lease_days, 365);
+    }
+
+    #[test]
+    fn zone_lease_config_custom_values() {
+        let toml = r#"
+[nostr]
+relays = ["wss://relay.example.com"]
+zone = "nodns.shop"
+
+[[dns.zones]]
+knot_address = "127.0.0.1:5353"
+zone = "nodns.shop"
+tsig_key_name = "key1."
+tsig_key_secret = "secret1"
+
+[dns.zones.lease]
+grace_period_days = 90
+max_lease_days = 730
+operator_lease_expires = "2027-06-08"
+"#;
+        let mut cfg: Config = toml::from_str(toml).unwrap();
+        cfg.apply_defaults();
+        cfg.validate().unwrap();
+
+        let lease = &cfg.dns.zones[0].lease;
+        assert_eq!(lease.grace_period_days, 90);
+        assert_eq!(lease.max_lease_days, 730);
+        assert_eq!(lease.operator_lease_expires.as_deref(), Some("2027-06-08"));
+    }
+
+    #[test]
+    fn zone_lease_backward_compat_zone_gets_defaults() {
+        let toml = r#"
+[nostr]
+relays = ["wss://relay.example.com"]
+zone = "nodns.shop"
+
+[dns]
+knot_address = "127.0.0.1:5353"
+zone = "nodns.shop"
+tsig_key_name = "key1."
+tsig_key_secret = "secret1"
+"#;
+        let mut cfg: Config = toml::from_str(toml).unwrap();
+        cfg.apply_defaults();
+        cfg.validate().unwrap();
+
+        let lease = &cfg.dns.zones[0].lease;
+        assert_eq!(lease.grace_period_days, 30);
+        assert_eq!(lease.max_lease_days, 365);
     }
 }

@@ -10,6 +10,7 @@ import {
 import { queryDoh } from "@/lib/dns";
 import { DEFAULT_ZONE } from "@/lib/constants";
 import { validateRecord } from "@/lib/validation";
+import { fetchZonePricing, type ZonePricing } from "@/lib/api";
 import type { KeyPair, PendingRecord, DnsRecord, FeedbackType } from "@/lib/types";
 import {
   PublishPipeline,
@@ -52,6 +53,7 @@ export function Dashboard() {
 
   const [publishedRecords, setPublishedRecords] = useState<DnsRecord[]>([]);
   const [deleting, setDeleting] = useState(false);
+  const [pricing, setPricing] = useState<ZonePricing | null>(null);
 
   const pipelineTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pipelineStartRef = useRef<number>(0);
@@ -161,6 +163,8 @@ export function Dashboard() {
           records,
           kp.secretKey,
           cashuToken || undefined,
+          pricing?.mint_url,
+          pricing?.create_price,
         );
         setFeedback({
           message: `Published event with ${records.length} record(s). Event ID: ${event.id.slice(0, 16)}...`,
@@ -181,7 +185,7 @@ export function Dashboard() {
       }
       setPublishing(false);
     },
-    [cashuToken, startPipeline],
+    [cashuToken, startPipeline, pricing],
   );
 
   useEffect(() => {
@@ -207,7 +211,7 @@ export function Dashboard() {
         },
       ];
 
-      publishDnsEvent(records, kp.secretKey).then((event) => {
+      publishDnsEvent(records, kp.secretKey, undefined, pricing?.mint_url, pricing?.create_price).then((event) => {
         setFeedback({
           message: `Published demo record. Event ID: ${event.id.slice(0, 16)}...`,
           type: "success",
@@ -224,7 +228,7 @@ export function Dashboard() {
 
     window.addEventListener("nodns-demo-publish", handler);
     return () => window.removeEventListener("nodns-demo-publish", handler);
-  }, [startPipeline]);
+  }, [startPipeline, pricing]);
 
   useEffect(() => {
     return () => {
@@ -235,6 +239,17 @@ export function Dashboard() {
       }
     };
   }, [stopPipelineTimers]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchZonePricing(DEFAULT_ZONE)
+      .then((data) => {
+        if (!cancelled) setPricing(data);
+      })
+      .catch(() => {
+      });
+    return () => { cancelled = true; };
+  }, []);
 
   const handleGenerateNew = useCallback(() => {
     const kp = generateEphemeralKeyPair();
@@ -504,6 +519,13 @@ export function Dashboard() {
             <h3 className="mb-4 text-lg font-semibold">
               Publish DNS Records
             </h3>
+            {pricing?.enabled && (
+              <p className="mb-3 text-xs text-[#888]">
+                {pricing.create_price} sat{pricing.create_price !== 1 ? 's' : ''} per new record
+                {pricing.update_price === 0 ? ' · Free updates' : ` · ${pricing.update_price} sats to update`}
+                {pricing.delete_price === 0 ? ' · Free deletes' : ` · ${pricing.delete_price} sats to delete`}
+              </p>
+            )}
 
             {!keyPair ? (
               <p className="text-sm text-[#666]">
@@ -654,8 +676,9 @@ export function Dashboard() {
                         className="w-full rounded-lg border border-[#222] bg-[#0a0a0a] px-3 py-2.5 text-sm text-[#e0e0e0] outline-none focus:border-[#ff6b35]"
                       />
                       <p className="mt-1 text-xs text-[#666]">
-                        Required for new records when payment is enabled (250
-                        sats)
+                        {pricing?.enabled
+                          ? `Required for new records (${pricing.create_price} sat${pricing.create_price !== 1 ? 's' : ''})`
+                          : 'Optional Cashu token for payment'}
                       </p>
                     </div>
                   )}

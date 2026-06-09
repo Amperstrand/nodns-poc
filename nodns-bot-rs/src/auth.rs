@@ -13,7 +13,7 @@ use thiserror::Error;
 use tracing::{debug, info, warn};
 
 use crate::store::{Store, StoreError};
-use crate::types::Delegation;
+use crate::types::{Delegation, DelegationState};
 
 #[derive(Error, Debug)]
 pub enum AuthError {
@@ -31,6 +31,8 @@ pub enum AuthError {
     },
     #[error("no active delegation for {domain}.{zone}")]
     NoActiveDelegation { domain: String, zone: String },
+    #[error("delegation for {domain}.{zone} is in grace period — only renewals accepted")]
+    DelegationInGrace { domain: String, zone: String },
     #[error("delegation for {domain}.{zone} assigned to {assigned}, not signer {signer}")]
     DelegationAssignedToOther {
         domain: String,
@@ -90,10 +92,12 @@ impl AuthorityChecker {
 
         debug!(fqdn = %fqdn, zone = %zone, npub = %npub, "checking authority");
 
-        // Check if this is an npub-based name
+        // Check if this is an npub-based name (direct or subdomain)
         let zone_suffix = format!(".{}", zone);
         if fqdn.ends_with(&zone_suffix) {
             let prefix = &fqdn[..fqdn.len() - zone_suffix.len()];
+
+            // Direct npub name: npub1xxx.zone
             if prefix.starts_with("npub1") {
                 if prefix == npub {
                     info!(npub = %npub, zone = %zone, "npub name matches signer, authority granted");
@@ -103,6 +107,22 @@ impl AuthorityChecker {
                     name: prefix.to_string(),
                     npub,
                 });
+            }
+
+            // Subdomain of npub name: sub.npub1xxx.zone (e.g. _acme-challenge.npub1xxx.zone)
+            // Check if any suffix of the prefix matches "npub1xxx"
+            if let Some(dot_pos) = prefix.rfind('.') {
+                let npub_part = &prefix[dot_pos + 1..];
+                if npub_part.starts_with("npub1") {
+                    if npub_part == npub {
+                        info!(npub = %npub, zone = %zone, subdomain = %&prefix[..dot_pos], "npub subdomain matches signer, authority granted");
+                        return Ok(());
+                    }
+                    return Err(AuthError::NpubMismatch {
+                        name: npub_part.to_string(),
+                        npub,
+                    });
+                }
             }
         }
 
@@ -125,7 +145,7 @@ impl AuthorityChecker {
 
         let delegation = self
             .store
-            .get_active_delegation(&domain, zone)
+            .get_delegation(&domain, zone)
             .map_err(|e| AuthError::DelegationCheck {
                 domain: domain.clone(),
                 zone: zone.to_string(),
@@ -141,6 +161,21 @@ impl AuthorityChecker {
                 })
             }
             Some(del) => {
+                let state = DelegationState::from_str(&del.status);
+                if state == DelegationState::Expired {
+                    warn!(domain = %domain, zone = %zone, "delegation expired");
+                    return Err(AuthError::NoActiveDelegation {
+                        domain,
+                        zone: zone.to_string(),
+                    });
+                }
+                if state == DelegationState::Grace {
+                    warn!(domain = %domain, zone = %zone, "delegation in grace period");
+                    return Err(AuthError::DelegationInGrace {
+                        domain,
+                        zone: zone.to_string(),
+                    });
+                }
                 if del.npub != npub {
                     warn!(
                         domain = %domain,
@@ -192,6 +227,17 @@ impl AuthorityChecker {
 
         debug!(zone = %zone, "no registrar key found in DB or config");
         Ok(false)
+    }
+
+    /// Return the registrar pubkey hex for a zone (DB first, then config).
+    /// Returns `None` if no registrar key is configured.
+    pub fn get_registrar_pubkey(&self, zone: &str) -> Option<String> {
+        if let Ok(db_key) = self.store.get_registrar_key(zone) {
+            if !db_key.is_empty() {
+                return Some(db_key);
+            }
+        }
+        self.config_keys.get(zone).cloned()
     }
 
     /// Validate that a delegation event is properly signed by the zone's registrar.
@@ -292,6 +338,8 @@ mod tests {
             valid_until: 9999999999,
             renew_by: 9999999999,
             registrar_pubkey: make_pubkey_hex().to_string(),
+            renewal_price: 0,
+            status: "active".to_string(),
             created_at: 0,
             processed_at: 0,
         }
@@ -547,5 +595,90 @@ mod tests {
         };
         let result = checker.validate_delegation(&delegation, "cv", make_pubkey_hex());
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_grace_delegation_rejected() {
+        let store = setup_store();
+        let npub = make_npub();
+        store
+            .save_delegation(
+                "event1", "alice", "cv", &npub, make_pubkey_hex(),
+                0, 9999999999, 9999999999, make_pubkey_hex(),
+            )
+            .unwrap();
+        store.mark_delegation_grace("alice", "cv").unwrap();
+
+        let checker = AuthorityChecker::new(store, HashMap::new());
+        let result = checker.check_authority("alice.cv.", "cv", make_pubkey_hex());
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("grace period"));
+    }
+
+    #[test]
+    fn test_expired_delegation_rejected() {
+        let store = setup_store();
+        let npub = make_npub();
+        store
+            .save_delegation(
+                "event1", "alice", "cv", &npub, make_pubkey_hex(),
+                0, 9999999999, 9999999999, make_pubkey_hex(),
+            )
+            .unwrap();
+        store.mark_delegation_grace("alice", "cv").unwrap();
+        store.mark_delegation_expired("alice", "cv").unwrap();
+
+        let checker = AuthorityChecker::new(store, HashMap::new());
+        let result = checker.check_authority("alice.cv.", "cv", make_pubkey_hex());
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("no active delegation"));
+    }
+
+    #[test]
+    fn test_subdomain_of_npub_name_matches_signer() {
+        let store = setup_store();
+        let npub = make_npub();
+        let checker = AuthorityChecker::new(store, HashMap::new());
+
+        let fqdn = format!("_acme-challenge.{}.cv.", npub);
+        let result = checker.check_authority(&fqdn, "cv", make_pubkey_hex());
+        assert!(result.is_ok(), "subdomain of npub name should grant authority");
+    }
+
+    #[test]
+    fn test_subdomain_of_npub_name_wrong_signer() {
+        let store = setup_store();
+        let checker = AuthorityChecker::new(store, HashMap::new());
+
+        let fqdn = "_acme-challenge.npub1wrongkey.cv.";
+        let result = checker.check_authority(fqdn, "cv", make_pubkey_hex());
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("does not match signer npub"));
+    }
+
+    #[test]
+    fn test_subdomain_of_npub_name_wrong_zone() {
+        let store = setup_store();
+        let npub = make_npub();
+        let checker = AuthorityChecker::new(store, HashMap::new());
+
+        let fqdn = format!("_acme-challenge.{}.com.", npub);
+        let result = checker.check_authority(&fqdn, "cv", make_pubkey_hex());
+        assert!(result.is_err(), "wrong zone should reject");
+    }
+
+    #[test]
+    fn test_deep_subdomain_of_npub_name_matches_signer() {
+        let store = setup_store();
+        let npub = make_npub();
+        let checker = AuthorityChecker::new(store, HashMap::new());
+
+        // sub.sub.npub1xxx.zone — rfind('.') extracts npub label at any depth
+        let fqdn = format!("a.b.{}.cv.", npub);
+        let result = checker.check_authority(&fqdn, "cv", make_pubkey_hex());
+        assert!(result.is_ok(), "deep subdomain of npub name should grant authority");
     }
 }

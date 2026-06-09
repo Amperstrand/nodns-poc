@@ -214,6 +214,8 @@ impl Store {
         let migrations = [
             "ALTER TABLE acme_orders ADD COLUMN csr_der TEXT",
             "ALTER TABLE acme_orders ADD COLUMN environment TEXT",
+            "ALTER TABLE delegations ADD COLUMN renewal_price INTEGER NOT NULL DEFAULT 0",
+            "ALTER TABLE delegations ADD COLUMN status TEXT NOT NULL DEFAULT 'active'",
         ];
         for sql in &migrations {
             match conn.execute(sql, []) {
@@ -504,11 +506,31 @@ impl Store {
         renew_by: i64,
         registrar_pubkey: &str,
     ) -> Result<(), StoreError> {
+        self.save_delegation_with_price(
+            event_id, domain, zone, npub, pubkey,
+            valid_from, valid_until, renew_by, registrar_pubkey, 0,
+        )
+    }
+
+    /// Store a delegation with a locked renewal price (`INSERT OR REPLACE`).
+    pub fn save_delegation_with_price(
+        &self,
+        event_id: &str,
+        domain: &str,
+        zone: &str,
+        npub: &str,
+        pubkey: &str,
+        valid_from: i64,
+        valid_until: i64,
+        renew_by: i64,
+        registrar_pubkey: &str,
+        renewal_price: i64,
+    ) -> Result<(), StoreError> {
         let conn = self.conn();
         conn.execute(
-            "INSERT OR REPLACE INTO delegations (event_id, domain, zone, npub, pubkey, valid_from, valid_until, renew_by, registrar_pubkey, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, unixepoch())",
-            params![event_id, domain, zone, npub, pubkey, valid_from, valid_until, renew_by, registrar_pubkey],
+            "INSERT OR REPLACE INTO delegations (event_id, domain, zone, npub, pubkey, valid_from, valid_until, renew_by, registrar_pubkey, renewal_price, status, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 'active', unixepoch())",
+            params![event_id, domain, zone, npub, pubkey, valid_from, valid_until, renew_by, registrar_pubkey, renewal_price],
         )
         .map_err(|e| StoreError::SaveDelegation(domain.to_string(), zone.to_string(), e))?;
 
@@ -516,6 +538,7 @@ impl Store {
             domain = domain,
             zone = zone,
             npub = npub,
+            renewal_price = renewal_price,
             "delegation saved"
         );
         Ok(())
@@ -536,9 +559,9 @@ impl Store {
         let conn = self.conn();
         let mut stmt = conn
             .prepare(
-                "SELECT event_id, domain, zone, npub, pubkey, valid_from, valid_until, renew_by, registrar_pubkey, created_at, processed_at
+                "SELECT event_id, domain, zone, npub, pubkey, valid_from, valid_until, renew_by, registrar_pubkey, renewal_price, status, created_at, processed_at
                  FROM delegations
-                 WHERE domain = ?1 AND zone = ?2 AND valid_from <= ?3 AND valid_until > ?4
+                 WHERE domain = ?1 AND zone = ?2 AND valid_from <= ?3 AND valid_until > ?4 AND status = 'active'
                  ORDER BY created_at DESC
                  LIMIT 1",
             )
@@ -550,6 +573,57 @@ impl Store {
             .map_err(|e| StoreError::GetActiveDelegation(domain.to_string(), zone.to_string(), e))?;
 
         Ok(result)
+    }
+
+    /// Return any delegation for a domain in a zone, regardless of status.
+    pub fn get_delegation(
+        &self,
+        domain: &str,
+        zone: &str,
+    ) -> Result<Option<DelegationRecord>, StoreError> {
+        let conn = self.conn();
+        let mut stmt = conn
+            .prepare(
+                "SELECT event_id, domain, zone, npub, pubkey, valid_from, valid_until, renew_by, registrar_pubkey, renewal_price, status, created_at, processed_at
+                 FROM delegations
+                 WHERE domain = ?1 AND zone = ?2
+                 ORDER BY created_at DESC
+                 LIMIT 1",
+            )
+            .map_err(|e| StoreError::GetActiveDelegation(domain.to_string(), zone.to_string(), e))?;
+
+        let result = stmt
+            .query_row(params![domain, zone], |row| scan_delegation_row(row))
+            .optional()
+            .map_err(|e| StoreError::GetActiveDelegation(domain.to_string(), zone.to_string(), e))?;
+
+        Ok(result)
+    }
+
+    /// Renew a delegation: update valid_until, renew_by, event_id, and reset status to 'active'.
+    pub fn renew_delegation(
+        &self,
+        domain: &str,
+        zone: &str,
+        new_valid_until: i64,
+        new_renew_by: i64,
+        event_id: &str,
+    ) -> Result<(), StoreError> {
+        let conn = self.conn();
+        conn.execute(
+            "UPDATE delegations SET valid_until = ?1, renew_by = ?2, event_id = ?3, status = 'active'
+             WHERE domain = ?4 AND zone = ?5",
+            params![new_valid_until, new_renew_by, event_id, domain, zone],
+        )
+        .map_err(|e| StoreError::SaveDelegation(domain.to_string(), zone.to_string(), e))?;
+
+        info!(
+            domain = domain,
+            zone = zone,
+            new_valid_until = new_valid_until,
+            "delegation renewed"
+        );
+        Ok(())
     }
 
     /// Return all active delegations for an npub.
@@ -565,9 +639,9 @@ impl Store {
         let conn = self.conn();
         let mut stmt = conn
             .prepare(
-                "SELECT event_id, domain, zone, npub, pubkey, valid_from, valid_until, renew_by, registrar_pubkey, created_at, processed_at
+                "SELECT event_id, domain, zone, npub, pubkey, valid_from, valid_until, renew_by, registrar_pubkey, renewal_price, status, created_at, processed_at
                  FROM delegations
-                 WHERE npub = ?1 AND valid_from <= ?2 AND valid_until > ?3
+                 WHERE npub = ?1 AND valid_from <= ?2 AND valid_until > ?3 AND status = 'active'
                  ORDER BY created_at DESC",
             )
             .map_err(|e| StoreError::GetDelegationsByPubkey(npub.to_string(), e))?;
@@ -581,9 +655,86 @@ impl Store {
         Ok(records)
     }
 
-    // -----------------------------------------------------------------------
-    // Registrar keys
-    // -----------------------------------------------------------------------
+    /// Check if a name is available (no active or grace delegation exists) in a zone.
+    pub fn is_name_available(&self, name: &str, zone: &str) -> Result<bool, StoreError> {
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs() as i64;
+
+        let conn = self.conn();
+        let count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM delegations
+                 WHERE domain = ?1 AND zone = ?2 AND (
+                     (status = 'active' AND valid_until > ?3) OR
+                     status = 'grace'
+                 )",
+                params![name, zone, now],
+                |row| row.get(0),
+            )
+            .map_err(|e| StoreError::GetActiveDelegation(name.to_string(), zone.to_string(), e))?;
+
+        Ok(count == 0)
+    }
+
+    /// Get all delegations that have passed their valid_until but are not yet expired.
+    pub fn get_delegations_past_valid_until(
+        &self,
+    ) -> Result<Vec<DelegationRecord>, StoreError> {
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs() as i64;
+
+        let conn = self.conn();
+        let mut stmt = conn
+            .prepare(
+                "SELECT event_id, domain, zone, npub, pubkey, valid_from, valid_until, renew_by, registrar_pubkey, renewal_price, status, created_at, processed_at
+                 FROM delegations
+                 WHERE valid_until <= ?1 AND status != 'expired'
+                 ORDER BY valid_until ASC",
+            )
+            .map_err(StoreError::ListAllRecords)?;
+
+        let records = stmt
+            .query_map(params![now], |row| scan_delegation_row(row))
+            .map_err(StoreError::ListAllRecords)?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(StoreError::ScanRecord)?;
+
+        Ok(records)
+    }
+
+    /// Set a delegation's status to 'grace'.
+    pub fn mark_delegation_grace(
+        &self,
+        domain: &str,
+        zone: &str,
+    ) -> Result<(), StoreError> {
+        let conn = self.conn();
+        conn.execute(
+            "UPDATE delegations SET status = 'grace' WHERE domain = ?1 AND zone = ?2 AND status = 'active'",
+            params![domain, zone],
+        )
+        .map_err(|e| StoreError::SaveDelegation(domain.to_string(), zone.to_string(), e))?;
+        Ok(())
+    }
+
+    /// Set a delegation's status to 'expired'.
+    pub fn mark_delegation_expired(
+        &self,
+        domain: &str,
+        zone: &str,
+    ) -> Result<(), StoreError> {
+        let conn = self.conn();
+        conn.execute(
+            "UPDATE delegations SET status = 'expired' WHERE domain = ?1 AND zone = ?2 AND status IN ('active', 'grace')",
+            params![domain, zone],
+        )
+        .map_err(|e| StoreError::SaveDelegation(domain.to_string(), zone.to_string(), e))?;
+        Ok(())
+    }
 
     /// Store the registrar pubkey for a zone (`INSERT OR REPLACE`).
     pub fn save_registrar_key(
@@ -844,6 +995,8 @@ const SCHEMA: &str = r#"
         valid_until INTEGER NOT NULL,
         renew_by INTEGER NOT NULL,
         registrar_pubkey TEXT NOT NULL,
+        renewal_price INTEGER NOT NULL DEFAULT 0,
+        status TEXT NOT NULL DEFAULT 'active',
         created_at INTEGER NOT NULL,
         processed_at INTEGER NOT NULL DEFAULT (unixepoch()),
         PRIMARY KEY (domain, zone)
@@ -925,8 +1078,10 @@ fn scan_delegation_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<DelegationRe
         valid_until: row.get(6)?,
         renew_by: row.get(7)?,
         registrar_pubkey: row.get(8)?,
-        created_at: row.get(9)?,
-        processed_at: row.get(10)?,
+        renewal_price: row.get(9)?,
+        status: row.get(10)?,
+        created_at: row.get(11)?,
+        processed_at: row.get(12)?,
     })
 }
 
@@ -1064,6 +1219,324 @@ mod tests {
 
         let order = store.get_acme_order(order_id).unwrap().unwrap();
         assert_eq!(order.private_key_pem.as_deref(), Some(private_key));
+    }
+
+    #[test]
+    fn is_name_available_when_no_delegation() {
+        let store = Store::new(":memory:", None).unwrap();
+        store.init().unwrap();
+
+        assert!(store.is_name_available("alice", "nodns.shop").unwrap());
+    }
+
+    #[test]
+    fn is_name_unavailable_when_active_delegation() {
+        let store = Store::new(":memory:", None).unwrap();
+        store.init().unwrap();
+
+        store.save_delegation(
+            "event1", "alice", "nodns.shop", "npub1abc", "pubkey1",
+            0, 9999999999, 9999999999, "registrar1",
+        ).unwrap();
+
+        assert!(!store.is_name_available("alice", "nodns.shop").unwrap());
+    }
+
+    #[test]
+    fn transition_active_to_grace_to_expired() {
+        let store = Store::new(":memory:", None).unwrap();
+        store.init().unwrap();
+
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs() as i64;
+
+        store.save_delegation(
+            "event1", "alice", "nodns.shop", "npub1abc", "pubkey1",
+            now - 100, now + 9999, now + 9999, "registrar1",
+        ).unwrap();
+
+        assert!(!store.is_name_available("alice", "nodns.shop").unwrap());
+
+        store.mark_delegation_grace("alice", "nodns.shop").unwrap();
+        assert!(!store.is_name_available("alice", "nodns.shop").unwrap());
+
+        store.mark_delegation_expired("alice", "nodns.shop").unwrap();
+        assert!(store.is_name_available("alice", "nodns.shop").unwrap());
+    }
+
+    #[test]
+    fn is_name_available_in_different_zone() {
+        let store = Store::new(":memory:", None).unwrap();
+        store.init().unwrap();
+
+        store.save_delegation(
+            "event1", "alice", "nodns.shop", "npub1abc", "pubkey1",
+            0, 9999999999, 9999999999, "registrar1",
+        ).unwrap();
+
+        assert!(store.is_name_available("alice", "other.shop").unwrap());
+    }
+
+    #[test]
+    fn save_delegation_with_price_stores_price() {
+        let store = Store::new(":memory:", None).unwrap();
+        store.init().unwrap();
+
+        store.save_delegation_with_price(
+            "event1", "alice", "nodns.shop", "npub1abc", "pubkey1",
+            0, 9999999999, 9999999999, "registrar1", 250,
+        ).unwrap();
+
+        let del = store.get_active_delegation("alice", "nodns.shop")
+            .unwrap().unwrap();
+        assert_eq!(del.renewal_price, 250);
+    }
+
+    #[test]
+    fn save_delegation_backward_compat_price_zero() {
+        let store = Store::new(":memory:", None).unwrap();
+        store.init().unwrap();
+
+        store.save_delegation(
+            "event1", "alice", "nodns.shop", "npub1abc", "pubkey1",
+            0, 9999999999, 9999999999, "registrar1",
+        ).unwrap();
+
+        let del = store.get_active_delegation("alice", "nodns.shop")
+            .unwrap().unwrap();
+        assert_eq!(del.renewal_price, 0);
+    }
+
+    #[test]
+    fn save_delegation_with_price_overwrites() {
+        let store = Store::new(":memory:", None).unwrap();
+        store.init().unwrap();
+
+        store.save_delegation(
+            "event1", "alice", "nodns.shop", "npub1abc", "pubkey1",
+            0, 9999999999, 9999999999, "registrar1",
+        ).unwrap();
+
+        store.save_delegation_with_price(
+            "event2", "alice", "nodns.shop", "npub1abc", "pubkey1",
+            0, 9999999999, 9999999999, "registrar1", 500,
+        ).unwrap();
+
+        let del = store.get_active_delegation("alice", "nodns.shop")
+            .unwrap().unwrap();
+        assert_eq!(del.event_id, "event2");
+        assert_eq!(del.renewal_price, 500);
+    }
+
+    #[test]
+    fn save_delegation_defaults_to_active_status() {
+        let store = Store::new(":memory:", None).unwrap();
+        store.init().unwrap();
+
+        store.save_delegation(
+            "event1", "alice", "nodns.shop", "npub1abc", "pubkey1",
+            0, 9999999999, 9999999999, "registrar1",
+        ).unwrap();
+
+        let del = store.get_delegation("alice", "nodns.shop")
+            .unwrap().unwrap();
+        assert_eq!(del.status, "active");
+    }
+
+    #[test]
+    fn mark_delegation_grace_updates_status() {
+        let store = Store::new(":memory:", None).unwrap();
+        store.init().unwrap();
+
+        store.save_delegation(
+            "event1", "alice", "nodns.shop", "npub1abc", "pubkey1",
+            0, 1, 1, "registrar1",
+        ).unwrap();
+
+        store.mark_delegation_grace("alice", "nodns.shop").unwrap();
+
+        let del = store.get_delegation("alice", "nodns.shop")
+            .unwrap().unwrap();
+        assert_eq!(del.status, "grace");
+    }
+
+    #[test]
+    fn mark_delegation_expired_updates_status() {
+        let store = Store::new(":memory:", None).unwrap();
+        store.init().unwrap();
+
+        store.save_delegation(
+            "event1", "alice", "nodns.shop", "npub1abc", "pubkey1",
+            0, 1, 1, "registrar1",
+        ).unwrap();
+
+        store.mark_delegation_grace("alice", "nodns.shop").unwrap();
+        store.mark_delegation_expired("alice", "nodns.shop").unwrap();
+
+        let del = store.get_delegation("alice", "nodns.shop")
+            .unwrap().unwrap();
+        assert_eq!(del.status, "expired");
+    }
+
+    #[test]
+    fn is_name_available_when_grace_delegation() {
+        let store = Store::new(":memory:", None).unwrap();
+        store.init().unwrap();
+
+        store.save_delegation(
+            "event1", "alice", "nodns.shop", "npub1abc", "pubkey1",
+            0, 1, 1, "registrar1",
+        ).unwrap();
+
+        store.mark_delegation_grace("alice", "nodns.shop").unwrap();
+
+        assert!(!store.is_name_available("alice", "nodns.shop").unwrap());
+    }
+
+    #[test]
+    fn is_name_available_when_status_expired() {
+        let store = Store::new(":memory:", None).unwrap();
+        store.init().unwrap();
+
+        store.save_delegation(
+            "event1", "alice", "nodns.shop", "npub1abc", "pubkey1",
+            0, 9999999999, 9999999999, "registrar1",
+        ).unwrap();
+
+        store.mark_delegation_grace("alice", "nodns.shop").unwrap();
+        store.mark_delegation_expired("alice", "nodns.shop").unwrap();
+
+        assert!(store.is_name_available("alice", "nodns.shop").unwrap());
+    }
+
+    #[test]
+    fn get_active_delegation_excludes_grace() {
+        let store = Store::new(":memory:", None).unwrap();
+        store.init().unwrap();
+
+        store.save_delegation(
+            "event1", "alice", "nodns.shop", "npub1abc", "pubkey1",
+            0, 9999999999, 9999999999, "registrar1",
+        ).unwrap();
+
+        store.mark_delegation_grace("alice", "nodns.shop").unwrap();
+
+        assert!(store.get_active_delegation("alice", "nodns.shop").unwrap().is_none());
+    }
+
+    #[test]
+    fn get_delegation_returns_any_status() {
+        let store = Store::new(":memory:", None).unwrap();
+        store.init().unwrap();
+
+        store.save_delegation(
+            "event1", "alice", "nodns.shop", "npub1abc", "pubkey1",
+            0, 9999999999, 9999999999, "registrar1",
+        ).unwrap();
+
+        store.mark_delegation_grace("alice", "nodns.shop").unwrap();
+
+        let del = store.get_delegation("alice", "nodns.shop").unwrap().unwrap();
+        assert_eq!(del.status, "grace");
+    }
+
+    #[test]
+    fn get_delegations_past_valid_until_returns_only_past() {
+        let store = Store::new(":memory:", None).unwrap();
+        store.init().unwrap();
+
+        store.save_delegation(
+            "event1", "alice", "nodns.shop", "npub1abc", "pubkey1",
+            0, 1, 1, "registrar1",
+        ).unwrap();
+
+        store.save_delegation(
+            "event2", "bob", "nodns.shop", "npub1def", "pubkey2",
+            0, 9999999999, 9999999999, "registrar1",
+        ).unwrap();
+
+        let past = store.get_delegations_past_valid_until().unwrap();
+        assert_eq!(past.len(), 1);
+        assert_eq!(past[0].domain, "alice");
+    }
+
+    #[test]
+    fn get_delegations_past_valid_until_excludes_already_expired() {
+        let store = Store::new(":memory:", None).unwrap();
+        store.init().unwrap();
+
+        store.save_delegation(
+            "event1", "alice", "nodns.shop", "npub1abc", "pubkey1",
+            0, 1, 1, "registrar1",
+        ).unwrap();
+
+        store.mark_delegation_grace("alice", "nodns.shop").unwrap();
+        store.mark_delegation_expired("alice", "nodns.shop").unwrap();
+
+        let past = store.get_delegations_past_valid_until().unwrap();
+        assert!(past.is_empty());
+    }
+
+    // ── Renewal store tests ──
+
+    #[test]
+    fn renew_delegation_updates_valid_until() {
+        let store = Store::new(":memory:", None).unwrap();
+        store.init().unwrap();
+
+        store.save_delegation_with_price(
+            "event1", "alice", "nodns.shop", "npub1abc", "pubkey1",
+            1000, 2000, 1700, "registrar1", 250,
+        ).unwrap();
+
+        store.renew_delegation("alice", "nodns.shop", 3000, 2700, "event2").unwrap();
+
+        let del = store.get_delegation("alice", "nodns.shop").unwrap().unwrap();
+        assert_eq!(del.valid_until, 3000);
+        assert_eq!(del.renew_by, 2700);
+        assert_eq!(del.event_id, "event2");
+        assert_eq!(del.status, "active");
+        assert_eq!(del.renewal_price, 250);
+    }
+
+    #[test]
+    fn renew_delegation_resets_grace_to_active() {
+        let store = Store::new(":memory:", None).unwrap();
+        store.init().unwrap();
+
+        store.save_delegation_with_price(
+            "event1", "alice", "nodns.shop", "npub1abc", "pubkey1",
+            1000, 2000, 1700, "registrar1", 250,
+        ).unwrap();
+
+        store.mark_delegation_grace("alice", "nodns.shop").unwrap();
+        let del = store.get_delegation("alice", "nodns.shop").unwrap().unwrap();
+        assert_eq!(del.status, "grace");
+
+        store.renew_delegation("alice", "nodns.shop", 3000, 2700, "event2").unwrap();
+
+        let del = store.get_delegation("alice", "nodns.shop").unwrap().unwrap();
+        assert_eq!(del.status, "active");
+        assert_eq!(del.valid_until, 3000);
+    }
+
+    #[test]
+    fn renew_delegation_preserves_owner() {
+        let store = Store::new(":memory:", None).unwrap();
+        store.init().unwrap();
+
+        store.save_delegation_with_price(
+            "event1", "alice", "nodns.shop", "npub1abc", "pubkey1",
+            1000, 2000, 1700, "registrar1", 250,
+        ).unwrap();
+
+        store.renew_delegation("alice", "nodns.shop", 3000, 2700, "event2").unwrap();
+
+        let del = store.get_delegation("alice", "nodns.shop").unwrap().unwrap();
+        assert_eq!(del.npub, "npub1abc");
+        assert_eq!(del.pubkey, "pubkey1");
     }
 }
 

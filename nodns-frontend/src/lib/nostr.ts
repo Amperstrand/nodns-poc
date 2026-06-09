@@ -42,13 +42,15 @@ export async function publishDnsEvent(
   records: { type: string; name: string; value: string; ttl: number }[],
   secretKey: Uint8Array,
   cashuToken?: string,
+  mintUrl?: string,
+  satAmount?: number,
 ): Promise<NostrEvent> {
   const tags = records.map((r) =>
     buildRecordTag(r.type, r.name || '@', r.value, r.ttl),
   );
 
-  if (cashuToken) {
-    tags.push(buildCashuTag(cashuToken, 'https://testnut.cashu.space', '250'));
+  if (cashuToken && mintUrl) {
+    tags.push(buildCashuTag(cashuToken, mintUrl, String(satAmount ?? 0)));
   }
 
   const template = {

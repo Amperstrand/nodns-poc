@@ -12,7 +12,7 @@ use nostr_sdk::prelude::*;
 use thiserror::Error;
 
 use crate::types::{
-    Delegation, DeleteRequest, DnsRecord, Payment, ParsedEvent, RegistrarKey, DEFAULT_TTL, KIND_DNS_RECORD,
+    ClaimRequest, Delegation, DeleteRequest, DnsRecord, Payment, ParsedEvent, RegistrarKey, RenewalRequest, DEFAULT_TTL, KIND_DNS_RECORD,
 };
 
 #[derive(Error, Debug)]
@@ -79,6 +79,8 @@ pub fn classify_event(
         delegation: None,
         registrar: None,
         payments: Vec::new(),
+        claim: None,
+        renewal: None,
     };
 
     for (i, tag) in event.tags.iter().enumerate() {
@@ -121,6 +123,32 @@ pub fn classify_event(
                 })?;
                 result.registrar = Some(r);
             }
+            "claim" => {
+                if result.claim.is_some() {
+                    return Err(ParserError::TagError {
+                        index: i,
+                        message: "duplicate claim tag".to_string(),
+                    });
+                }
+                let c = parse_claim_tag(slice).map_err(|e| ParserError::TagError {
+                    index: i,
+                    message: e.to_string(),
+                })?;
+                result.claim = Some(c);
+            }
+            "renewal" => {
+                if result.renewal.is_some() {
+                    return Err(ParserError::TagError {
+                        index: i,
+                        message: "duplicate renewal tag".to_string(),
+                    });
+                }
+                let r = parse_renewal_tag(slice).map_err(|e| ParserError::TagError {
+                    index: i,
+                    message: e.to_string(),
+                })?;
+                result.renewal = Some(r);
+            }
             "delete" => {
                 let del = parse_delete_tag(slice).map_err(|e| ParserError::TagError {
                     index: i,
@@ -142,6 +170,8 @@ pub fn classify_event(
         && result.deletes.is_empty()
         && result.delegation.is_none()
         && result.registrar.is_none()
+        && result.claim.is_none()
+        && result.renewal.is_none()
     {
         return Err(ParserError::NoRecognizedTags);
     }
@@ -295,6 +325,83 @@ pub fn parse_delete_tag(tag: &[String]) -> Result<DeleteRequest, ParserError> {
     Ok(DeleteRequest {
         record_type: rtype,
         name,
+    })
+}
+
+/// Parse a claim tag: `["claim", NAME, ZONE, VALID_UNTIL]`
+///
+/// Validates:
+/// - NAME is a valid DNS label (alphanumeric + hyphen, 1-63 chars, no leading/trailing hyphens)
+/// - ZONE is non-empty
+/// - VALID_UNTIL is a valid unix timestamp
+pub fn parse_claim_tag(tag: &[String]) -> Result<ClaimRequest, ParserError> {
+    if tag.len() < 4 {
+        return Err(ParserError::Validation(format!(
+            "claim tag must have 4 elements, got {}",
+            tag.len()
+        )));
+    }
+    if tag[0] != "claim" {
+        return Err(ParserError::Validation(
+            "first element must be 'claim'".to_string(),
+        ));
+    }
+    let name = &tag[1];
+    if name.is_empty() {
+        return Err(ParserError::Validation(
+            "claim name cannot be empty".to_string(),
+        ));
+    }
+    validate_dns_label(name)?;
+    if tag[2].is_empty() {
+        return Err(ParserError::Validation(
+            "claim zone cannot be empty".to_string(),
+        ));
+    }
+    let valid_until: i64 = tag[3]
+        .parse()
+        .map_err(|e| ParserError::Validation(format!("invalid valid_until {:?}: {}", tag[3], e)))?;
+
+    Ok(ClaimRequest {
+        name: name.clone(),
+        zone: tag[2].clone(),
+        valid_until,
+    })
+}
+
+/// Parse a renewal tag: `["renewal", NAME, ZONE, NEW_VALID_UNTIL]`
+pub fn parse_renewal_tag(tag: &[String]) -> Result<RenewalRequest, ParserError> {
+    if tag.len() < 4 {
+        return Err(ParserError::Validation(format!(
+            "renewal tag must have 4 elements, got {}",
+            tag.len()
+        )));
+    }
+    if tag[0] != "renewal" {
+        return Err(ParserError::Validation(
+            "first element must be 'renewal'".to_string(),
+        ));
+    }
+    let name = &tag[1];
+    if name.is_empty() {
+        return Err(ParserError::Validation(
+            "renewal name cannot be empty".to_string(),
+        ));
+    }
+    validate_dns_label(name)?;
+    if tag[2].is_empty() {
+        return Err(ParserError::Validation(
+            "renewal zone cannot be empty".to_string(),
+        ));
+    }
+    let new_valid_until: i64 = tag[3]
+        .parse()
+        .map_err(|e| ParserError::Validation(format!("invalid new_valid_until {:?}: {}", tag[3], e)))?;
+
+    Ok(RenewalRequest {
+        name: name.clone(),
+        zone: tag[2].clone(),
+        new_valid_until,
     })
 }
 
@@ -1202,5 +1309,293 @@ mod tests {
         let result = classify_event(&event, &[], false, 0).unwrap();
         assert_eq!(result.records.len(), 1);
         assert_eq!(result.records[0].record_type, "CNAME");
+    }
+
+    // ── Claim tag parsing tests ──
+
+    #[test]
+    fn test_parse_claim_tag_valid() {
+        let tag: Vec<String> = vec![
+            "claim".to_string(),
+            "alice".to_string(),
+            "nodns.shop".to_string(),
+            "1780704000".to_string(),
+        ];
+        let claim = parse_claim_tag(&tag).unwrap();
+        assert_eq!(claim.name, "alice");
+        assert_eq!(claim.zone, "nodns.shop");
+        assert_eq!(claim.valid_until, 1780704000);
+    }
+
+    #[test]
+    fn test_parse_claim_tag_too_short() {
+        let tag: Vec<String> = vec![
+            "claim".to_string(),
+            "alice".to_string(),
+            "nodns.shop".to_string(),
+        ];
+        let err = parse_claim_tag(&tag).unwrap_err();
+        assert!(err.to_string().contains("must have 4 elements"));
+    }
+
+    #[test]
+    fn test_parse_claim_tag_empty_name() {
+        let tag: Vec<String> = vec![
+            "claim".to_string(),
+            "".to_string(),
+            "nodns.shop".to_string(),
+            "1780704000".to_string(),
+        ];
+        let err = parse_claim_tag(&tag).unwrap_err();
+        assert!(err.to_string().contains("name cannot be empty"));
+    }
+
+    #[test]
+    fn test_parse_claim_tag_invalid_name_uppercase() {
+        let tag: Vec<String> = vec![
+            "claim".to_string(),
+            "Alice".to_string(),
+            "nodns.shop".to_string(),
+            "1780704000".to_string(),
+        ];
+        let err = parse_claim_tag(&tag).unwrap_err();
+        assert!(err.to_string().contains("uppercase"));
+    }
+
+    #[test]
+    fn test_parse_claim_tag_invalid_name_hyphen_start() {
+        let tag: Vec<String> = vec![
+            "claim".to_string(),
+            "-alice".to_string(),
+            "nodns.shop".to_string(),
+            "1780704000".to_string(),
+        ];
+        let err = parse_claim_tag(&tag).unwrap_err();
+        assert!(err.to_string().contains("start with a hyphen"));
+    }
+
+    #[test]
+    fn test_parse_claim_tag_invalid_name_special_chars() {
+        let tag: Vec<String> = vec![
+            "claim".to_string(),
+            "alice.bob".to_string(),
+            "nodns.shop".to_string(),
+            "1780704000".to_string(),
+        ];
+        let err = parse_claim_tag(&tag).unwrap_err();
+        assert!(err.to_string().contains("invalid character"));
+    }
+
+    #[test]
+    fn test_parse_claim_tag_empty_zone() {
+        let tag: Vec<String> = vec![
+            "claim".to_string(),
+            "alice".to_string(),
+            "".to_string(),
+            "1780704000".to_string(),
+        ];
+        let err = parse_claim_tag(&tag).unwrap_err();
+        assert!(err.to_string().contains("zone cannot be empty"));
+    }
+
+    #[test]
+    fn test_parse_claim_tag_invalid_valid_until() {
+        let tag: Vec<String> = vec![
+            "claim".to_string(),
+            "alice".to_string(),
+            "nodns.shop".to_string(),
+            "not-a-number".to_string(),
+        ];
+        let err = parse_claim_tag(&tag).unwrap_err();
+        assert!(err.to_string().contains("invalid valid_until"));
+    }
+
+    #[test]
+    fn test_parse_claim_tag_name_with_hyphens() {
+        let tag: Vec<String> = vec![
+            "claim".to_string(),
+            "my-name".to_string(),
+            "nodns.shop".to_string(),
+            "1780704000".to_string(),
+        ];
+        let claim = parse_claim_tag(&tag).unwrap();
+        assert_eq!(claim.name, "my-name");
+    }
+
+    #[test]
+    fn test_parse_claim_tag_name_with_digits() {
+        let tag: Vec<String> = vec![
+            "claim".to_string(),
+            "abc123".to_string(),
+            "nodns.shop".to_string(),
+            "1780704000".to_string(),
+        ];
+        let claim = parse_claim_tag(&tag).unwrap();
+        assert_eq!(claim.name, "abc123");
+    }
+
+    #[test]
+    fn test_classify_event_with_claim_tag() {
+        let keys = Keys::generate();
+        let event = EventBuilder::new(Kind::Custom(11111), "")
+            .tags(vec![
+                Tag::parse(["claim", "alice", "nodns.shop", "1780704000"]).unwrap(),
+            ])
+            .sign_with_keys(&keys)
+            .unwrap();
+        let result = classify_event(&event, &[], false, 0).unwrap();
+        assert!(result.claim.is_some());
+        assert!(result.records.is_empty());
+        let claim = result.claim.unwrap();
+        assert_eq!(claim.name, "alice");
+        assert_eq!(claim.zone, "nodns.shop");
+    }
+
+    #[test]
+    fn test_classify_event_rejects_duplicate_claim() {
+        let keys = Keys::generate();
+        let event = EventBuilder::new(Kind::Custom(11111), "")
+            .tags(vec![
+                Tag::parse(["claim", "alice", "nodns.shop", "1780704000"]).unwrap(),
+                Tag::parse(["claim", "bob", "nodns.shop", "1780704000"]).unwrap(),
+            ])
+            .sign_with_keys(&keys)
+            .unwrap();
+        let err = classify_event(&event, &[], false, 0).unwrap_err();
+        assert!(err.to_string().contains("duplicate claim tag"));
+    }
+
+    #[test]
+    fn test_classify_event_claim_with_record() {
+        let keys = Keys::generate();
+        let event = EventBuilder::new(Kind::Custom(11111), "")
+            .tags(vec![
+                Tag::parse(["claim", "alice", "nodns.shop", "1780704000"]).unwrap(),
+                Tag::parse(["record", "A", "@", "3600", "1.2.3.4"]).unwrap(),
+            ])
+            .sign_with_keys(&keys)
+            .unwrap();
+        let result = classify_event(&event, &[], false, 0).unwrap();
+        assert!(result.claim.is_some());
+        assert_eq!(result.records.len(), 1);
+    }
+
+    // ── Renewal tag parsing tests ──
+
+    #[test]
+    fn test_parse_renewal_tag_valid() {
+        let tag: Vec<String> = vec![
+            "renewal".to_string(),
+            "alice".to_string(),
+            "nodns.shop".to_string(),
+            "1780704000".to_string(),
+        ];
+        let renewal = parse_renewal_tag(&tag).unwrap();
+        assert_eq!(renewal.name, "alice");
+        assert_eq!(renewal.zone, "nodns.shop");
+        assert_eq!(renewal.new_valid_until, 1780704000);
+    }
+
+    #[test]
+    fn test_parse_renewal_tag_too_short() {
+        let tag: Vec<String> = vec![
+            "renewal".to_string(),
+            "alice".to_string(),
+            "nodns.shop".to_string(),
+        ];
+        let err = parse_renewal_tag(&tag).unwrap_err();
+        assert!(err.to_string().contains("must have 4 elements"));
+    }
+
+    #[test]
+    fn test_parse_renewal_tag_empty_name() {
+        let tag: Vec<String> = vec![
+            "renewal".to_string(),
+            "".to_string(),
+            "nodns.shop".to_string(),
+            "1780704000".to_string(),
+        ];
+        let err = parse_renewal_tag(&tag).unwrap_err();
+        assert!(err.to_string().contains("name cannot be empty"));
+    }
+
+    #[test]
+    fn test_parse_renewal_tag_empty_zone() {
+        let tag: Vec<String> = vec![
+            "renewal".to_string(),
+            "alice".to_string(),
+            "".to_string(),
+            "1780704000".to_string(),
+        ];
+        let err = parse_renewal_tag(&tag).unwrap_err();
+        assert!(err.to_string().contains("zone cannot be empty"));
+    }
+
+    #[test]
+    fn test_parse_renewal_tag_invalid_timestamp() {
+        let tag: Vec<String> = vec![
+            "renewal".to_string(),
+            "alice".to_string(),
+            "nodns.shop".to_string(),
+            "not-a-number".to_string(),
+        ];
+        let err = parse_renewal_tag(&tag).unwrap_err();
+        assert!(err.to_string().contains("invalid new_valid_until"));
+    }
+
+    #[test]
+    fn test_parse_renewal_tag_invalid_name_uppercase() {
+        let tag: Vec<String> = vec![
+            "renewal".to_string(),
+            "Alice".to_string(),
+            "nodns.shop".to_string(),
+            "1780704000".to_string(),
+        ];
+        let err = parse_renewal_tag(&tag).unwrap_err();
+        assert!(err.to_string().contains("uppercase"));
+    }
+
+    #[test]
+    fn test_parse_renewal_tag_name_with_hyphens() {
+        let tag: Vec<String> = vec![
+            "renewal".to_string(),
+            "my-name".to_string(),
+            "nodns.shop".to_string(),
+            "1780704000".to_string(),
+        ];
+        let renewal = parse_renewal_tag(&tag).unwrap();
+        assert_eq!(renewal.name, "my-name");
+    }
+
+    #[test]
+    fn test_classify_event_with_renewal_tag() {
+        let keys = Keys::generate();
+        let event = EventBuilder::new(Kind::Custom(11111), "")
+            .tags(vec![
+                Tag::parse(["renewal", "alice", "nodns.shop", "1780704000"]).unwrap(),
+            ])
+            .sign_with_keys(&keys)
+            .unwrap();
+        let result = classify_event(&event, &[], false, 0).unwrap();
+        assert!(result.renewal.is_some());
+        assert!(result.records.is_empty());
+        let renewal = result.renewal.unwrap();
+        assert_eq!(renewal.name, "alice");
+        assert_eq!(renewal.zone, "nodns.shop");
+        assert_eq!(renewal.new_valid_until, 1780704000);
+    }
+
+    #[test]
+    fn test_classify_event_rejects_duplicate_renewal() {
+        let keys = Keys::generate();
+        let event = EventBuilder::new(Kind::Custom(11111), "")
+            .tags(vec![
+                Tag::parse(["renewal", "alice", "nodns.shop", "1780704000"]).unwrap(),
+                Tag::parse(["renewal", "bob", "nodns.shop", "1780704000"]).unwrap(),
+            ])
+            .sign_with_keys(&keys)
+            .unwrap();
+        let err = classify_event(&event, &[], false, 0).unwrap_err();
+        assert!(err.to_string().contains("duplicate renewal tag"));
     }
 }

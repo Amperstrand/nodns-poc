@@ -149,3 +149,21 @@ export async function getCertificateOrder(
   const res = await safeFetch(`${API_BASE}/api/acme/order/${orderId}`, { headers });
   return res.json();
 }
+
+export interface ZonePricing {
+  zone: string;
+  enabled: boolean;
+  create_price: number;
+  update_price: number;
+  delete_price: number;
+  npub_names_free: boolean;
+  mint_url: string;
+  mint_filter: string;
+}
+
+export async function fetchZonePricing(zone: string): Promise<ZonePricing> {
+  const res = await safeFetch(`${API_BASE}/api/zones/${encodeURIComponent(zone)}/pricing`, {
+    headers: {},
+  });
+  return res.json();
+}

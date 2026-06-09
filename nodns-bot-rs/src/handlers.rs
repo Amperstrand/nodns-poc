@@ -70,6 +70,18 @@ pub struct AcmeCertResponse {
     logs: Vec<AcmeOrderLog>,
 }
 
+#[derive(Serialize)]
+pub struct ZonePricingResponse {
+    zone: String,
+    enabled: bool,
+    create_price: u64,
+    update_price: u64,
+    delete_price: u64,
+    npub_names_free: bool,
+    mint_url: String,
+    mint_filter: String,
+}
+
 // ---------------------------------------------------------------------------
 // AppState (re-exported from crate root)
 // ---------------------------------------------------------------------------
@@ -123,6 +135,37 @@ pub async fn records_handler(AxumState(state): AxumState<Arc<AppState>>) -> Json
             error!(error = %e, "failed to list records");
             Json(RecordsResponse { records: vec![], count: 0 })
         }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Zone pricing handler
+// ---------------------------------------------------------------------------
+
+pub async fn zone_pricing_handler(
+    AxumState(state): AxumState<Arc<AppState>>,
+    Path(zone): Path<String>,
+) -> Response {
+    match state.dns_zones.iter().find(|z| z.zone == zone) {
+        Some(zc) => {
+            let p = &zc.payment;
+            Json(ZonePricingResponse {
+                zone: zc.zone.clone(),
+                enabled: p.enabled,
+                create_price: p.create_price,
+                update_price: p.update_price,
+                delete_price: p.delete_price,
+                npub_names_free: p.npub_names_free,
+                mint_url: p.mint_url.clone(),
+                mint_filter: p.mint_filter.clone(),
+            })
+            .into_response()
+        }
+        None => (
+            axum::http::StatusCode::NOT_FOUND,
+            Json(serde_json::json!({"error": "zone not found"})),
+        )
+            .into_response(),
     }
 }
 

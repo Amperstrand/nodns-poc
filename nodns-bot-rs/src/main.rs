@@ -32,12 +32,12 @@ use tower_http::set_header::SetResponseHeaderLayer;
 use tower_http::cors::CorsLayer;
 use tracing::{info, warn};
 
-use config::Config;
+use config::{Config, ZoneConfig};
 use dns::Updater;
 use payment::Verifier;
 use store::Store;
 use subscriber::Subscriber;
-use types::Metrics;
+use types::{DelegationState, Metrics};
 
 // ---------------------------------------------------------------------------
 // CLI
@@ -61,6 +61,72 @@ pub struct AppState {
     pub acme_environment: String,
     pub metrics: Metrics,
     pub start_time: Instant,
+    pub dns_zones: Vec<config::ZoneConfig>,
+}
+
+// ---------------------------------------------------------------------------
+// Background lease expiry task
+// ---------------------------------------------------------------------------
+
+async fn lease_expiry_task(
+    store: Arc<Store>,
+    zone_configs: Vec<ZoneConfig>,
+) {
+    let mut interval = tokio::time::interval(std::time::Duration::from_secs(3600));
+    loop {
+        interval.tick().await;
+
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs() as i64;
+
+        let delegations = match store.get_delegations_past_valid_until() {
+            Ok(d) => d,
+            Err(e) => {
+                tracing::error!(error = %e, "lease expiry task: failed to query delegations");
+                continue;
+            }
+        };
+
+        for del in &delegations {
+            let grace_config = zone_configs.iter().find(|z| z.zone == del.zone);
+            let grace_period_secs = grace_config
+                .map(|z| z.lease.grace_period_days as i64 * 86400)
+                .unwrap_or(30 * 86400);
+
+            let state = DelegationState::from_str(&del.status);
+            let grace_deadline = del.valid_until + grace_period_secs;
+
+            if now >= grace_deadline {
+                if state != DelegationState::Expired {
+                    if let Err(e) = store.mark_delegation_expired(&del.domain, &del.zone) {
+                        tracing::error!(
+                            domain = %del.domain, zone = %del.zone, error = %e,
+                            "lease expiry task: failed to mark delegation expired"
+                        );
+                    } else {
+                        tracing::info!(
+                            domain = %del.domain, zone = %del.zone,
+                            "lease expiry task: delegation expired, name available for re-registration"
+                        );
+                    }
+                }
+            } else if state == DelegationState::Active {
+                if let Err(e) = store.mark_delegation_grace(&del.domain, &del.zone) {
+                    tracing::error!(
+                        domain = %del.domain, zone = %del.zone, error = %e,
+                        "lease expiry task: failed to mark delegation grace"
+                    );
+                } else {
+                    tracing::info!(
+                        domain = %del.domain, zone = %del.zone,
+                        "lease expiry task: delegation entered grace period"
+                    );
+                }
+            }
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -107,15 +173,12 @@ async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
     let authority = auth::AuthorityChecker::new(store.clone(), cfg.registrar_keys.clone());
 
     // ── Payment ──
-    let verifier: Option<Arc<Verifier>> = if cfg.payment.enabled {
-        Some(Arc::new(Verifier::new(
-            &cfg.payment.cashu_mint_url,
-            cfg.payment.required_sats,
-            cfg.payment.update_free,
-        )))
-    } else {
-        None
-    };
+    let mut zone_verifiers: HashMap<String, Verifier> = HashMap::new();
+    for zc in &cfg.dns.zones {
+        if zc.payment.enabled {
+            zone_verifiers.insert(zc.zone.clone(), Verifier::from_zone_config(&zc.payment));
+        }
+    }
 
     // ── DNS updaters ──
     let mut updaters: HashMap<String, Updater> = HashMap::new();
@@ -159,6 +222,7 @@ async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
         acme_environment: cfg.acme.environment.clone(),
         metrics: Metrics::default(),
         start_time: Instant::now(),
+        dns_zones: cfg.dns.zones.clone(),
     });
     let bind = cfg.server.bind.clone();
     let http_state = app_state.clone();
@@ -191,6 +255,7 @@ async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
             .route("/.well-known/nostr.json", axum::routing::get(nip05::nip05_handler))
             .route("/health", axum::routing::get(handlers::health_handler))
             .route("/api/records", axum::routing::get(handlers::records_handler))
+            .route("/api/zones/{zone}/pricing", axum::routing::get(handlers::zone_pricing_handler))
             .layer(GovernorLayer::new(api_limit))
             .with_state(http_state);
 
@@ -236,11 +301,20 @@ async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
     let subscriber = Subscriber::new(&cfg.nostr, store.clone());
     let mut event_rx = subscriber.subscribe()?;
 
+    // ── Lease expiry task ──
+    {
+        let lease_store = store.clone();
+        let lease_zones = cfg.dns.zones.clone();
+        tokio::spawn(async move {
+            lease_expiry_task(lease_store, lease_zones).await;
+        });
+    }
+
     // ── Event loop ──
     let ev_store = store.clone();
     let ev_auth = authority;
     let ev_updaters = updaters;
-    let ev_verifier = verifier.clone();
+    let ev_zone_verifiers = zone_verifiers;
     let ev_cfg = cfg;
     let ev_metrics = app_state.clone();
 
@@ -250,7 +324,7 @@ async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
                 Some(evt) => {
                     event_processor::process_nostr_event(
                         &evt, &ev_cfg, &ev_updaters, &ev_store,
-                        &ev_auth, ev_verifier.as_deref(), &ev_metrics.metrics,
+                        &ev_auth, &ev_zone_verifiers, &ev_metrics.metrics,
                     ).await;
                 }
                 None => {

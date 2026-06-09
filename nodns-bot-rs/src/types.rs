@@ -61,6 +61,8 @@ pub struct ParsedEvent {
     pub delegation: Option<Delegation>,
     pub registrar: Option<RegistrarKey>,
     pub payments: Vec<Payment>,
+    pub claim: Option<ClaimRequest>,
+    pub renewal: Option<RenewalRequest>,
 }
 
 /// A stored DNS event record (maps to `events` table).
@@ -79,6 +81,47 @@ pub struct EventRecord {
     pub deleted: bool,
 }
 
+/// Parsed from `["claim", NAME, ZONE, VALID_UNTIL_TIMESTAMP]` tags.
+#[derive(Debug, Clone)]
+pub struct ClaimRequest {
+    pub name: String,
+    pub zone: String,
+    pub valid_until: i64,
+}
+
+/// Parsed from `["renewal", NAME, ZONE, NEW_VALID_UNTIL]` tags.
+#[derive(Debug, Clone)]
+pub struct RenewalRequest {
+    pub name: String,
+    pub zone: String,
+    pub new_valid_until: i64, // Unix timestamp
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum DelegationState {
+    Active,
+    Grace,     // past valid_until but within grace period
+    Expired,   // past grace period
+}
+
+impl DelegationState {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            DelegationState::Active => "active",
+            DelegationState::Grace => "grace",
+            DelegationState::Expired => "expired",
+        }
+    }
+
+    pub fn from_str(s: &str) -> Self {
+        match s {
+            "grace" => DelegationState::Grace,
+            "expired" => DelegationState::Expired,
+            _ => DelegationState::Active,
+        }
+    }
+}
+
 /// A stored delegation record (maps to `delegations` table).
 #[derive(Debug, Clone)]
 pub struct DelegationRecord {
@@ -91,6 +134,8 @@ pub struct DelegationRecord {
     pub valid_until: i64,
     pub renew_by: i64,
     pub registrar_pubkey: String,
+    pub renewal_price: i64,  // locked price in sats (0 = free/not set)
+    pub status: String,       // "active", "grace", "expired"
     pub created_at: i64,
     pub processed_at: i64,
 }
@@ -158,5 +203,32 @@ pub fn record_type_to_u16(t: &str) -> u16 {
 impl fmt::Display for DnsRecord {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{} {} IN {} {}", self.name, self.ttl, self.record_type, self.rdata)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn delegation_state_as_str() {
+        assert_eq!(DelegationState::Active.as_str(), "active");
+        assert_eq!(DelegationState::Grace.as_str(), "grace");
+        assert_eq!(DelegationState::Expired.as_str(), "expired");
+    }
+
+    #[test]
+    fn delegation_state_from_str() {
+        assert_eq!(DelegationState::from_str("active"), DelegationState::Active);
+        assert_eq!(DelegationState::from_str("grace"), DelegationState::Grace);
+        assert_eq!(DelegationState::from_str("expired"), DelegationState::Expired);
+        assert_eq!(DelegationState::from_str("unknown"), DelegationState::Active);
+    }
+
+    #[test]
+    fn delegation_state_equality() {
+        assert_eq!(DelegationState::Active, DelegationState::Active);
+        assert_ne!(DelegationState::Active, DelegationState::Grace);
+        assert_ne!(DelegationState::Grace, DelegationState::Expired);
     }
 }

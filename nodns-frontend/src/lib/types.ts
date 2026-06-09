@@ -56,3 +56,14 @@ export interface KeyPair {
   npub: string;
   nsec: string;
 }
+
+export interface ZonePricing {
+  zone: string;
+  enabled: boolean;
+  create_price: number;
+  update_price: number;
+  delete_price: number;
+  npub_names_free: boolean;
+  mint_url: string;
+  mint_filter: string;
+}
