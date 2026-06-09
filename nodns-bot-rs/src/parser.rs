@@ -616,7 +616,7 @@ pub fn validate_dns_label(name: &str) -> Result<(), ParserError> {
         ));
     }
     for ch in name.chars() {
-        if !ch.is_ascii_lowercase() && !ch.is_ascii_digit() && ch != '-' {
+        if !ch.is_ascii_lowercase() && !ch.is_ascii_digit() && ch != '-' && ch != '_' {
             if ch.is_ascii_uppercase() {
                 return Err(ParserError::Validation(format!(
                     "DNS label must be lowercase, found uppercase: '{}'",
@@ -1121,9 +1121,9 @@ mod tests {
     }
 
     #[test]
-    fn test_validate_dns_label_underscore_rejected() {
-        let err = validate_dns_label("_dmarc").unwrap_err();
-        assert!(err.to_string().contains("invalid character"));
+    fn test_validate_dns_label_underscore_accepted() {
+        assert!(validate_dns_label("_acme-challenge").is_ok());
+        assert!(validate_dns_label("_dmarc").is_ok());
     }
 
     #[test]
