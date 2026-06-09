@@ -167,3 +167,30 @@ export async function fetchZonePricing(zone: string): Promise<ZonePricing> {
   });
   return res.json();
 }
+
+export interface CheckSource {
+  registered: boolean;
+  records: Array<{
+    npub: string;
+    name: string;
+    fqdn: string;
+    type: string;
+    ttl: number;
+    rdata: string;
+    created_at: number;
+  }>;
+}
+
+export interface CheckResponse {
+  name: string;
+  zone: string;
+  api: CheckSource;
+  dns: CheckSource;
+}
+
+export async function checkRegistration(name: string): Promise<CheckResponse> {
+  const res = await safeFetch(`${API_BASE}/api/check?name=${encodeURIComponent(name)}`, {
+    headers: {},
+  });
+  return res.json();
+}

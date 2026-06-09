@@ -1,25 +1,16 @@
 export function SiteFooter() {
   return (
-    <footer className="border-t border-[#222] px-6 py-8 text-center text-sm text-[#666]">
+    <footer className="border-t border-border px-6 py-8 text-center text-sm text-muted-foreground">
       <p>NoDNS &mdash; DNS from Nostr. Open protocol, no central authority.</p>
       <p className="mt-2">
         <a
-          href="https://github.com/nbd-wtf/nostr-tools"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-[#ff6b35] hover:underline"
+          href="https://nodns.shop"
+          className="text-primary hover:underline"
         >
-          Powered by nostr-tools
+          nodns.shop
         </a>
-        {" "}&middot;{" "}
-        <a
-          href="https://github.com/nbd-wtf/nostr-tools"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-[#ff6b35] hover:underline"
-        >
-          nostr-tools
-        </a>
+        <span className="mx-2">&middot;</span>
+        <span className="text-muted-foreground">You&apos;re on the beta</span>
       </p>
     </footer>
   );

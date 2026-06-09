@@ -1,84 +1,78 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-
-const DEMO_MESSAGES = [
-  "NoDNS was here! 🌍",
-  "DNS from Nostr ✨",
-  "Hello from NoDNS! 👋",
-  "Decentralized DNS rocks 🚀",
-];
-
-function getRandomMessage(): string {
-  const hex = Math.random().toString(16).slice(2, 10);
-  return DEMO_MESSAGES[Math.floor(Math.random() * DEMO_MESSAGES.length)] + " " + hex;
-}
+import { useState, useCallback, type FormEvent } from "react";
+import { useRouter } from "next/navigation";
+import { DEFAULT_ZONE } from "@/lib/constants";
 
 export function Hero() {
-  const [launching, setLaunching] = useState(false);
-  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [query, setQuery] = useState("");
+  const router = useRouter();
 
-  useEffect(() => {
-    return () => {
-      if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    };
-  }, []);
-
-  const handleTryIt = useCallback(() => {
-    if (launching) return;
-    setLaunching(true);
-
-    const message = getRandomMessage();
-
-    document.getElementById("dashboard")?.scrollIntoView({ behavior: "smooth" });
-
-    timeoutRef.current = setTimeout(() => {
-      window.dispatchEvent(
-        new CustomEvent("nodns-demo-publish", {
-          detail: { message },
-        }),
-      );
-      setLaunching(false);
-    }, 600);
-  }, [launching]);
+  const handleSearch = useCallback(
+    (e: FormEvent) => {
+      e.preventDefault();
+      const clean = query.trim().toLowerCase().replace(/\s+/g, "");
+      if (!clean) return;
+      // Strip .nodns.shop suffix if user typed the full domain
+      const suffix = `.${DEFAULT_ZONE}`;
+      const name = clean.endsWith(suffix)
+        ? clean.slice(0, -suffix.length)
+        : clean;
+      if (!name) return;
+      router.push(`/search?q=${encodeURIComponent(name)}`);
+    },
+    [query, router],
+  );
 
   return (
-    <section className="px-6 pb-16 pt-24 text-center">
-      <div className="mx-auto max-w-[960px]">
-        <h2 className="mb-4 text-[2.5rem] font-extrabold leading-[1.15] tracking-tight text-[#e0e0e0] max-[700px]:text-[1.75rem]">
-          DNS Records from
+    <section className="px-6 pb-20 pt-28 text-center">
+      <div className="mx-auto max-w-[720px]">
+        <h1 className="mb-3 text-[2.75rem] font-extrabold leading-[1.1] tracking-tight text-foreground max-[700px]:text-[1.75rem]">
+          Your domain.
           <br />
-          Nostr Events
-        </h2>
-        <p className="mx-auto mb-8 max-w-[640px] text-lg text-[#bbb]">
-          No registrars. No control panels. Publish a cryptographically-signed
-          event to Nostr, and your DNS records propagate globally in seconds.
+          <span className="text-primary">No registrar needed.</span>
+        </h1>
+        <p className="mx-auto mb-10 max-w-[520px] text-lg text-muted-foreground">
+          Register a .nodns.shop subdomain instantly. Pay with Cashu sats.
+          Records propagate via Nostr in seconds.
         </p>
 
-        <button
-          onClick={handleTryIt}
-          disabled={launching}
-          className="animate-cta-glow mx-auto mb-8 inline-block rounded-xl bg-[#ff6b35] px-10 py-4 text-xl font-bold tracking-wide text-white transition-all hover:scale-[1.03] hover:bg-[#ff7f4f] active:scale-[0.98] disabled:opacity-60 max-[700px]:px-7 max-[700px]:py-3.5 max-[700px]:text-lg"
-        >
-          {launching ? "Launching..." : "Try it in 5 seconds →"}
-        </button>
+        {/* Search bar */}
+        <form onSubmit={handleSearch} className="relative mx-auto max-w-[560px]">
+          <div className="flex items-center rounded-xl border border-border bg-card overflow-hidden shadow-lg shadow-black/30 focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/20 transition-all">
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Find your .nodns.shop domain"
+              className="flex-1 bg-transparent px-5 py-4 text-lg text-foreground placeholder:text-muted-foreground outline-none"
+              autoFocus
+            />
+            <button
+              type="submit"
+              className="shrink-0 m-1.5 rounded-lg bg-primary px-6 py-2.5 text-sm font-semibold text-primary-foreground hover:bg-primary/80 transition-colors"
+            >
+              Search
+            </button>
+          </div>
+          <p className="mt-3 text-xs text-muted-foreground">
+            e.g., <span className="text-foreground/70">alice</span>.nodns.shop
+          </p>
+        </form>
 
-        <div>
-          <code className="inline-block rounded-lg border border-[#222] bg-[#141414] px-5 py-3 font-mono text-[0.95rem] text-[#ff6b35]">
-            your-key.nodns.shop
-          </code>
-        </div>
-        <p className="mt-3 text-sm text-[#666]">
-          Powered by Nostr &middot; Resolves globally via standard DNS
-        </p>
-        <div className="mt-4 flex flex-wrap items-center justify-center gap-1.5 text-xs text-[#666]">
-          <span className="inline-block h-1.5 w-1.5 rounded-full bg-[#2ecc71]" />
-          <span className="font-medium text-[#e0e0e0]/70">Primary:</span>
-          <span>ns1.nodns.shop (46.224.104.12)</span>
-          <span className="mx-1 text-[#222]">&middot;</span>
-          <span className="inline-block h-1.5 w-1.5 rounded-full bg-[#2ecc71]" />
-          <span className="font-medium text-[#e0e0e0]/70">Secondary:</span>
-          <span>puck.nether.net (204.42.254.5)</span>
+        {/* Pricing hint */}
+        <div className="mt-8 flex flex-wrap items-center justify-center gap-4 text-xs text-muted-foreground">
+          <span className="flex items-center gap-1.5">
+            <span className="font-mono text-foreground">1-3 chars</span> 200 sats
+          </span>
+          <span className="text-border">·</span>
+          <span className="flex items-center gap-1.5">
+            <span className="font-mono text-foreground">4-6 chars</span> 20 sats
+          </span>
+          <span className="text-border">·</span>
+          <span className="flex items-center gap-1.5">
+            <span className="font-mono text-foreground">7+ chars</span> 4 sats
+          </span>
         </div>
       </div>
     </section>

@@ -489,6 +489,26 @@ impl Store {
         Ok(records)
     }
 
+    pub fn get_records_by_domain(&self, domain: &str) -> Result<Vec<EventRecord>, StoreError> {
+        let conn = self.conn();
+        let pattern = format!("{domain}.%");
+        let mut stmt = conn
+            .prepare(
+                "SELECT event_id, npub, pubkey, name, record_type, ttl, rdata, zone, created_at, processed_at, deleted
+                 FROM events WHERE (name || '.' || npub || '.' || zone) LIKE ?1 AND deleted = 0
+                 ORDER BY created_at DESC",
+            )
+            .map_err(StoreError::ListAllRecords)?;
+
+        let records = stmt
+            .query_map(params![pattern], |row| scan_event_row(row))
+            .map_err(StoreError::ListAllRecords)?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(StoreError::ScanRecord)?;
+
+        Ok(records)
+    }
+
     // -----------------------------------------------------------------------
     // Delegations
     // -----------------------------------------------------------------------

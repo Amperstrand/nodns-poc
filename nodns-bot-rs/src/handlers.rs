@@ -3,6 +3,7 @@ use std::sync::atomic::Ordering;
 
 use axum::extract::State as AxumState;
 use axum::extract::Path;
+use axum::extract::Query;
 use axum::http::HeaderMap;
 use axum::response::{IntoResponse, Json, Response};
 use base64::Engine;
@@ -41,6 +42,12 @@ pub struct ApiRecord {
 pub struct RecordsResponse {
     records: Vec<ApiRecord>,
     count: usize,
+}
+
+#[derive(Deserialize, Default)]
+pub struct RecordsQuery {
+    pubkey: Option<String>,
+    domain: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -106,36 +113,39 @@ pub async fn health_handler(AxumState(state): AxumState<Arc<AppState>>) -> Json<
     })
 }
 
-pub async fn records_handler(AxumState(state): AxumState<Arc<AppState>>) -> Json<RecordsResponse> {
-    match state.store.list_all_records() {
-        Ok(records) => {
-            let out: Vec<ApiRecord> = records
-                .into_iter()
-                .map(|r| {
-                    let name = if r.name == "@" || r.name.is_empty() {
-                        String::new()
-                    } else {
-                        r.name.clone()
-                    };
-                    ApiRecord {
-                        npub: r.npub.clone(),
-                        name,
-                        fqdn: build_fqdn(&r.npub, &r.name, &r.zone),
-                        record_type: r.record_type,
-                        ttl: r.ttl,
-                        rdata: r.rdata,
-                        created_at: r.created_at,
-                    }
-                })
-                .collect();
-            let count = out.len();
-            Json(RecordsResponse { records: out, count })
-        }
-        Err(e) => {
-            error!(error = %e, "failed to list records");
-            Json(RecordsResponse { records: vec![], count: 0 })
-        }
-    }
+pub async fn records_handler(
+    AxumState(state): AxumState<Arc<AppState>>,
+    Query(params): Query<RecordsQuery>,
+) -> Json<RecordsResponse> {
+    let records = if let Some(pubkey) = params.pubkey {
+        state.store.get_records_by_pubkey(&pubkey).unwrap_or_default()
+    } else if let Some(domain) = params.domain {
+        state.store.get_records_by_domain(&domain).unwrap_or_default()
+    } else {
+        state.store.list_all_records().unwrap_or_default()
+    };
+
+    let out: Vec<ApiRecord> = records
+        .into_iter()
+        .map(|r| {
+            let name = if r.name == "@" || r.name.is_empty() {
+                String::new()
+            } else {
+                r.name.clone()
+            };
+            ApiRecord {
+                npub: r.npub.clone(),
+                name,
+                fqdn: build_fqdn(&r.npub, &r.name, &r.zone),
+                record_type: r.record_type,
+                ttl: r.ttl,
+                rdata: r.rdata,
+                created_at: r.created_at,
+            }
+        })
+        .collect();
+    let count = out.len();
+    Json(RecordsResponse { records: out, count })
 }
 
 // ---------------------------------------------------------------------------
@@ -167,6 +177,67 @@ pub async fn zone_pricing_handler(
         )
             .into_response(),
     }
+}
+
+// ---------------------------------------------------------------------------
+// Registration check handler
+// ---------------------------------------------------------------------------
+
+#[derive(Serialize)]
+pub struct CheckResponse {
+    name: String,
+    zone: String,
+    api: CheckSource,
+    dns: CheckSource,
+}
+
+#[derive(Serialize)]
+pub struct CheckSource {
+    registered: bool,
+    records: Vec<ApiRecord>,
+}
+
+#[derive(Deserialize)]
+pub struct CheckQuery {
+    name: String,
+}
+
+pub async fn check_handler(
+    AxumState(state): AxumState<Arc<AppState>>,
+    Query(params): Query<CheckQuery>,
+) -> Json<CheckResponse> {
+    let name = params.name.trim().to_lowercase();
+    let zone = state.dns_zones.first()
+        .map(|z| z.zone.clone())
+        .unwrap_or_default();
+
+    let api_records = state.store.get_records_by_domain(&format!("{name}.{zone}"))
+        .unwrap_or_default();
+
+    let api_source = CheckSource {
+        registered: !api_records.is_empty(),
+        records: api_records.into_iter().map(|r| ApiRecord {
+            npub: r.npub.clone(),
+            name: if r.name == "@" || r.name.is_empty() { String::new() } else { r.name.clone() },
+            fqdn: build_fqdn(&r.npub, &r.name, &r.zone),
+            record_type: r.record_type,
+            ttl: r.ttl,
+            rdata: r.rdata,
+            created_at: r.created_at,
+        }).collect(),
+    };
+
+    let dns_source = CheckSource {
+        registered: false,
+        records: vec![],
+    };
+
+    Json(CheckResponse {
+        name,
+        zone,
+        api: api_source,
+        dns: dns_source,
+    })
 }
 
 // ---------------------------------------------------------------------------

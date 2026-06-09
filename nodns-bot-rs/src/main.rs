@@ -254,8 +254,9 @@ async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
         let api_routes = axum::Router::new()
             .route("/.well-known/nostr.json", axum::routing::get(nip05::nip05_handler))
             .route("/health", axum::routing::get(handlers::health_handler))
-            .route("/api/records", axum::routing::get(handlers::records_handler))
-            .route("/api/zones/{zone}/pricing", axum::routing::get(handlers::zone_pricing_handler))
+.route("/api/records", axum::routing::get(handlers::records_handler))
+.route("/api/check", axum::routing::get(handlers::check_handler))
+.route("/api/zones/{zone}/pricing", axum::routing::get(handlers::zone_pricing_handler))
             .layer(GovernorLayer::new(api_limit))
             .with_state(http_state);
 
