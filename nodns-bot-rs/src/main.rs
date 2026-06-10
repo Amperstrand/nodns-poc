@@ -356,6 +356,8 @@ async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
                 CorsLayer::new()
                     .allow_origin([
                         "https://nodns.shop".parse::<HeaderValue>().unwrap(),
+                        "https://beta.nodns.shop".parse::<HeaderValue>().unwrap(),
+                        "https://amperstrand.github.io".parse::<HeaderValue>().unwrap(),
                         "http://localhost:3000".parse::<HeaderValue>().unwrap(),
                     ])
                     .allow_methods([axum::http::Method::GET, axum::http::Method::POST])

@@ -41,6 +41,7 @@ jobs:
         working-directory: nodns-frontend
         env:
           GITHUB_PAGES: "1"
+          NEXT_PUBLIC_API_BASE: "https://nodns.shop"
         run: npm run build
 
       - name: Upload artifact
