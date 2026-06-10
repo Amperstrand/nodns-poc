@@ -14,6 +14,51 @@ NoDNS uses Nostr events to manage DNS records. Three operations are supported:
 
 All operations use **kind 11111** events. The event type is determined by the tags present.
 
+## Zone-Agnostic Events
+
+The core design principle: **events contain no zone information**. The wire format is the same regardless of which zone (`.nostr`, `.nodns.shop`, or any other) the records end up in.
+
+A kind 11111 record tag:
+```
+["record", "A", "", "1.2.3.4", "", "", "", "", "", "", "3600"]
+```
+
+Contains no zone identifier. Zone assignment is an **infrastructure-layer concern**:
+
+- A bot configured for `.nostr` writes records to the `.nostr` zone
+- A bot configured for `.nodns.shop` writes records to the `.nodns.shop` zone
+- A bot configured for both writes the same records to both zones
+- The same event produces identical records across all zones
+
+This means:
+- **Users publish once** — they don't need to know which zones exist
+- **Zones are additive** — adding `.nostr` doesn't change the protocol
+- **The domain is not the protocol** — `nodns.shop` is a temporary convenience. If lost, the same events resolve under `.nostr` or any zone running a NoDNS bot
+- **Multiple operators** — anyone can run a bot for their own zone and process the same events
+
+### The `.nostr` TLD
+
+`.nostr` is a special-use TLD reserved for NoDNS's purest consensus rule: `$npub.nostr`.
+
+**Rules:**
+- Only `$npub.nostr` is supported — your public key is your subdomain
+- `$string.nostr` returns **NXDOMAIN** — there is no consensus mechanism for string ownership under `.nostr`
+- Subdomains work: `www.{npub}.nostr`, `mail.{npub}.nostr` etc.
+- Resolution via DoH endpoint (e.g. `https://dns.nodns.shop/dns-query`) or local resolver
+
+**Why no `$string.nostr`?**
+Naming requires consensus — who gets to own `alice.nostr`? Under `$npub.nostr`, the answer is purely mathematical: nobody can forge a signature for a public key they don't control. For string names, you need a social or economic mechanism (delegation, proof-of-burn, web-of-trust, etc.), and those mechanisms don't belong under `.nostr` because they'd require an operator or authority figure. String names belong under parent domains where an operator has opted in.
+
+**Future options for `$string.nostr`:**
+- Proof-of-burn (mining-style economic commitment)
+- Web-of-trust (subjective resolution)
+- These are documented in the consensus models but **not decided** — `.nostr` stays npub-only until consensus emerges
+
+**Resolution methods:**
+1. **DoH endpoint** — `https://dns.nodns.shop/dns-query` — users point their DNS at this endpoint for one-click `.nostr` resolution
+2. **Local resolver** — Arjen's `nodns-nameserver` — subscribes to Nostr relays directly
+3. **Bot-mirrored DNS** — same records also appear under `.nodns.shop` for standard DNS resolution
+
 ## Kind 11111 Event Types
 
 ### Type 1: DNS Record Update
@@ -330,3 +375,5 @@ Zap payment tag:   ["zap",       ZAP_RECEIPT_EVENT_ID, AMOUNT]
 ```
 
 All timestamps are Unix epoch strings. All amounts are in satoshis as strings.
+
+**Note:** Record and delete tags contain no zone identifier. The same event produces records under `.nostr`, `.nodns.shop`, or any zone running a NoDNS bot. Zone assignment is infrastructure, not protocol.

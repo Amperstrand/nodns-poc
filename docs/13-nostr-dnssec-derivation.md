@@ -1,6 +1,6 @@
 # Nostr → DNSSEC Key Derivation (Research)
 
-> **Status**: Researched, not implemented. Implementation requires design decisions (see Open Questions).
+> **Status**: IMPLEMENTED and LIVE in production since 2026-06-10. SLIP-10-derived P-256 KSK (tag 15318) actively signing the nodns.shop zone alongside original KSK 12717.
 
 ## The Problem
 
@@ -233,6 +233,68 @@ No matter how clever the key derivation, the `.shop` TLD needs a DS record point
 Public DNS resolvers validate standard DNSSEC. They don't know about Nostr, SLIP-10, or key derivation. The Nostr link is verifiable by custom software but NOT by the standard DNSSEC validation path. This is by design — DNSSEC has its own trust hierarchy.
 
 These aren't bugs — they're architectural boundaries. The three-layer model respects each system's boundaries while creating links between them.
+
+## Production Deployment (2026-06-10)
+
+### Decisions Made
+
+- **Curve**: P-256 (algorithm 13) — matches existing zone, no rollover needed
+- **Derivation depth**: Master key only (no child path) — single zone
+- **Key storage**: nsec in bot config file (`/opt/nodns-bot/config.toml` under `[registrar]`)
+- **Rotation**: None for PoC
+
+### Implementation
+
+- **Code**: `nodns-bot-rs/src/dnssec_derivation.rs` — ~80 lines of Rust
+- **Crates**: `hmac`, `sha2`, `p256`, `pkcs8`
+- **At startup**: Bot derives P-256 key from registrar nsec, writes PKCS#8 PEM to `/tmp/nodns-slip10.pem`, imports into Knot via `keymgr import-pem`
+
+### Knot DNS Integration
+
+```bash
+# Import derived key (must be root)
+keymgr nodns.shop import-pem /tmp/nodns-slip10.pem algorithm=ECDSAP256SHA256 ksk=yes
+
+# CRITICAL: fix ownership or key silently fails to sign
+chown knot:knot /var/lib/knot/keys/keys/<keyhash>.pem
+
+knotc reload
+```
+
+The `chown` step is essential — `keymgr import-pem` creates files as `root:root`, but the Knot DNS daemon runs as `knot:knot` and cannot read the key. It fails silently (no error logged, key just doesn't sign).
+
+### Dual-KSK State
+
+| Key | Tag | Origin | DS at Registrar |
+|---|---|---|---|
+| Original KSK | 12717 | Knot auto-generated | ✅ DS submitted at Namecheap |
+| SLIP-10 KSK | 15318 | Derived from registrar nsec | ⏳ Pending — user needs to add at Namecheap |
+
+Both KSKs are actively signing the zone. Dual-DS (both at registrar) enables a clean transition path.
+
+### Attestation Event
+
+The bot publishes a kind:11111 Nostr event at startup linking the registrar identity to the DNSKEY:
+
+- **Event ID**: `fd0d8d4399dee87c472c8a5883315cac554bec4c8c5ea77db23f83b2b08ef8cf`
+- **Tags**: `["dnskey", "nodns.shop", "15318", "13", "<base64 DNSKEY RDATA>"]`, `["dnskey-derivation", "slip10", "Nist256p1 seed"]`
+- **Relays**: relay.damus.io, nos.lol
+
+### Verification
+
+```bash
+# Verify both KSKs in DNS
+dig @8.8.8.8 nodns.shop DNSKEY +short | wc -l
+# Should show 3 lines: KSK 12717, KSK 15318, ZSK 33240
+
+# Verify ad flag (DNSSEC validates end-to-end)
+dig @8.8.8.8 nodns.shop SOA | grep ";; flags"
+# Should include "ad"
+
+# Verify mathematical link (on development machine)
+cd nodns-bot-rs && cargo test test_slip10_matches_dns -- --nocapture
+# Should print "MATCH: True"
+```
 
 ## References
 

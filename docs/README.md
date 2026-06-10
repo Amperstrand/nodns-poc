@@ -57,12 +57,13 @@ These docs are the authoritative source for reasoning. `content/consensus.json` 
 | Doc | Status | Description |
 |---|---|---|
 | [12-dnssec-setup.md](12-dnssec-setup.md) | ACTIVE | Production DNSSEC deployment reference |
-| [13-nostr-dnssec-derivation.md](13-nostr-dnssec-derivation.md) | ACTIVE | SLIP-10 key derivation research |
+| [13-nostr-dnssec-derivation.md](13-nostr-dnssec-derivation.md) | ACTIVE | SLIP-10 key derivation — IMPLEMENTED, LIVE in production |
 | [15-nsec-to-dnssec-analysis.md](15-nsec-to-dnssec-analysis.md) | ACTIVE | 5-approach nsec→DNSSEC tradeoff analysis |
 | [16-crypto-key-cert-patterns.md](16-crypto-key-cert-patterns.md) | ACTIVE | Cryptographic key and certificate patterns |
 | [17-acme-dns01-trust-analysis.md](17-acme-dns01-trust-analysis.md) | ACTIVE | ACME DNS-01 challenge trust analysis |
 | [18-client-side-tls-security.md](18-client-side-tls-security.md) | ACTIVE | Client-side TLS security model |
 | [19-audit-findings.md](19-audit-findings.md) | ACTIVE | Security audit findings and mitigations |
+| [31-dnssec-trust-architecture.md](31-dnssec-trust-architecture.md) | ACTIVE | Three-layer trust model, soft fork, attestation, dual-KSK |
 
 ### Operations & Outreach
 

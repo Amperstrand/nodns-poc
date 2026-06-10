@@ -81,6 +81,8 @@ pub fn classify_event(
         payments: Vec::new(),
         claim: None,
         renewal: None,
+        sig: hex::encode(event.sig.serialize()),
+        raw_tags: event.tags.iter().map(|t| t.as_slice().to_vec()).collect(),
     };
 
     for (i, tag) in event.tags.iter().enumerate() {

@@ -63,6 +63,8 @@ pub struct ParsedEvent {
     pub payments: Vec<Payment>,
     pub claim: Option<ClaimRequest>,
     pub renewal: Option<RenewalRequest>,
+    pub sig: String,
+    pub raw_tags: Vec<Vec<String>>,
 }
 
 /// A stored DNS event record (maps to `events` table).

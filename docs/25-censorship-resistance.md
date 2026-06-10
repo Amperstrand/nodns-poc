@@ -112,3 +112,55 @@ This is **social censorship resistance**, not cryptographic. It relies on the op
 - Whether to add cryptographic enforcement for `$string.tld` (e.g., timelocked delegation that can't be revoked)
 - How to handle DNSSEC when the resolver overrides DNS records (the DS chain would break)
 - Whether relays themselves can be made censorship-resistant (Nostr's existing relay ecosystem helps)
+
+---
+
+## DNS-as-Relay-Cache (TXT-as-Event)
+
+> **Status**: LIVE since 2026-06-10. Deployed on nodns.shop.
+
+### What It Does
+
+Every TXT record update from a kind:11111 event also gets a compact Nostr event embedded as an additional TXT record at the same name. This turns DNS itself into a relay cache — a nodns-aware resolver can extract event data directly from DNS without connecting to Nostr.
+
+### Live Example
+
+```
+$ dig @8.8.8.8 test.npub1gxz8rj...nodns.shop TXT +short
+"registered via nodns.shop"
+"nostr:k=11111;i=082174ed...;p=418471cb..."
+```
+
+Two TXT records: the user's data, and the compact event.
+
+### Compact Format
+
+The bot uses a tiered fallback to fit within the 255-byte DNS TXT string limit:
+
+| Tier | Format | Fits When |
+|---|---|---|
+| Full | `nostr:k=11111;i=<hex>;p=<hex>;s=<hex>;t=<tags>` | Small events (~279 bytes min — rarely fits) |
+| No-sig | `nostr:k=11111;i=<hex>;p=<hex>;t=<tags>` | Medium events (~150 bytes + tags) |
+| Minimal | `nostr:k=11111;i=<hex>;p=<hex>` | Always fits (142 bytes) |
+
+The full format includes the 128-char hex signature. For most events, even the no-sig format exceeds 255 bytes due to tag data. The minimal format (event ID + pubkey) always fits and is sufficient for a resolver to fetch the full event from relays by ID.
+
+### Implementation Details
+
+- **Only for TXT records**: A/AAAA/CNAME/MX records don't get compact event embedding
+- **Only for kind:11111**: The bot only processes these events anyway
+- **Non-fatal**: If the compact TXT append fails, the user's record is still written
+- **Secondary sync**: Compact TXT records sync to secondary DNS (puck) via AXFR. Knot DNS has no record-level transfer filtering. Negligible at current scale; fixable with a separate internal zone if needed
+- **Code**: `nodns-bot-rs/src/event_processor.rs` — `build_compact_event_txt()` + `append_record()` call after each TXT `update_record()`
+
+### Censorship Resistance Implications
+
+TXT-as-event means DNS responses carry verifiable Nostr event data. A home router resolver can:
+
+1. Query DNS for a name
+2. Find the compact event TXT
+3. Verify event signature (if included in full format) or fetch full event from relays by ID
+4. Compare DNS record with the event — detect tampering
+5. Resolve using cryptographic truth, not DNS convenience
+
+This bridges the gap between the "convenience layer" (DNS) and the "truth layer" (Nostr) without requiring the user to run a full Nostr client.

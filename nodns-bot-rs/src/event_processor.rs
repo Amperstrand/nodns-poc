@@ -516,6 +516,49 @@ async fn process_renewal(
 }
 
 // ---------------------------------------------------------------------------
+// Compact Nostr event TXT embedding
+// ---------------------------------------------------------------------------
+
+/// Build a compact Nostr event string for embedding in DNS TXT records.
+///
+/// Tries full format (with signature) first, then falls back to omitting the
+/// signature, then to minimal (just event ID + pubkey). Returns `None` only
+/// if even the minimal form exceeds 255 bytes (should never happen).
+fn build_compact_event_txt(
+    event_id: &str,
+    pubkey_hex: &str,
+    sig: &str,
+    raw_tags: &[Vec<String>],
+) -> Option<String> {
+    let tags_compact: String = raw_tags
+        .iter()
+        .map(|tag| tag.join(","))
+        .collect::<Vec<_>>()
+        .join("|");
+
+    let full = format!(
+        "nostr:k=11111;i={event_id};p={pubkey_hex};s={sig};t={tags_compact}"
+    );
+    if full.len() <= 255 {
+        return Some(full);
+    }
+
+    let without_sig = format!(
+        "nostr:k=11111;i={event_id};p={pubkey_hex};t={tags_compact}"
+    );
+    if without_sig.len() <= 255 {
+        return Some(without_sig);
+    }
+
+    let minimal = format!("nostr:k=11111;i={event_id};p={pubkey_hex}");
+    if minimal.len() <= 255 {
+        return Some(minimal);
+    }
+
+    None
+}
+
+// ---------------------------------------------------------------------------
 // process_dns_update
 // ---------------------------------------------------------------------------
 
@@ -600,6 +643,17 @@ async fn process_dns_update(
             }
 
             metrics.ddns_successes.fetch_add(1, Ordering::Relaxed);
+
+            // Embed compact Nostr event as additional TXT record (DNS-as-relay-cache)
+            if rt == 16 {
+                if let Some(compact) = build_compact_event_txt(
+                    event_id, pubkey_hex, &parsed.sig, &parsed.raw_tags,
+                ) {
+                    if let Err(e) = updater.append_record(&fqdn, rec.ttl, 16, &compact).await {
+                        warn!(event_id = %event_id, fqdn = %fqdn, error = %e, "compact event TXT append failed (non-fatal)");
+                    }
+                }
+            }
 
             if let Err(e) = store.save_event(
                 event_id, npub, pubkey_hex, &rec.name, &rec.record_type,

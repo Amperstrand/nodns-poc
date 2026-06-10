@@ -1,6 +1,6 @@
 # DNSSEC Deployment — nodns.shop
 
-> **Status**: Zone signing live since 2026-06-06. DS record submitted at Namecheap. All records carry RRSIG signatures.
+> **Status**: Zone signing live since 2026-06-06. DS record submitted at Namecheap. All records carry RRSIG signatures. `ad` flag confirmed on public resolvers since 2026-06-07. SLIP-10-derived KSK (tag 15318) deployed since 2026-06-10.
 
 ---
 
@@ -10,12 +10,15 @@
 |---|---|---|
 | Zone signing | ✅ Live | All records signed with RRSIG via Knot DNS 3.3.4 |
 | Algorithm | ECDSAP256SHA256 (13) | Per RFC 6605, RFC 8624 |
-| KSK | tag 12717 | Created 2026-06-06 |
+| KSK (original) | tag 12717 | Created 2026-06-06, DS at Namecheap |
+| KSK (SLIP-10) | tag 15318 | Derived from registrar nsec via SLIP-10, deployed 2026-06-10 |
 | ZSK | tag 33240 | Created 2026-06-06 |
 | NSEC3 | `1 0 0 -` | Per RFC 9276 recommendations |
 | CDS/CDNSKEY | Published | Knot auto-publishes for RFC 8078 |
-| DS at registrar | Submitted | At Namecheap, pending propagation |
-| `ad` flag in public DNS | Pending | Requires DS propagation through `.shop` TLD |
+| DS at registrar | Submitted | At Namecheap for KSK 12717 |
+| `ad` flag in public DNS | ✅ Confirmed | DS propagated, `ad` flag present on public resolvers since 2026-06-07 |
+| DNSKEY attestation | Published | Kind:11111 event with dnskey tag, on relay.damus.io + nos.lol |
+| TXT-as-event | ✅ Live | Compact Nostr events embedded as TXT records since 2026-06-10 |
 
 ### Verified Output (2026-06-06)
 
@@ -35,6 +38,22 @@ $ dig @127.0.0.1 nodns.shop NSEC3PARAM +short
 $ keymgr nodns.shop ds
 nodns.shop. DS 12717 13 2 b5a6a5f1b855d3a231e6cf6be231ba4b3bc1843c62845762600f1c5455758726
 nodns.shop. DS 12717 13 4 c1ea33c62fe6c38d27cf36d9c7e429bb95527dae75c9b450cb1bd8890a552134afe4d9aaaca70bfda4f4ea1dd322b625
+```
+
+### Verified Output (2026-06-10 — post SLIP-10 + dual-KSK)
+
+```
+$ dig @8.8.8.8 nodns.shop DNSKEY +short
+257 3 13 uTCfjkiMHmlUkhKs387FDEMPALSwzXzCYL3PRjA+3WTMnKOSVd6eKJuA...   ← KSK 12717 (original)
+257 3 13 4wxHkDJMuMCTMp2eTAHLs6eRj0Tt2xyccIQYzA1VQIU...                  ← KSK 15318 (SLIP-10)
+256 3 13 HJ65PZjA7jXvKvmes9EQgUqtq71n6KNbuixd1YAa6unFQSoQaDP2QbyV...   ← ZSK 33240
+
+$ dig @8.8.8.8 nodns.shop SOA
+;; flags: qr rd ra ad;   ← "ad" flag present, DNSSEC validates end-to-end
+
+# SLIP-10 mathematical link verification (on local machine):
+$ cargo test test_slip10_matches_dns -- --nocapture
+MATCH: True   ← SLIP-10(nsec) → P-256 pubkey == DNSKEY 15318 in DNS
 ```
 
 ---
@@ -295,7 +314,7 @@ IANA reserves algorithm numbers 253 and 254 for private use. We could define our
 
 This means custom algorithms produce responses that resolvers treat as unsigned — defeating the entire purpose of DNSSEC.
 
-### Alternative 2: SLIP-10 Derivation (Viable, Not Implemented)
+### Alternative 2: SLIP-10 Derivation (IMPLEMENTED — LIVE)
 
 SLIP-10 ([SLIP-0010](https://github.com/satoshilabs/slips/blob/master/slip-0010.md), SatoshiLabs) derives keys for different curves from the same seed:
 
@@ -308,23 +327,21 @@ nsec (32 bytes)
 
 Each label produces a completely independent key for a different curve, but all deterministically derived from the same seed. Anyone who knows the npub can derive the P-256 public key and verify it matches the DNSKEY.
 
-**Tradeoffs**:
+**Status**: **LIVE in production** since 2026-06-10. Derived KSK (tag 15318) imported into Knot DNS, actively signing the zone alongside original KSK 12717 (dual-KSK). Full analysis in `docs/13-nostr-dnssec-derivation.md`.
 
-| Aspect | Pro | Con |
-|---|---|---|
-| Verifiability | Anyone can derive DNSKEY from npub | Requires custom software; resolvers don't know about the link |
-| Key management | Single seed (nsec) controls everything | nsec compromise = DNSSEC compromise |
-| Standards | SLIP-10 is widely deployed (Trezor, Ledger) | Not a DNS standard — it's a convention we define |
-| Implementation | ~100 lines of Rust | Requires design decisions (P-256 vs Ed25519, derivation path) |
-| Rollback | Import derived key into Knot via `keymgr import-pem` | Cannot be done incrementally — requires full KSK rotation |
+**Production details**:
+- Derived P-256 pubkey: `04e30c790326cb8c093329d9e4c01cb3a79120f474df18c9c708418cc0d5540851b3ec104d9888cc9d7a7b1379eddb42a708eada7c403f8f7be7810b749566e39c`
+- Key tag: 15318
+- DS (digest type 2): `15318 13 2 15fe3e8c712de06ed097123497938d9185563baf6fecafa5ffe89a322706f580`
+- **Pending**: Add DS for 15318 at Namecheap alongside existing DS for 12717 (dual-DS)
+- **Attestation event**: ID `fd0d8d4399dee87c472c8a5883315cac554bec4c8c5ea77db23f83b2b08ef8cf`, published to relay.damus.io + nos.lol
+- **Known issue**: `keymgr import-pem` creates files as `root:root` — must `chown knot:knot` or key silently fails to sign
 
-**Status**: Researched, not implemented. Full analysis in `docs/13-nostr-dnssec-derivation.md`.
+### Alternative 3: Nostr Attestation Events (IMPLEMENTED — LIVE)
 
-### Alternative 3: Nostr Attestation Events (Future)
+Publish kind:11111 Nostr events that attest to the DNSKEY, creating an on-chain verifiable link between the Nostr identity and the DNSSEC key.
 
-Publish kind:11111 Nostr events that attest to the DNSKEY, creating an on-chain verifiable link between the Nostr identity and the DNSSEC key. This is complementary to SLIP-10 or standalone.
-
-**Status**: Concept only, not implemented.
+**Status**: **LIVE**. Attestation event published by the bot at startup. Event ID `fd0d8d4399dee87c472c8a5883315cac554bec4c8c5ea77db23f83b2b08ef8cf`, tags `["dnskey", zone, "15318", "13", base64_rdata]` and `["dnskey-derivation", "slip10", "Nist256p1 seed"]`. Published to relay.damus.io and nos.lol.
 
 ---
 
@@ -407,7 +424,7 @@ ssh root@46.224.104.12 'keymgr nodns.shop ds'
 | NSEC3 params | 0 iterations, no salt | More iterations | RFC 9276 explicit recommendation | [RFC 9276] |
 | DS management | Manual | RFC 8078 CDS/CDNSKEY | Namecheap doesn't support RFC 8078 | — |
 | Key split | KSK/ZSK | Single key | Standard practice, limits KSK exposure | [RFC 6605] |
-| Nostr key link | Not implemented | SLIP-10 derivation | Requires design decisions; standard DNSSEC works | SLIP-0010 |
+| Nostr key link | SLIP-10 → P-256 KSK 15318 (LIVE) | Custom algorithm | SLIP-10 derivation works, standard DNSSEC validates | SLIP-0010 |
 
 ---
 

@@ -37,32 +37,31 @@
       "resolution": "DNS query → recursive resolver → authoritative nameserver → records"
     },
     {
-      "id": "crypto-naming",
-      "name": "Crypto Naming Tokens",
-      "tagline": "Token decides",
+      "id": "tor-onion",
+      "name": "Tor .onion Addresses",
+      "tagline": "Key decides (closest existing analogy to $npub.nostr)",
       "status": "external-reference",
-      "authority": "Smart contract / blockchain",
-      "ownership_model": "Token-based property",
-      "censorship_resistance": "high",
-      "token": true,
-      "examples": [
-        { "name": "ENS", "description": "Ethereum-based, .eth names, auction + annual renewal", "url": "https://ens.domains" },
-        { "name": "Unstoppable Domains", "description": "Polygon-based, one-time purchase, .crypto/.x/.nft", "url": "https://unstoppabledomains.com" },
-        { "name": "Handshake", "description": "Own blockchain, auction-based TLDs, PoW", "url": "https://handshake.org" }
-      ],
-      "description": "Various projects have created naming systems backed by blockchain tokens. You buy a name, you get a token that represents ownership. The smart contract or chain consensus enforces who controls the name. NoDNS takes a different path: no token, no blockchain.",
+      "authority": "Cryptographic (derived from public key, same as .nostr)",
+      "ownership_model": "Inalienable mathematical ownership",
+      "censorship_resistance": "absolute",
+      "token": false,
+      "pattern": "{public_key_derived}.onion",
+      "url": "https://community.torproject.org/onion-services/",
+      "description": "Tor onion addresses are derived from a public key. Nobody can take your .onion address because nobody can derive a different key that produces the same address. This is the closest existing analogy to $npub.nostr — your key IS your address. The difference: .onion addresses route traffic through the Tor network, while $npub.nostr resolves to DNS records. Both share the same core insight: cryptographic identity as naming.",
       "pros": [
-        "Censorship-resistant (smart contract can't be court-ordered)",
-        "Transferable property (you can sell the token)",
-        "Programmable (subdomains, records as smart contract state)"
+        "Zero ambiguity — cryptographic proof of ownership",
+        "No squatting possible — you can't derive someone else's key",
+        "Free to claim (your keypair already exists)",
+        "No parent domain, no operator — just you and your key"
       ],
       "cons": [
-        "Creates a token economy around naming — financial speculation distorts the namespace",
-        "Requires blockchain infrastructure to resolve",
-        "Gas fees for updates",
-        "Bifurcated resolution — normal DNS doesn't see these names without special software"
+        "Not human-readable (56-char base32 strings)",
+        "Requires Tor Browser or special software",
+        "The .onion TLD only exists within the Tor network",
+        "No path to standard DNS resolution"
       ],
-      "resolution": "Special resolver / browser extension → blockchain RPC → contract state → records"
+      "resolution": "Tor client → .onion address → rendezvous with hidden service",
+      "philosophy": "The architectural predecessor to $npub.nostr. Same idea — your key is your identity — but for routing, not naming. $npub.nostr applies this insight to DNS: instead of routing packets, it resolves names."
     },
     {
       "id": "npub-nostr",
@@ -80,21 +79,23 @@
         "url": "https://gitworkshop.dev/npub1hw6amg8p24ne08c9gdq8hhpqx0t0pwanpae9z25crn7m9uy7yarse465gr/nos.lol/nodns-nameserver",
         "description": "Go implementation. JIT DNS server with embedded Khatru relay. Supports 17 DNS record types. Resolves *.nostr via Nostr subscriptions."
       },
-      "description": "The purest consensus rule: your public key is your domain under .nostr. Nobody can take it from you because nobody can forge your signature. Nobody can squat someone else's public key because they can't produce valid events for it. Defined in an experimental draft. Requires installing a local resolver — not resolvable by standard DNS.",
+      "description": "The purest consensus rule: your public key is your domain under .nostr. Nobody can take it from you because nobody can forge your signature. Nobody can squat someone else's public key because they can't produce valid events for it. The wire format (kind 11111 record tags) is zone-agnostic — the same event applies to .nostr, .nodns.shop, or any zone. Resolution is an infrastructure-layer concern, not a protocol-layer concern. Only $npub.nostr is supported — $string.nostr returns NXDOMAIN because there is no consensus mechanism for string ownership under .nostr.",
+      "wire_compat": "The kind 11111 record tag [\"record\", \"A\", \"\", \"1.2.3.4\", ...] contains no zone information. The same event that creates records under .nostr also creates records under .nodns.shop. Zone operators choose which events to process by running a bot with their zone config.",
       "pros": [
         "Zero ambiguity — cryptographic proof of ownership",
         "No squatting possible — you can't fake someone's npub",
         "Free to claim (your keypair already exists)",
         "No parent domain, no operator — just you and your key",
-        "17 DNS record types supported"
+        "17 DNS record types supported",
+        "Zone-agnostic wire format — same events work everywhere"
       ],
       "cons": [
         "Not human-readable (npubs are long strings)",
-        "Requires installing a local resolver — no one can use it without special software",
-        "The .nostr TLD only exists for people running nodns-nameserver",
-        "No path to standard DNS resolution"
+        "Requires installing a local resolver or using DoH — not resolvable by standard DNS out of the box",
+        "The .nostr TLD only exists for people using a NoDNS resolver or DoH endpoint",
+        "$string.nostr is not supported — NXDOMAIN"
       ],
-      "resolution": "Local DNS server (nodns-ns) → subscribes to Nostr relays → serves from cache",
+      "resolution": "Local DNS server (nodns-ns) or DoH endpoint → subscribes to Nostr relays → serves from cache",
       "philosophy": "The only consensus rule that is purely mathematical. No social contracts, no reputation, no economics, no operator. Just: do you have the private key? Then it's yours."
     },
     {
@@ -112,14 +113,15 @@
         "title": "Protocol experimental draft",
         "url": "https://github.com/Amperstrand/nodns-poc/blob/main/docs/11-protocol-experimental-draft.md"
       },
-      "description": "The same rule as $npub.nostr, but under an existing parent domain. Your npub IS your subdomain. The parent domain operator runs a bot that subscribes to Nostr relays and pushes records to standard DNS via DDNS. This means anyone can resolve it with normal DNS — no special software needed. The operator can be paid to cache/mirror your records, but the Nostr events are the source of truth. This is a land grab: the parent domain operator is placing a new consensus rule above their own authority.",
+      "description": "The same rule as $npub.nostr, but under an existing parent domain. Your npub IS your subdomain. The parent domain operator runs a bot that subscribes to Nostr relays and pushes records to standard DNS via DDNS. This means anyone can resolve it with normal DNS — no special software needed. The operator can be paid to cache/mirror your records, but the Nostr events are the source of truth. This is a land grab: the parent domain operator is placing a new consensus rule above their own authority. The same zone-agnostic events that create records under .nostr also create records here — no wire format changes needed.",
       "pros": [
         "Cryptographic proof of ownership (same as $npub.nostr)",
         "No squatting possible",
         "Resolves via standard DNS — every device can use it",
         "Dual resolution: DNS and Nostr give identical results",
         "If DNS is tampered with (MITM), the correct result is still available via Nostr",
-        "3-5 second propagation globally"
+        "3-5 second propagation globally",
+        "Zone-agnostic events — same event works under any zone"
       ],
       "cons": [
         "Not human-readable (npubs are long strings)",
@@ -132,7 +134,7 @@
         "nostr": "Nostr relay subscription → event verification → records",
         "conflict": "Nostr always wins. If DNS returns different records than Nostr events, someone is tampering with DNS (MITM) or a court has ordered changes. The Nostr events remain the cryptographic truth."
       },
-      "philosophy": "Your private key decides. The registrar can be paid to cache your records in standard DNS, but they cannot take your name because they cannot forge your signature. The parent domain operator sublets their namespace to cryptographic truth."
+      "philosophy": "Your private key decides. The registrar can be paid to cache your records in standard DNS, but they cannot take your name because they cannot forge your signature. The parent domain operator sublets their namespace to cryptographic truth. Note: nodns.shop is a temporary backwards-compatibility convenience. If the domain is lost, the same events resolve under .nostr or any other zone running a NoDNS bot. The domain is not the protocol."
     },
     {
       "id": "string-parent",
@@ -259,19 +261,48 @@
         "How does this interact with genuine ownership disputes?"
       ],
       "philosophy": "Takes the PoB model and adds a defense-in-depth mechanism. But the complexity may not be worth it."
+    },
+    {
+      "id": "crypto-naming",
+      "name": "Crypto Naming Tokens",
+      "tagline": "Token decides",
+      "status": "external-reference",
+      "authority": "Smart contract / blockchain",
+      "ownership_model": "Token-based property",
+      "censorship_resistance": "high",
+      "token": true,
+      "examples": [
+        { "name": "ENS", "description": "Ethereum-based, .eth names, auction + annual renewal", "url": "https://ens.domains" },
+        { "name": "Unstoppable Domains", "description": "Polygon-based, one-time purchase, .crypto/.x/.nft", "url": "https://unstoppabledomains.com" },
+        { "name": "Handshake", "description": "Own blockchain, auction-based TLDs, PoW", "url": "https://handshake.org" }
+      ],
+      "description": "Various projects have created naming systems backed by blockchain tokens. You buy a name, you get a token that represents ownership. The smart contract or chain consensus enforces who controls the name. NoDNS takes a different path: no token, no blockchain. Included for comparison — NoDNS explicitly rejects this approach.",
+      "pros": [
+        "Censorship-resistant (smart contract can't be court-ordered)",
+        "Transferable property (you can sell the token)",
+        "Programmable (subdomains, records as smart contract state)"
+      ],
+      "cons": [
+        "Creates a token economy around naming — financial speculation distorts the namespace",
+        "Requires blockchain infrastructure to resolve",
+        "Gas fees for updates",
+        "Bifurcated resolution — normal DNS doesn't see these names without special software"
+      ],
+      "resolution": "Special resolver / browser extension → blockchain RPC → contract state → records"
     }
   ],
   "comparison_table": {
     "columns": ["Model", "Who Decides", "Token?", "Censorship Resistance", "Standard DNS?", "Status"],
     "rows": [
       ["Traditional DNS", "Registrar/ICANN", "No", "None", "Yes", "External"],
-      ["Crypto Naming (ENS etc.)", "Smart Contract", "Yes", "High", "No", "External"],
-      ["$npub.nostr", "Private Key", "No", "Absolute", "No (local resolver)", "Draft"],
+      ["Tor .onion", "Private Key (derived)", "No", "Absolute", "No (Tor only)", "External"],
+      ["$npub.nostr", "Private Key", "No", "Absolute", "Via DoH/local resolver", "Draft"],
       ["$npub.{parent}", "Private Key", "No", "Absolute", "Yes", "Proof of Concept"],
       ["$string.{parent}", "Delegated Key", "No", "Partial", "Yes", "Proof of Concept"],
       ["$string.pob", "Highest Burner", "No", "High", "TBD", "Thought Experiment"],
       ["$string.wot", "Social Graph", "No", "Inherent", "Probably not", "Research TODO"],
-      ["$string.eburn", "Economic Defense", "No", "High", "TBD", "Research TODO"]
+      ["$string.eburn", "Economic Defense", "No", "High", "TBD", "Research TODO"],
+      ["Crypto Naming (ENS etc.)", "Smart Contract", "Yes", "High", "No", "External"]
     ]
   },
   "closing": {
