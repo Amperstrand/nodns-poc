@@ -1,4 +1,6 @@
-# Demo Setup Guide — nostr.cv
+# 04 — Demo Setup Guide
+
+> **Status**: ACTIVE. VPS setup guide for a NoDNS zone.
 
 This guide covers setting up the `nostr.cv` NoDNS demo on a VPS. After setup, any Nostr user will be able to publish a kind 11111 event and have their domain resolve globally.
 

@@ -1,4 +1,6 @@
-# Custom Name Registration: alice.nodns.shop
+# 09 — Custom Name Registration
+
+> **Status**: DRAFT. Research into `$string.tld` registration flows.
 
 ## Overview
 

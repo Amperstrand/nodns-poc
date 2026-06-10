@@ -1,7 +1,8 @@
-# NoDNS Protocol Specification v0.1 (DRAFT)
+# NoDNS Protocol Specification (EXPERIMENTAL DRAFT)
 
-> **Status**: DRAFT. Kind numbers chosen arbitrarily. Not discussed with Nostr community.
-> This is a proof-of-concept protocol for Nostr-native DNS management.
+> **Status**: EXPERIMENTAL DRAFT. No version number. Kind numbers chosen arbitrarily. Not discussed with Nostr community.
+> This is a proof-of-concept protocol for Nostr-native DNS management. Nothing here is production.
+> See also: [Arjen's nodns-nameserver](https://gitworkshop.dev/npub1hw6amg8p24ne08c9gdq8hhpqx0t0pwanpae9z25crn7m9uy7yarse465gr/nos.lol/nodns-nameserver) — the `$npub.nostr` reference implementation.
 
 ## Overview
 

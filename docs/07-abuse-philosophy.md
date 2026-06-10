@@ -1,4 +1,6 @@
-# Abuse Handling Philosophy
+# 07 — Abuse Handling Philosophy
+
+> **Status**: ACTIVE. DNS-as-mirror principle, accountability model.
 
 ## Core Principle: DNS is a Mirror, Not a Source
 

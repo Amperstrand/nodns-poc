@@ -1,10 +1,21 @@
 # NoDNS — DNS Records from Nostr Events
 
-Nostr-native DNS management. Publish a Nostr event, get a DNS record. No control panel, no API keys, no human intervention.
+> **A thought experiment in decentralized naming.** Nothing here is production. The protocol is an experimental draft.
 
-Live at [nodns.shop](https://nodns.shop).
+**Live demo**: [nodns.shop](https://nodns.shop) · **Beta**: [beta.nodns.shop](https://beta.nodns.shop) · **GitHub Pages**: [nodns-poc pages](https://amperstrand.github.io/nodns-poc/)
 
-## How It Works
+The [GitHub Pages site](https://amperstrand.github.io/nodns-poc/) explains the thought experiment, consensus rules, and design philosophy. What follows here is purely technical — how to build, configure, and run the software.
+
+---
+
+## Architecture
+
+| Component | Tech | Purpose |
+|---|---|---|
+| **nodns-bot** | Rust (nostr-sdk, hickory, axum) | Subscribes to Nostr relays, validates events, pushes DDNS updates |
+| **Knot DNS** | 3.3.4 | Authoritative nameserver with DNSSEC signing (ECDSAP256SHA256) |
+| **Frontend** | Next.js (static export) | Key generation, record publishing, live feed |
+| **Caddy** | Reverse proxy | Serves frontend at nodns.shop, proxies `/api/*` to bot |
 
 ```
 User publishes kind 11111 event to Nostr relay
@@ -35,7 +46,7 @@ Publish a kind 11111 Nostr event:
 ```json
 {
   "kind": 11111,
-  "content": "DNS record update",
+  "content": "",
   "tags": [
     ["record", "TXT", "", "hello from nostr!", "", "", "", "", "", "", "3600"]
   ]
@@ -55,28 +66,6 @@ dig @8.8.8.8 <npub>.nodns.shop TXT +short
 # "hello from nostr!"
 ```
 
-## Architecture
-
-| Component | Tech | Purpose |
-|---|---|---|
-| **nodns-bot** | Rust (nostr-sdk, hickory, axum) | Subscribes to Nostr relays, validates events, pushes DDNS updates |
-| **Knot DNS** | 3.3.4 | Authoritative nameserver with DNSSEC signing (ECDSAP256SHA256) |
-| **Frontend** | HTML/JS (being rebuilt in Next.js) | Key generation, record publishing, live feed |
-| **Caddy** | Reverse proxy | Serves frontend at nodns.shop, proxies `/api/*` to bot |
-
-### DNSSEC
-
-The zone is fully signed with DNSSEC. The `ad` (Authenticated Data) flag is confirmed across all major resolvers (Google, Cloudflare, Quad9). Full chain of trust: Root → .shop → nodns.shop.
-
-```bash
-dig +dnssec @8.8.8.8 nodns.shop SOA
-# flags: qr rd ra ad  ← authenticated
-```
-
-### Record Types
-
-A, AAAA, CNAME, TXT, MX — with private IP blocking and input validation.
-
 ## Protocol
 
 All operations use **kind 11111** events. The event type is determined by tags:
@@ -88,34 +77,37 @@ All operations use **kind 11111** events. The event type is determined by tags:
 | `["registrar", ZONE, PUBKEY]` | Registrar key publication | `["registrar", "nodns.shop", "abc..."]` |
 | `["cashu", TOKEN, MINT, AMOUNT]` | Cashu payment proof | `["cashu", "cashuA...", "https://mint.example.com", "250"]` |
 
-Full spec: [docs/11-protocol-spec-v0.1.md](docs/11-protocol-spec-v0.1.md)
+Full spec: [docs/11-protocol-experimental-draft.md](docs/11-protocol-experimental-draft.md)
 
 ## Project Structure
 
 ```
 nodns-poc/
-├── nodns-bot-rs/          # Rust bot (production)
+├── content/                # Compiled JSON for websites (derived from docs/)
+│   └── consensus.json      # Curated public summary of consensus rules
+├── docs/                   # Single source of truth — see docs/README.md
+│   ├── README.md           # Doc index with status badges (ACTIVE/DRAFT/ARCHIVED)
+│   ├── 11-protocol-experimental-draft.md  # Protocol specification
+│   ├── 20-26               # Design philosophy series (consensus, naming, payments...)
+│   ├── 27-30               # Implementation plans
+│   └── competitive/        # Competitive analysis (ENS, Handshake, etc.)
+├── gh-pages/               # GitHub Pages static site
+│   ├── index.html          # Vanilla HTML/CSS/JS rendering consensus.json
+│   └── consensus.json      # Symlink → ../content/consensus.json
+├── nodns-bot-rs/           # Rust bot
 │   └── src/
-│       ├── main.rs        # Entry point, event loop
-│       ├── auth.rs        # Authority/delegation checking
-│       ├── config.rs      # TOML config with multi-zone support
-│       ├── dns.rs         # DDNS updater (RFC 2136 + TSIG)
-│       ├── parser.rs      # Nostr event parsing & validation
-│       ├── payment.rs     # Cashu token verification (CDK)
-│       ├── store.rs       # SQLite persistence
-│       ├── subscriber.rs  # Nostr relay subscription
-│       └── types.rs       # Shared types
-├── nodns-bot-archive/     # Go bot (archived, superseded by Rust)
-├── docs/                  # Documentation
-│   ├── 01-overview.md     # Project overview
-│   ├── 02-architecture.md # System design
-│   ├── 11-protocol-spec-v0.1.md  # Protocol specification
-│   ├── 12-dnssec-setup.md # DNSSEC deployment reference
-│   ├── 13-nostr-dnssec-derivation.md  # SLIP-10 research
-│   ├── 14-demo-recipes.md # Demo scripts with exact commands
-│   └── 15-nsec-to-dnssec-analysis.md  # nsec→DNSSEC tradeoff analysis
-├── tests/                 # Playwright E2E tests
-└── .githooks/             # Pre-commit hooks (gitleaks)
+│       ├── main.rs         # Entry point, event loop
+│       ├── auth.rs         # Authority/delegation checking
+│       ├── config.rs       # TOML config with multi-zone support
+│       ├── dns.rs          # DDNS updater (RFC 2136 + TSIG)
+│       ├── parser.rs       # Nostr event parsing & validation
+│       ├── payment.rs      # Cashu token verification (CDK)
+│       ├── store.rs        # SQLite persistence
+│       ├── subscriber.rs   # Nostr relay subscription
+│       └── types.rs        # Shared types
+├── nodns-frontend/         # Next.js frontend
+├── tests/                  # Playwright E2E tests
+└── .githooks/              # Pre-commit hooks (gitleaks)
 ```
 
 ## Development
@@ -123,13 +115,22 @@ nodns-poc/
 ### Prerequisites
 
 - Rust 1.75+ (for nodns-bot-rs)
-- Node.js 18+ (for Playwright tests)
+- Node.js 18+ (for frontend and Playwright tests)
 
 ### Build the bot
 
 ```bash
 cd nodns-bot-rs
 cargo build --release
+```
+
+### Build the frontend
+
+```bash
+cd nodns-frontend
+npm install
+npm run build
+# Static output in out/
 ```
 
 ### Run tests
@@ -141,6 +142,16 @@ cd nodns-bot-rs && cargo test
 # E2E tests (requires nodns.shop running)
 npx playwright test
 ```
+
+### Deploy to VPS
+
+```bash
+cd nodns-frontend
+npm run build
+scp -r out/* root@46.22.104.104:/var/www/nodns-beta/
+```
+
+See [docs/29-beta-deployment.md](docs/29-beta-deployment.md) for full deployment instructions.
 
 ### Configuration
 
@@ -189,6 +200,10 @@ path = "records.db"
 - **No secrets in git**: Config files with TSIG keys are gitignored. Pre-commit hook runs gitleaks.
 - **Privacy**: Frontend generates ephemeral keypairs by default. Using a personal nsec ties your IP to your npub.
 
+## Related
+
+- **Arjen's nodns-nameserver** — The `$npub.nostr` reference implementation ([gitworkshop.dev](https://gitworkshop.dev/npub1hw6amg8p24ne08c9gdq8hhpqx0t0pwanpae9z25crn7m9uy7yarse465gr/nos.lol/nodns-nameserver))
+
 ## License
 
-Private repository. All rights reserved.
+Unlicense. This is a thought experiment and an idea. Do whatever you want with it.

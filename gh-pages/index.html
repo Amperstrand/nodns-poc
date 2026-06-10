@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NoDNS — Consensus Rules</title>
+  <meta name="description" content="A thought experiment in decentralized naming. Who decides what a name resolves to?">
+  <style>
+    :root {
+      --bg: #0a0a0a;
+      --card-bg: #141414;
+      --border: #222;
+      --text: #e0e0e0;
+      --muted: #bbb;
+      --dim: #666;
+      --accent: #ff6b35;
+      --accent-dim: rgba(255,107,53,0.15);
+      --green: #2ecc71;
+      --green-dim: rgba(46,204,113,0.15);
+      --yellow: #f1c40f;
+      --yellow-dim: rgba(241,196,15,0.15);
+      --blue: #3498db;
+      --blue-dim: rgba(52,152,219,0.15);
+      --red: #e74c3c;
+      --red-dim: rgba(231,76,60,0.15);
+      --purple: #9b59b6;
+      --purple-dim: rgba(155,89,182,0.15);
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+    }
+
+    .container { max-width: 960px; margin: 0 auto; padding: 0 24px; }
+
+    /* Header */
+    header {
+      border-bottom: 1px solid var(--border);
+      padding: 16px 0;
+      position: sticky;
+      top: 0;
+      background: rgba(10,10,10,0.95);
+      backdrop-filter: blur(12px);
+      z-index: 50;
+    }
+    header .container { display: flex; align-items: center; justify-content: space-between; }
+    .logo { font-size: 1.25rem; font-weight: 700; text-decoration: none; color: var(--text); }
+    .logo span { color: var(--accent); }
+    .logo small { color: var(--dim); font-size: 0.9rem; font-weight: 400; }
+    header nav a {
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 0.875rem;
+      padding: 6px 12px;
+      border-radius: 6px;
+      transition: all 0.15s;
+    }
+    header nav a:hover { background: #1a1a1a; color: var(--text); }
+
+    /* Sections */
+    .section { padding: 64px 0; }
+    .section + .section { border-top: 1px solid var(--border); }
+
+    h1 { font-size: 1.75rem; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 8px; }
+    h2 { font-size: 1.75rem; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 24px; }
+    h3 { font-size: 1.125rem; font-weight: 600; margin-bottom: 12px; }
+    h4 { font-size: 0.95rem; font-weight: 600; margin-bottom: 8px; }
+
+    p { margin-bottom: 12px; }
+    .muted { color: var(--muted); }
+    .dim { color: var(--dim); }
+
+    code {
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      background: rgba(255,107,53,0.1);
+      color: var(--accent);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 0.85em;
+    }
+
+    /* Principle box */
+    .principle {
+      background: var(--green-dim);
+      border: 1px solid rgba(46,204,113,0.3);
+      border-radius: 10px;
+      padding: 24px;
+      margin-bottom: 48px;
+    }
+    .principle h3 { color: var(--green); }
+
+    /* Cards */
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 24px;
+      margin-bottom: 20px;
+    }
+    .card-header { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+    .card h3 { margin-bottom: 0; }
+
+    /* Status badges */
+    .badge {
+      display: inline-block;
+      padding: 2px 10px;
+      border-radius: 9999px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      white-space: nowrap;
+    }
+    .badge-external { background: var(--dim); color: #999; background: rgba(102,102,102,0.2); }
+    .badge-draft { background: var(--blue-dim); color: var(--blue); }
+    .badge-poc { background: var(--green-dim); color: var(--green); }
+    .badge-thought { background: var(--yellow-dim); color: var(--yellow); }
+    .badge-research { background: var(--purple-dim); color: var(--purple); }
+
+    /* Pros/Cons */
+    .pros-cons { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px 0; }
+    @media (max-width: 640px) { .pros-cons { grid-template-columns: 1fr; } }
+    .pros h4 { color: var(--green); }
+    .cons h4 { color: var(--red); }
+    .pros ul, .cons ul { padding-left: 20px; }
+    .pros li, .cons li { margin-bottom: 4px; font-size: 0.9rem; color: var(--muted); }
+
+    /* Dual resolution */
+    .dual-res { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin: 16px 0; }
+    @media (max-width: 640px) { .dual-res { grid-template-columns: 1fr; } }
+    .res-box { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
+    .res-box h4 { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--dim); margin-bottom: 8px; }
+    .res-box code { background: transparent; font-size: 0.8rem; }
+
+    /* Open questions */
+    .open-qs { margin: 16px 0; }
+    .open-qs li { color: var(--muted); margin-bottom: 6px; font-size: 0.9rem; }
+    .open-qs li::marker { color: var(--yellow); }
+
+    /* Comparison table */
+    table { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 0.85rem; }
+    th { text-align: left; padding: 10px 12px; border-bottom: 2px solid var(--border); color: var(--dim); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; }
+    td { padding: 10px 12px; border-bottom: 1px solid var(--border); color: var(--muted); }
+    td:first-child { color: var(--text); font-weight: 500; }
+    .table-wrap { overflow-x: auto; }
+
+    /* Collapsible details */
+    details { margin-top: 8px; }
+    details summary {
+      cursor: pointer;
+      color: var(--accent);
+      font-size: 0.875rem;
+      font-weight: 500;
+      padding: 4px 0;
+      list-style: none;
+    }
+    details summary::before { content: '▸ '; }
+    details[open] summary::before { content: '▾ '; }
+    details[open] summary { margin-bottom: 12px; }
+
+    /* Closing */
+    .closing { margin-top: 48px; padding: 32px; background: var(--card-bg); border: 1px solid var(--border); border-radius: 10px; }
+    .closing p { color: var(--muted); }
+
+    /* Footer */
+    footer { border-top: 1px solid var(--border); padding: 32px 0; text-align: center; color: var(--dim); font-size: 0.875rem; }
+    footer a { color: var(--accent); text-decoration: none; }
+    footer a:hover { text-decoration: underline; }
+
+    /* Loading */
+    .loading { text-align: center; padding: 64px 0; color: var(--dim); }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="container">
+      <a href="/" class="logo">No<span>DNS</span><small>.shop</small></a>
+      <nav>
+        <a href="https://nodns.shop">Live Demo</a>
+        <a href="https://github.com/Amperstrand/nodns-poc">GitHub</a>
+      </nav>
+    </div>
+  </header>
+
+  <div id="content" class="container">
+    <div class="loading">Loading consensus rules…</div>
+  </div>
+
+  <footer>
+    <div class="container">
+      <p>NoDNS — a thought experiment in decentralized naming.</p>
+      <p style="margin-top:8px;">
+        <a href="https://nodns.shop">nodns.shop</a> ·
+        <a href="https://github.com/Amperstrand/nodns-poc">GitHub</a> ·
+        Unlicense
+      </p>
+    </div>
+  </footer>
+
+  <script>
+    const STATUS_MAP = {
+      'external-reference': { label: 'External', cls: 'badge-external' },
+      'draft': { label: 'Draft', cls: 'badge-draft' },
+      'proof-of-concept': { label: 'Proof of Concept', cls: 'badge-poc' },
+      'thought-experiment': { label: 'Thought Experiment', cls: 'badge-thought' },
+      'research-todo': { label: 'Research TODO', cls: 'badge-research' }
+    };
+
+    function badge(status) {
+      const s = STATUS_MAP[status] || { label: status, cls: 'badge-external' };
+      return `<span class="badge ${s.cls}">${s.label}</span>`;
+    }
+
+    function renderList(items) {
+      return '<ul>' + items.map(i => `<li>${i}</li>`).join('') + '</ul>';
+    }
+
+    function renderModel(m, idx) {
+      let html = `
+        <div class="card" id="${m.id}">
+          <div class="card-header">
+            ${badge(m.status)}
+            <h3>${m.name}</h3>
+            <span class="dim" style="font-size:0.875rem">${m.tagline}</span>
+          </div>
+          <p class="muted">${m.description}</p>`;
+
+      // Authority / ownership summary
+      html += `<p style="margin-top:12px;font-size:0.85rem"><strong>Authority:</strong> <span class="muted">${m.authority}</span></p>`;
+
+      // Pattern + example
+      if (m.pattern) {
+        html += `<p style="font-size:0.85rem"><strong>Pattern:</strong> <code>${m.pattern}</code>`;
+        if (m.example) html += ` &nbsp;→&nbsp; <code>${m.example}</code>`;
+        html += `</p>`;
+      }
+
+      // Reference link
+      if (m.reference) {
+        html += `<p style="font-size:0.85rem"><strong>Ref:</strong> <a href="${m.reference.url}" style="color:var(--accent);text-decoration:none">${m.reference.title}</a></p>`;
+      }
+
+      // Examples (for crypto-naming)
+      if (m.examples) {
+        html += `<div style="margin:12px 0">`;
+        for (const ex of m.examples) {
+          html += `<p style="font-size:0.85rem"><a href="${ex.url}" style="color:var(--accent);text-decoration:none">${ex.name}</a> — <span class="muted">${ex.description}</span></p>`;
+        }
+        html += `</div>`;
+      }
+
+      // URL (for traditional dns)
+      if (m.url && !m.reference) {
+        html += `<p style="font-size:0.85rem"><a href="${m.url}" style="color:var(--accent);text-decoration:none">Learn more →</a></p>`;
+      }
+
+      // Dual resolution
+      if (m.dual_resolution) {
+        const dr = m.dual_resolution;
+        html += `
+          <div class="dual-res">
+            <div class="res-box">
+              <h4>DNS</h4>
+              <code>${dr.dns}</code>
+            </div>
+            <div class="res-box">
+              <h4>Nostr</h4>
+              <code>${dr.nostr}</code>
+            </div>
+            <div class="res-box">
+              <h4>Conflict</h4>
+              <code>${dr.conflict}</code>
+            </div>
+          </div>`;
+      }
+
+      // Resolution (non-dual)
+      if (m.resolution && !m.dual_resolution) {
+        html += `<p style="font-size:0.85rem;margin-top:12px"><strong>Resolution:</strong> <span class="muted">${m.resolution}</span></p>`;
+      }
+
+      // Philosophy
+      if (m.philosophy) {
+        html += `<details><summary>Philosophy</summary><p class="muted" style="font-style:italic">${m.philosophy}</p></details>`;
+      }
+
+      // Pros / Cons
+      if (m.pros || m.cons) {
+        html += `<details><summary>Pros & Cons</summary><div class="pros-cons">`;
+        if (m.pros) html += `<div class="pros"><h4>✓ Pros</h4>${renderList(m.pros)}</div>`;
+        if (m.cons) html += `<div class="cons"><h4>✗ Cons</h4>${renderList(m.cons)}</div>`;
+        html += `</div></details>`;
+      }
+
+      // Open questions
+      if (m.open_questions) {
+        html += `<details><summary>Open Questions</summary><ul class="open-qs">${m.open_questions.map(q => `<li>${q}</li>`).join('')}</ul></details>`;
+      }
+
+      html += `</div>`;
+      return html;
+    }
+
+    function renderTable(data) {
+      const t = data.comparison_table;
+      let html = `<div class="table-wrap"><table><thead><tr>`;
+      for (const col of t.columns) html += `<th>${col}</th>`;
+      html += `</tr></thead><tbody>`;
+      for (const row of t.rows) {
+        html += `<tr>`;
+        for (const cell of row) html += `<td>${cell}</td>`;
+        html += `</tr>`;
+      }
+      html += `</tbody></table></div>`;
+      return html;
+    }
+
+    async function init() {
+      try {
+        const res = await fetch('./consensus.json');
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+
+        let html = '';
+
+        // Intro section
+        html += `<div class="section">
+          <h1>${data.title}</h1>
+          <p class="muted" style="font-size:1.125rem">${data.subtitle}</p>
+          <p class="muted" style="margin-top:16px">${data.intro}</p>
+        </div>`;
+
+        // No-token principle
+        const p = data.principle;
+        html += `<div class="section">
+          <div class="principle">
+            <h3>⛔ No Token. Ever.</h3>
+            <p class="muted" style="font-size:1rem">${p.statement}</p>
+            <div style="margin-top:16px;display:grid;grid-template-columns:1fr 1fr;gap:16px">
+              <div><h4 style="color:var(--green)">Anti-spam</h4><p class="muted" style="font-size:0.9rem">${p.payments.anti_spam}</p></div>
+              <div><h4 style="color:var(--accent)">Namespace lease</h4><p class="muted" style="font-size:0.9rem">${p.payments.namespace_lease}</p></div>
+            </div>
+            <p class="muted" style="margin-top:12px;font-size:0.85rem;color:var(--red)">${p.payments.never}</p>
+          </div>
+        </div>`;
+
+        // Models
+        html += `<div class="section">
+          <h2>Consensus Models</h2>`;
+        for (let i = 0; i < data.models.length; i++) {
+          html += renderModel(data.models[i], i);
+        }
+        html += `</div>`;
+
+        // Comparison table
+        html += `<div class="section">
+          <h2>At a Glance</h2>
+          ${renderTable(data)}
+        </div>`;
+
+        // Closing
+        const c = data.closing;
+        html += `<div class="section">
+          <div class="closing">
+            <h2>${c.title}</h2>
+            <p>${c.body}</p>
+            <p style="margin-top:12px"><strong>No token:</strong> <span class="muted">${c.no_token}</span></p>
+            <p style="margin-top:8px"><strong>Research:</strong> <span class="muted">${c.research}</span></p>
+            <p style="margin-top:8px;color:var(--yellow)">${c.nothing_is_production}</p>
+          </div>
+        </div>`;
+
+        document.getElementById('content').innerHTML = html;
+      } catch (err) {
+        document.getElementById('content').innerHTML =
+          `<div class="section"><p style="color:var(--red)">Failed to load consensus.json: ${err.message}</p></div>`;
+      }
+    }
+
+    init();
+  </script>
+</body>
+</html>

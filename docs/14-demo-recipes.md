@@ -1,6 +1,6 @@
-# Demo Recipes — nodns.shop
+# 14 — Demo Recipes
 
-> Step-by-step commands to test and demo every feature of NoDNS.
+> **Status**: ACTIVE. Step-by-step commands to test and demo every feature of NoDNS.
 
 ## Prerequisites
 

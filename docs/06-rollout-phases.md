@@ -1,4 +1,6 @@
-# Rollout Phases
+# 06 — Rollout Phases
+
+> **Status**: ARCHIVED. Original rollout timeline — dates and scope are historical.
 
 ## Phase 0: Local Development (Week 1)
 

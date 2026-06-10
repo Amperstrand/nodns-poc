@@ -1,4 +1,6 @@
-# NoDNS .cv Integration — Architecture Proposal
+# 10 — NoDNS .cv Integration
+
+> **Status**: DRAFT. Aspirational — `.cv` TLD integration architecture proposal.
 
 ## TL;DR
 

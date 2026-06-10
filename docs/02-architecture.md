@@ -1,4 +1,6 @@
-# Architecture
+# 02 — Architecture
+
+> **Status**: ACTIVE. System design, Knot DNS integration, DDNS mechanism.
 
 ## Design Principle: Zero Modifications to Existing DNS Infrastructure
 

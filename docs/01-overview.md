@@ -1,4 +1,6 @@
-# NoDNS — Project Overview
+# 01 — NoDNS Project Overview
+
+> **Status**: ACTIVE. Current project context and goals.
 
 ## What is NoDNS?
 
@@ -8,7 +10,7 @@ NoDNS is a protocol that resolves DNS records from Nostr events. Instead of regi
 
 Core event type: **kind 11111** — DNS record events with a fixed 11-element `record` tag.
 
-Protocol spec: [11-protocol-spec-v0.1.md](11-protocol-spec-v0.1.md)
+Protocol spec: [11-protocol-experimental-draft.md](11-protocol-experimental-draft.md)
 
 ## Current Status
 
@@ -53,7 +55,7 @@ Knot DNS uses RCU-based lock-free zone updates and automatic DNSSEC re-signing a
 | [03-bot-spec.md](03-bot-spec.md) | Bot specification (Go — archived; see Rust source for current spec) |
 | [08-deployment-status.md](08-deployment-status.md) | VPS setup, zone file, propagation verification |
 | [09-custom-names.md](09-custom-names.md) | Custom name registration with Cashu payments |
-| [11-protocol-spec-v0.1.md](11-protocol-spec-v0.1.md) | Protocol specification v0.1 |
+| [11-protocol-experimental-draft.md](11-protocol-experimental-draft.md) | Protocol specification (experimental draft) |
 | [12-dnssec-setup.md](12-dnssec-setup.md) | Production DNSSEC deployment reference |
 | [13-nostr-dnssec-derivation.md](13-nostr-dnssec-derivation.md) | SLIP-10 key derivation research |
 | [14-demo-recipes.md](14-demo-recipes.md) | 7 demo scripts with exact commands |

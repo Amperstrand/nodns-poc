@@ -161,7 +161,7 @@ async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
         "nodns-bot starting"
     );
 
-    // ── Registrar identity + DNSSEC derivation ──
+     // ── Registrar identity + DNSSEC derivation + Nostr attestation ──
     if !cfg.registrar.nsec_hex.is_empty() && cfg.dnssec_derivation.enabled {
         let nsec_bytes = hex::decode(&cfg.registrar.nsec_hex)
             .expect("registrar.nsec_hex must be valid hex");
@@ -179,7 +179,52 @@ async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
                 info!("registrar DNSSEC key derived via SLIP-10 → P-256");
                 info!("P-256 public key (uncompressed): {}", pub_hex);
                 info!("PKCS#8 PEM:\n{}", pem.trim());
-                info!("import into Knot: keymgr nodns.shop import-pem /dev/stdin algorithm=ECDSAP256SHA256 ksk=yes < pem-file");
+
+                let registrar_keys = nostr_sdk::Keys::parse(&cfg.registrar.nsec_hex)
+                    .expect("registrar.nsec_hex must be a valid nostr secret key");
+                info!("registrar npub: {}", registrar_keys.public_key().to_hex());
+
+                let zone = cfg.nostr.zone.clone();
+                let dnskey_b64 = base64_dnskey(&pub_hex);
+                let key_tag = compute_key_tag_13(&dnskey_b64);
+
+                let mut tags: Vec<nostr_sdk::Tag> = vec![
+                    nostr_sdk::Tag::custom(nostr_sdk::TagKind::custom("dnskey"), [
+                        zone.clone(),
+                        key_tag.to_string(),
+                        "13".to_string(),
+                        dnskey_b64,
+                    ]),
+                    nostr_sdk::Tag::custom(nostr_sdk::TagKind::custom("dnskey-derivation"), [
+                        "slip10".to_string(),
+                        "Nist256p1 seed".to_string(),
+                    ]),
+                ];
+                for relay in &cfg.nostr.relays {
+                    tags.push(nostr_sdk::Tag::custom(nostr_sdk::TagKind::custom("relay"), [relay.clone()]));
+                }
+
+                let builder = nostr_sdk::EventBuilder::new(
+                    nostr_sdk::Kind::from(11111u16),
+                    "",
+                ).tags(tags);
+
+                let client = nostr_sdk::Client::new(registrar_keys.clone());
+                for relay in &cfg.nostr.relays {
+                    if let Err(e) = client.add_relay(relay).await {
+                        warn!("could not add relay {} for attestation: {}", relay, e);
+                    }
+                }
+                client.connect().await;
+
+                match client.send_event_builder(builder).await {
+                    Ok(output) => {
+                        info!("DNSKEY attestation event: {}", output.id().to_hex());
+                        info!("sent to {} relay(s), failed: {:?}", output.success.len(), output.failed);
+                    }
+                    Err(e) => warn!("failed to publish DNSKEY attestation: {}", e),
+                }
+                client.disconnect().await;
             }
             Err(e) => {
                 tracing::error!("DNSSEC key derivation failed: {e}");
@@ -378,4 +423,28 @@ async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     Ok(())
+}
+
+fn base64_dnskey(pub_hex: &str) -> String {
+    use base64::Engine;
+    let pub_bytes = hex::decode(pub_hex).expect("valid hex pubkey");
+    let mut rdata = vec![];
+    rdata.push(1); rdata.push(1); // flags: 257 (Zone Key + SEP = KSK)
+    rdata.push(3); // protocol: 3 (DNSSEC)
+    rdata.push(13); // algorithm: ECDSAP256SHA256
+    rdata.extend_from_slice(&pub_bytes);
+    base64::engine::general_purpose::STANDARD.encode(&rdata)
+}
+
+fn compute_key_tag_13(dnskey_b64: &str) -> u16 {
+    use base64::Engine;
+    let dnskey = base64::engine::general_purpose::STANDARD.decode(dnskey_b64).expect("valid base64");
+    let sum: u32 = dnskey.chunks(2).map(|chunk| {
+        if chunk.len() == 2 {
+            u32::from(u16::from_be_bytes([chunk[0], chunk[1]]))
+        } else {
+            u32::from(chunk[0])
+        }
+    }).sum();
+    ((sum + (sum >> 16)) & 0xFFFF) as u16
 }

@@ -101,4 +101,4 @@ If a TLD operator wants to use these ideas, great. If not, nodns.shop serves as 
 
 ## Relationship to Existing Protocol Spec
 
-The [Protocol Spec v0.1](11-protocol-spec-v0.1.md) defines the current wire format (kind 11111 events, record/delegation/registrar/payment tags). The documents in this series (20-26) describe the **design philosophy and reasoning** behind the protocol — why things are the way they are, what alternatives were considered, and what's still undecided.
+The [Protocol experimental draft](11-protocol-experimental-draft.md) defines the current wire format (kind 11111 events, record/delegation/registrar/payment tags). The documents in this series (20-26) describe the **design philosophy and reasoning** behind the protocol — why things are the way they are, what alternatives were considered, and what's still undecided.

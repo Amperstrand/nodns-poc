@@ -1,0 +1,284 @@
+{
+  "title": "Consensus Rules",
+  "subtitle": "Who decides what a name resolves to?",
+  "intro": "There are two hard problems in programming: cache invalidation, naming things, and off-by-one errors. NoDNS doesn't try to solve naming for the whole world. It provides a framework where different consensus rules can coexist. The question 'who owns this domain?' has different answers depending on which consensus rule you follow. Nothing described here is production. Everything is a thought experiment.",
+  "principle": {
+    "id": "no-token",
+    "statement": "NoDNS will never create a token. Naming is a utility, not an investment.",
+    "payments": {
+      "anti_spam": "Sats burned to miners (proof of work equivalent, no beneficiary)",
+      "namespace_lease": "Sats paid to the parent domain operator for subletting their namespace",
+      "never": "No token sale, no governance token, no staking, no ICO. If someone creates a $NODNS token, it's a scam."
+    }
+  },
+  "models": [
+    {
+      "id": "traditional-dns",
+      "name": "Traditional DNS",
+      "tagline": "Registrar decides",
+      "status": "external-reference",
+      "authority": "Institutional hierarchy (ICANN → Registry → Registrar → You)",
+      "ownership_model": "Lease from a hierarchy",
+      "censorship_resistance": "none",
+      "token": false,
+      "url": "https://en.wikipedia.org/wiki/Domain_Name_System",
+      "description": "The existing DNS system. You register a domain through a registrar, who leases it from a registry, who operates under ICANN's authority. A court order can seize your domain. A registrar can refuse to renew. Someone above you always has power over your name. This is what everyone uses today and it works fine for most things.",
+      "pros": [
+        "Universal resolution — every device speaks DNS",
+        "Human-readable names",
+        "Well-understood legal framework"
+      ],
+      "cons": [
+        "Censorship-vulnerable — any level of the hierarchy can override",
+        "Lease, not ownership — you rent, never own",
+        "No cryptographic proof of ownership",
+        "Payment goes to intermediaries"
+      ],
+      "resolution": "DNS query → recursive resolver → authoritative nameserver → records"
+    },
+    {
+      "id": "crypto-naming",
+      "name": "Crypto Naming Tokens",
+      "tagline": "Token decides",
+      "status": "external-reference",
+      "authority": "Smart contract / blockchain",
+      "ownership_model": "Token-based property",
+      "censorship_resistance": "high",
+      "token": true,
+      "examples": [
+        { "name": "ENS", "description": "Ethereum-based, .eth names, auction + annual renewal", "url": "https://ens.domains" },
+        { "name": "Unstoppable Domains", "description": "Polygon-based, one-time purchase, .crypto/.x/.nft", "url": "https://unstoppabledomains.com" },
+        { "name": "Handshake", "description": "Own blockchain, auction-based TLDs, PoW", "url": "https://handshake.org" }
+      ],
+      "description": "Various projects have created naming systems backed by blockchain tokens. You buy a name, you get a token that represents ownership. The smart contract or chain consensus enforces who controls the name. NoDNS takes a different path: no token, no blockchain.",
+      "pros": [
+        "Censorship-resistant (smart contract can't be court-ordered)",
+        "Transferable property (you can sell the token)",
+        "Programmable (subdomains, records as smart contract state)"
+      ],
+      "cons": [
+        "Creates a token economy around naming — financial speculation distorts the namespace",
+        "Requires blockchain infrastructure to resolve",
+        "Gas fees for updates",
+        "Bifurcated resolution — normal DNS doesn't see these names without special software"
+      ],
+      "resolution": "Special resolver / browser extension → blockchain RPC → contract state → records"
+    },
+    {
+      "id": "npub-nostr",
+      "name": "$npub.nostr",
+      "tagline": "Private key decides",
+      "status": "draft",
+      "authority": "Cryptographic (nsec/npub — your keypair IS your domain credential)",
+      "ownership_model": "Inalienable mathematical ownership",
+      "censorship_resistance": "absolute",
+      "token": false,
+      "pattern": "{npub}.nostr",
+      "example": "npub1axfc8yyaycvnqawkusq7p9pcfgzaw74jgme6c9ez5vcde3pq3d2sgufgdg.nostr",
+      "reference": {
+        "title": "nodns-nameserver by Arjen",
+        "url": "https://gitworkshop.dev/npub1hw6amg8p24ne08c9gdq8hhpqx0t0pwanpae9z25crn7m9uy7yarse465gr/nos.lol/nodns-nameserver",
+        "description": "Go implementation. JIT DNS server with embedded Khatru relay. Supports 17 DNS record types. Resolves *.nostr via Nostr subscriptions."
+      },
+      "description": "The purest consensus rule: your public key is your domain under .nostr. Nobody can take it from you because nobody can forge your signature. Nobody can squat someone else's public key because they can't produce valid events for it. Defined in an experimental draft. Requires installing a local resolver — not resolvable by standard DNS.",
+      "pros": [
+        "Zero ambiguity — cryptographic proof of ownership",
+        "No squatting possible — you can't fake someone's npub",
+        "Free to claim (your keypair already exists)",
+        "No parent domain, no operator — just you and your key",
+        "17 DNS record types supported"
+      ],
+      "cons": [
+        "Not human-readable (npubs are long strings)",
+        "Requires installing a local resolver — no one can use it without special software",
+        "The .nostr TLD only exists for people running nodns-nameserver",
+        "No path to standard DNS resolution"
+      ],
+      "resolution": "Local DNS server (nodns-ns) → subscribes to Nostr relays → serves from cache",
+      "philosophy": "The only consensus rule that is purely mathematical. No social contracts, no reputation, no economics, no operator. Just: do you have the private key? Then it's yours."
+    },
+    {
+      "id": "npub-parent",
+      "name": "$npub.{parent_domain}",
+      "tagline": "Private key decides, parent domain caches",
+      "status": "proof-of-concept",
+      "authority": "Cryptographic (nsec/npub) + parent domain operator mirrors to standard DNS",
+      "ownership_model": "Inalienable mathematical ownership with optional DNS caching",
+      "censorship_resistance": "absolute",
+      "token": false,
+      "pattern": "{npub}.{zone}",
+      "example": "npub1ykal2...pa3dl.nodns.shop",
+      "reference": {
+        "title": "Protocol experimental draft",
+        "url": "https://github.com/Amperstrand/nodns-poc/blob/main/docs/11-protocol-experimental-draft.md"
+      },
+      "description": "The same rule as $npub.nostr, but under an existing parent domain. Your npub IS your subdomain. The parent domain operator runs a bot that subscribes to Nostr relays and pushes records to standard DNS via DDNS. This means anyone can resolve it with normal DNS — no special software needed. The operator can be paid to cache/mirror your records, but the Nostr events are the source of truth. This is a land grab: the parent domain operator is placing a new consensus rule above their own authority.",
+      "pros": [
+        "Cryptographic proof of ownership (same as $npub.nostr)",
+        "No squatting possible",
+        "Resolves via standard DNS — every device can use it",
+        "Dual resolution: DNS and Nostr give identical results",
+        "If DNS is tampered with (MITM), the correct result is still available via Nostr",
+        "3-5 second propagation globally"
+      ],
+      "cons": [
+        "Not human-readable (npubs are long strings)",
+        "Parent domain operator must opt-in to this consensus rule",
+        "This IS a land grab — most TLDs won't like it because there is now an alternative rule above their authority"
+      ],
+      "resolution": "Nostr event (kind 11111) → signature verification → bot pushes to DNS via DDNS",
+      "dual_resolution": {
+        "dns": "Standard DNS query → zone's nameserver → records",
+        "nostr": "Nostr relay subscription → event verification → records",
+        "conflict": "Nostr always wins. If DNS returns different records than Nostr events, someone is tampering with DNS (MITM) or a court has ordered changes. The Nostr events remain the cryptographic truth."
+      },
+      "philosophy": "Your private key decides. The registrar can be paid to cache your records in standard DNS, but they cannot take your name because they cannot forge your signature. The parent domain operator sublets their namespace to cryptographic truth."
+    },
+    {
+      "id": "string-parent",
+      "name": "$string.{parent_domain}",
+      "tagline": "Parent domain delegates authority to a private key",
+      "status": "proof-of-concept",
+      "authority": "Delegation from parent domain owner (via signed Nostr event)",
+      "ownership_model": "Lease with cryptographic proof",
+      "censorship_resistance": "partial",
+      "token": false,
+      "pattern": "{name}.{zone}",
+      "example": "alice.nodns.shop",
+      "reference": {
+        "title": "Protocol experimental draft",
+        "url": "https://github.com/Amperstrand/nodns-poc/blob/main/docs/11-protocol-experimental-draft.md"
+      },
+      "description": "An existing domain owner delegates a human-readable name to a specific npub for a fixed duration. The delegation is a signed Nostr event — irrevocable within the validity period. The operator is subletting their namespace. They choose to recognize Nostr events as the authority for their zone. Payment goes to the parent domain operator as a lease of their namespace. Censorship-resistant at the Nostr layer (delegation event can't be forged), but a court can order the operator to change DNS records.",
+      "pros": [
+        "Human-readable names",
+        "Delegation is verifiable on Nostr (public audit trail)",
+        "Price locked at registration time",
+        "Dual resolution — same records via DNS and Nostr",
+        "Censorship-resistant at the Nostr layer (delegation event can't be forged)"
+      ],
+      "cons": [
+        "Trust in operator — they could theoretically re-delegate (reputation risk)",
+        "Lease duration bounded by operator's own domain registration",
+        "Court can order operator to change DNS records (but Nostr events remain)",
+        "Social censorship resistance, not cryptographic"
+      ],
+      "resolution": "Delegation event on Nostr → npub publishes records → bot mirrors events to DNS",
+      "dual_resolution": {
+        "dns": "Standard DNS query → zone's nameserver → records",
+        "nostr": "Nostr relay → delegation event + record events → verify signatures → records",
+        "conflict": "Nostr events are the truth. DNS is a cache. If they disagree, DNS has been tampered with."
+      },
+      "philosophy": "The operator sublets their namespace. They choose to recognize Nostr events as the authority. A TLD operator could run their own nodns-bot and offer this to all their registrants. The payment is a lease of namespace, not a token."
+    },
+    {
+      "id": "proof-of-burn",
+      "name": "$string.pob",
+      "tagline": "Burn sats to claim a namespace",
+      "status": "thought-experiment",
+      "authority": "Economic commitment (sats burned to miners)",
+      "ownership_model": "Highest burner owns the name",
+      "censorship_resistance": "high",
+      "token": false,
+      "pattern": "{name}.pob",
+      "description": "A speculative consensus rule where you prove you burned Bitcoin (sending sats to unspendable addresses, contributing to Bitcoin's security) to claim a namespace. Based on ThomasV's proof-of-burn model for Nostr namespaces. The idea: burning is costly, so names have implicit economic weight. No token is created — sats go to miners.",
+      "pros": [
+        "No token created — sats go to miners (net positive for Bitcoin security)",
+        "Economic cost prevents trivial spam",
+        "Trustless — the burn proof is on-chain"
+      ],
+      "cons": [
+        "Deep pockets problem — anyone with more sats can out-burn you and take your name",
+        "How do you prevent typosquatting by burning tiny amounts?",
+        "Ownership change mechanism unclear — does highest burner always win?",
+        "Someone with deep pockets wanting to sabotage you can keep burning",
+        "Operator gets no revenue (sats burned, not paid to operator)"
+      ],
+      "open_questions": [
+        "Should there be an exponential burn curve to make takeovers progressively more expensive?",
+        "What happens to the namespace if nobody is burning to maintain it?",
+        "How to handle disputes — first burner or highest burner?",
+        "Could this work as a commit-reveal scheme to prevent front-running?"
+      ],
+      "philosophy": "Philosophically elegant — you prove commitment by destroying value. But the economics create attack vectors that may make it unusable in practice."
+    },
+    {
+      "id": "web-of-trust",
+      "name": "$string.wot",
+      "tagline": "Your social circle decides what the name resolves to",
+      "status": "research-todo",
+      "authority": "Social graph (who you trust determines resolution)",
+      "ownership_model": "Context-dependent — no single owner",
+      "censorship_resistance": "inherent",
+      "token": false,
+      "pattern": "{name}.wot",
+      "description": "A highly experimental model where a name resolves differently depending on which social circle you belong to. Much like how 'the pub' means different places to different people depending on their context, a WoT domain resolves based on who you trust. Your web of trust defines your namespace. Not yet explored in depth.",
+      "pros": [
+        "No central authority at all — resolution is subjective",
+        "Inherently censorship-resistant (there's nothing to censor — everyone sees different results)",
+        "Reflects how naming actually works in real life (context-dependent)"
+      ],
+      "cons": [
+        "No universal resolution — different people see different results",
+        "This might make it useless for DNS (DNS assumes global consistency)",
+        "Complex to implement (social graph traversal, trust scoring)",
+        "Susceptible to Sybil attacks and trust manipulation"
+      ],
+      "open_questions": [
+        "How to bootstrap trust without centralization?",
+        "Can this coexist with DNS, or is it fundamentally incompatible?",
+        "What's the user experience? 'alice.wot resolves to... depends on who you ask'?"
+      ],
+      "philosophy": "The most radical model. It acknowledges that naming is fundamentally social and context-dependent. 'The pub' means different things to different people — and that's fine. But it may not be DNS."
+    },
+    {
+      "id": "exponential-burn",
+      "name": "$string.eburn",
+      "tagline": "Exponentially increasing cost to take over a name",
+      "status": "research-todo",
+      "authority": "Economic commitment with exponential defense",
+      "ownership_model": "Incumbent-favored through economic barriers",
+      "censorship_resistance": "high",
+      "token": false,
+      "pattern": "{name}.eburn",
+      "description": "A variant of Proof of Burn where the cost to take over an existing name increases exponentially. If you burned 1000 sats to claim 'alice.eburn', someone else would need to burn 10,000 to take it. Then you'd need 100,000 to reclaim it. The exponential curve makes it prohibitively expensive to dislodge a legitimate owner. Not yet explored in depth.",
+      "pros": [
+        "Strong protection against deep-pocket takeovers (exponential defense)",
+        "Legitimate owners can defend with smaller amounts",
+        "Still no token — sats burned to miners"
+      ],
+      "cons": [
+        "Exponential curves can reach absurd numbers quickly",
+        "Doesn't solve the problem — just delays it",
+        "Names become de facto permanent after a few cycles",
+        "Complex to reason about economically"
+      ],
+      "open_questions": [
+        "What's the right exponent? 2x? 10x?",
+        "Should the exponential reset after a period of inactivity?",
+        "How does this interact with genuine ownership disputes?"
+      ],
+      "philosophy": "Takes the PoB model and adds a defense-in-depth mechanism. But the complexity may not be worth it."
+    }
+  ],
+  "comparison_table": {
+    "columns": ["Model", "Who Decides", "Token?", "Censorship Resistance", "Standard DNS?", "Status"],
+    "rows": [
+      ["Traditional DNS", "Registrar/ICANN", "No", "None", "Yes", "External"],
+      ["Crypto Naming (ENS etc.)", "Smart Contract", "Yes", "High", "No", "External"],
+      ["$npub.nostr", "Private Key", "No", "Absolute", "No (local resolver)", "Draft"],
+      ["$npub.{parent}", "Private Key", "No", "Absolute", "Yes", "Proof of Concept"],
+      ["$string.{parent}", "Delegated Key", "No", "Partial", "Yes", "Proof of Concept"],
+      ["$string.pob", "Highest Burner", "No", "High", "TBD", "Thought Experiment"],
+      ["$string.wot", "Social Graph", "No", "Inherent", "Probably not", "Research TODO"],
+      ["$string.eburn", "Economic Defense", "No", "High", "TBD", "Research TODO"]
+    ]
+  },
+  "closing": {
+    "title": "What all of these have in common",
+    "body": "Every model above is just a different consensus rule — a different social contract about what 'looking up a name' means. Traditional DNS says 'the registrar decides.' ENS says 'the smart contract decides.' NoDNS says 'the private key decides, and the parent domain operator can be paid to cache.' Proof of Burn says 'economic commitment decides.' Web of Trust says 'your community decides.' They're all trying to answer the same question: when someone types a name into their browser, who gets to say what it resolves to?",
+    "no_token": "NoDNS will never create a token. Any payment is either burned as anti-spam or paid to the parent domain operator as a lease of their namespace.",
+    "research": "Researching other name resolution methods beyond what's listed here is an open TODO. If you have ideas, open an issue.",
+    "nothing_is_production": "Nothing described here is production. The protocol is an experimental draft. The proof-of-concept is live at nodns.shop. Everything else is a thought experiment."
+  }
+}

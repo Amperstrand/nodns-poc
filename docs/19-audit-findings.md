@@ -138,7 +138,7 @@ NIP-05 response always uses `"_"` as the names key regardless of query. Registra
 ## Documentation
 
 ### ISSUE-015: Protocol spec missing delete tag
-**File**: `docs/11-protocol-spec-v0.1.md`
+**File**: `docs/11-protocol-experimental-draft.md`
 **Severity**: High (spec incomplete)
 **Status**: ✅ CLOSED — Added Type 1b delete section, wire format entry, and examples.
 

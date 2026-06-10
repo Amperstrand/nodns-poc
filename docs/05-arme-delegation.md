@@ -1,4 +1,6 @@
-# ARME Delegation Instructions
+# 05 — ARME Delegation Instructions
+
+> **Status**: ARCHIVED. Historical — nostr.cv delegation instructions. Superseded by nodns.shop.
 
 This document contains everything ARME needs to do to delegate `nostr.cv` for the NoDNS demo. It is intentionally minimal — one NS record addition, nothing else.
 

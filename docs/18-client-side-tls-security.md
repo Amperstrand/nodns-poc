@@ -392,7 +392,7 @@ Key import via JWK format works with `window.crypto.subtle.importKey()`.
 
 ### Related NoDNS Documentation
 
-- **[Protocol Spec v0.1](11-protocol-spec-v0.1.md)** — Nostr event format
+- **[Protocol experimental draft](11-protocol-experimental-draft.md)** — Nostr event format
 - **[DNSSEC Setup Reference](12-dnssec-setup.md)** — Knot DNS configuration
 - **[Demo Recipes](14-demo-recipes.md)** — End-to-end testing commands
 - **[Project README](../README.md)** — Architecture overview

@@ -1,4 +1,6 @@
-# Deployment Status — nodns.shop
+# 08 — Deployment Status
+
+> **Status**: ACTIVE. Production deployment details for nodns.shop.
 
 ## What We Built
 

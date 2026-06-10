@@ -1,4 +1,6 @@
-# nodns-bot Implementation Plan
+# 08 — Implementation Plan (Original)
+
+> **Status**: SUPERSEDED by [27-implementation-plan.md](27-implementation-plan.md).
 
 ## Protocol Spec Reference
 

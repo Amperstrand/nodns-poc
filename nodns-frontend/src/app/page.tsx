@@ -8,6 +8,7 @@ import { Dashboard } from "@/components/dashboard";
 import { TryIt } from "@/components/try-it";
 import { Architecture } from "@/components/architecture";
 import { ProtocolSpec } from "@/components/protocol-spec";
+import { Consensus } from "@/components/consensus";
 import { FAQ } from "@/components/faq";
 import { Roadmap } from "@/components/roadmap";
 import { Infrastructure } from "@/components/infrastructure";
@@ -22,6 +23,7 @@ export default function Home() {
         <Hero />
         <Features />
         <HowItWorks />
+        <Consensus />
         <RecordBrowser />
         <LiveFeed />
         <Dashboard />
