@@ -271,7 +271,7 @@ export function DualLookupDemo() {
                 Respect my authority! My IP is {CLOUDFLARE_IP}
               </p>
               <p className="mt-1 text-sm text-emerald-400">
-                <span className="font-semibold">NoDNS:</span> LIAR DETECTED
+                <span className="font-semibold">NoDNS:</span> Liar. No you.
               </p>
               <p className="mt-3 text-xs text-muted-foreground">
                 Cloudflare is the registrar — their DNS points to their IP. NoDNS

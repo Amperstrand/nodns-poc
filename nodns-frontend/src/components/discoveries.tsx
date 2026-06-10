@@ -146,7 +146,7 @@ truth.npub10ml...dns4sats.xyz. 300 IN TXT "No you!"`}
 
         <div className="mb-5 rounded-xl border border-border bg-card p-6">
           <h3 className="mb-3 text-lg font-semibold">
-            Demo 2: Web — &ldquo;Respect my authority&rdquo; vs &ldquo;LIAR DETECTED&rdquo;
+            Demo 2: Web — &ldquo;Respect my authority&rdquo; vs &ldquo;Liar&rdquo; &ldquo;No you&rdquo;
           </h3>
           <p className="mb-3 text-muted-foreground">
             The same domain resolves to entirely different web pages depending on
@@ -154,7 +154,7 @@ truth.npub10ml...dns4sats.xyz. 300 IN TXT "No you!"`}
             (the registrar&apos;s page saying{" "}
             <code className="text-primary">&quot;Respect my authority&quot;</code>).
             NoDNS returns our VPS IP (the keyholder&apos;s page saying{" "}
-            <code className="text-primary">&quot;LIAR DETECTED&quot;</code>).
+            <code className="text-primary">&quot;Liar&quot;</code> — published by the Nostr keyholder).
           </p>
           <p className="mb-2 text-sm">
             <strong>Demo domain:</strong>{" "}
@@ -179,7 +179,7 @@ truth.npub10ml...dns4sats.xyz. 300 IN TXT "No you!"`}
                 NoDNS (dns.nodns.shop)
               </h4>
               <p className="text-sm text-muted-foreground">
-                VPS — &ldquo;LIAR DETECTED&rdquo;
+                VPS — &ldquo;Liar&rdquo;
               </p>
               <code className="font-mono text-[0.8rem] text-primary">
                 46.224.104.12
