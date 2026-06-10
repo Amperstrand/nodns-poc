@@ -39,6 +39,8 @@ jobs:
 
       - name: Build static export
         working-directory: nodns-frontend
+        env:
+          GITHUB_PAGES: "1"
         run: npm run build
 
       - name: Upload artifact
