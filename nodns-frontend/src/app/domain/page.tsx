@@ -37,7 +37,12 @@ import { useWallet } from "@/contexts/WalletContext";
 import { MINT_URL } from "@/lib/wallet";
 import { DEFAULT_ZONE } from "@/lib/constants";
 import { toFqdn } from "@/lib/pricing";
-import { fetchZonePricing } from "@/lib/api";
+import {
+  fetchTripartiteRecords,
+  fetchPricing,
+  compareTripartite,
+  type TripartiteRecords,
+} from "@/lib/sources";
 import { hexPk } from "@/lib/identity";
 import {
   publishDnsEvent,
@@ -71,6 +76,7 @@ interface DnsRecordRow {
   ttl: number;
   created_at: number;
   isNew?: boolean;
+  sources: string[];
 }
 
 const RECORD_TYPES = ["A", "AAAA", "CNAME", "TXT", "MX", "NS"] as const;
@@ -81,6 +87,13 @@ function makeRecordId(r: {
   value: string;
 }): string {
   return `${r.type}:${r.name}:${r.value}`;
+}
+
+function statusDot(status: string) {
+  if (status === "ok") return "🟢";
+  if (status === "error") return "🔴";
+  if (status === "loading") return "🟡";
+  return "⚫";
 }
 
 function DomainDetailContent() {
@@ -98,6 +111,7 @@ function DomainDetailContent() {
   );
   const [errorMsg, setErrorMsg] = useState("");
   const [pricing, setPricing] = useState<ZonePricing | null>(null);
+  const [tripartite, setTripartite] = useState<TripartiteRecords | null>(null);
 
   // Editing state
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -128,32 +142,69 @@ function DomainDetailContent() {
 
     try {
       const domain = toFqdn(nameParam);
-      const resp = await fetch(
-        `/api/records?domain=${encodeURIComponent(domain)}`
-      );
+      const results = await fetchTripartiteRecords({ domain });
+      setTripartite(results);
 
-      if (!resp.ok) {
-        throw new Error(`HTTP ${resp.status}`);
+      const recordMap = new Map<string, DnsRecordRow>();
+
+      for (const r of results.api.records) {
+        const id = makeRecordId({ type: r.type, name: r.name || "@", value: r.rdata });
+        const existing = recordMap.get(id);
+        if (existing) {
+          if (!existing.sources.includes("api")) existing.sources.push("api");
+          existing.created_at = Math.max(existing.created_at, r.created_at);
+        } else {
+          recordMap.set(id, {
+            id,
+            type: r.type,
+            name: r.name || "@",
+            value: r.rdata,
+            ttl: r.ttl,
+            created_at: r.created_at,
+            sources: ["api"],
+          });
+        }
       }
 
-      const data = await resp.json();
-      const raw: Array<{
-        type: string;
-        name: string;
-        rdata: string;
-        ttl: number;
-        created_at: number;
-      }> = data.records ?? [];
+      for (const r of results.nostr.records) {
+        const id = makeRecordId({ type: r.type, name: r.name, value: r.value });
+        const existing = recordMap.get(id);
+        if (existing) {
+          if (!existing.sources.includes("nostr")) existing.sources.push("nostr");
+          existing.created_at = Math.max(existing.created_at, r.created_at);
+        } else {
+          recordMap.set(id, {
+            id,
+            type: r.type,
+            name: r.name,
+            value: r.value,
+            ttl: r.ttl,
+            created_at: r.created_at,
+            sources: ["nostr"],
+          });
+        }
+      }
+
+      for (const r of results.dns.records) {
+        const id = makeRecordId({ type: r.type, name: r.name.split(".")[0] || "@", value: r.data });
+        const existing = recordMap.get(id);
+        if (existing) {
+          if (!existing.sources.includes("dns")) existing.sources.push("dns");
+        } else {
+          recordMap.set(id, {
+            id,
+            type: r.type,
+            name: r.name.split(".")[0] || "@",
+            value: r.data,
+            ttl: r.ttl,
+            created_at: 0,
+            sources: ["dns"],
+          });
+        }
+      }
 
       setRecords(
-        raw.map((r) => ({
-          id: makeRecordId({ type: r.type, name: r.name, value: r.rdata }),
-          type: r.type,
-          name: r.name || "@",
-          value: r.rdata,
-          ttl: r.ttl,
-          created_at: r.created_at,
-        }))
+        Array.from(recordMap.values()).sort((a, b) => b.created_at - a.created_at)
       );
     } catch (err) {
       setErrorMsg(
@@ -166,7 +217,7 @@ function DomainDetailContent() {
 
   // Fetch pricing
   useEffect(() => {
-    fetchZonePricing(DEFAULT_ZONE)
+    fetchPricing()
       .then(setPricing)
       .catch(() => {});
   }, []);
@@ -462,6 +513,26 @@ function DomainDetailContent() {
         </div>
       </div>
 
+      {/* Source status bar */}
+      <div className="flex items-center gap-4 mb-6 px-4 py-3 rounded-lg bg-card ring-1 ring-foreground/10">
+        <span className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Sources</span>
+        {tripartite ? (
+          <>
+            <span className="flex items-center gap-1.5 text-sm">
+              {tripartite.api.icon} {statusDot(tripartite.api.status)} <span className="text-xs">{tripartite.api.status}</span>
+            </span>
+            <span className="flex items-center gap-1.5 text-sm">
+              {tripartite.nostr.icon} {statusDot(tripartite.nostr.status)} <span className="text-xs">{tripartite.nostr.status}</span>
+            </span>
+            <span className="flex items-center gap-1.5 text-sm">
+              {tripartite.dns.icon} {statusDot(tripartite.dns.status)} <span className="text-xs">{tripartite.dns.status}</span>
+            </span>
+          </>
+        ) : (
+          <span className="text-xs text-muted-foreground animate-pulse">Loading sources...</span>
+        )}
+      </div>
+
       {/* Error banner */}
       {errorMsg && (
         <div className="rounded-lg border border-red-800 bg-red-950/40 px-4 py-3 text-sm text-red-400 mb-6">
@@ -512,11 +583,12 @@ function DomainDetailContent() {
         </div>
 
         {/* Table header (desktop) */}
-        <div className="hidden md:grid grid-cols-[80px_100px_1fr_80px_80px] gap-3 px-5 py-2.5 border-b border-border text-xs text-muted-foreground font-medium uppercase tracking-wider">
+        <div className="hidden md:grid grid-cols-[80px_100px_1fr_80px_70px_80px] gap-3 px-5 py-2.5 border-b border-border text-xs text-muted-foreground font-medium uppercase tracking-wider">
           <span>Type</span>
           <span>Name</span>
           <span>Value</span>
           <span className="text-center">TTL</span>
+          <span className="text-center">Src</span>
           <span className="text-right">Actions</span>
         </div>
 
@@ -526,12 +598,13 @@ function DomainDetailContent() {
             {[1, 2, 3].map((i) => (
               <div
                 key={i}
-                className="grid grid-cols-1 md:grid-cols-[80px_100px_1fr_80px_80px] gap-2 md:gap-3 px-5 py-3.5 border-b border-border last:border-b-0"
+                className="grid grid-cols-1 md:grid-cols-[80px_100px_1fr_80px_70px_80px] gap-2 md:gap-3 px-5 py-3.5 border-b border-border last:border-b-0"
               >
                 <div className="h-4 w-12 bg-muted rounded animate-pulse" />
                 <div className="h-4 w-10 bg-muted rounded animate-pulse" />
                 <div className="h-4 w-40 bg-muted rounded animate-pulse" />
                 <div className="h-4 w-10 bg-muted rounded animate-pulse" />
+                <div className="h-4 w-12 bg-muted rounded animate-pulse" />
                 <div className="h-4 w-14 bg-muted rounded animate-pulse" />
               </div>
             ))}
@@ -561,7 +634,7 @@ function DomainDetailContent() {
         {records.map((record) => (
           <div
             key={record.id}
-            className="grid grid-cols-1 md:grid-cols-[80px_100px_1fr_80px_80px] gap-2 md:gap-3 px-5 py-3.5 border-b border-border last:border-b-0 hover:bg-muted/30 transition-colors"
+            className="grid grid-cols-1 md:grid-cols-[80px_100px_1fr_80px_70px_80px] gap-2 md:gap-3 px-5 py-3.5 border-b border-border last:border-b-0 hover:bg-muted/30 transition-colors"
           >
             {/* Type */}
             <div>
@@ -625,6 +698,20 @@ function DomainDetailContent() {
               )}
             </div>
 
+            {/* Sources */}
+            <div className="flex items-center justify-center gap-0.5">
+              <span className="md:hidden text-xs text-muted-foreground mr-1">Sources:</span>
+              {record.sources.includes("api") && (
+                <span className="text-[10px] px-1 py-0.5 rounded bg-secondary" title="API">🗄</span>
+              )}
+              {record.sources.includes("nostr") && (
+                <span className="text-[10px] px-1 py-0.5 rounded bg-secondary" title="Nostr">🔐</span>
+              )}
+              {record.sources.includes("dns") && (
+                <span className="text-[10px] px-1 py-0.5 rounded bg-secondary" title="DNS">🌐</span>
+              )}
+            </div>
+
             {/* Actions */}
             <div className="flex items-center justify-end gap-1">
               {editingId === record.id ? (
@@ -676,7 +763,7 @@ function DomainDetailContent() {
 
         {/* Add record row */}
         {addingRecord && (
-          <div className="grid grid-cols-1 md:grid-cols-[80px_100px_1fr_80px_auto] gap-2 md:gap-3 px-5 py-3.5 border-t-2 border-primary/30 bg-primary/5">
+          <div className="grid grid-cols-1 md:grid-cols-[80px_100px_1fr_80px_70px_auto] gap-2 md:gap-3 px-5 py-3.5 border-t-2 border-primary/30 bg-primary/5">
             {/* Type selector */}
             <div>
               <span className="md:hidden text-xs text-muted-foreground mr-1 mb-1 block">
@@ -790,6 +877,55 @@ function DomainDetailContent() {
           </div>
         )}
       </div>
+
+      {/* Verification section */}
+      {tripartite && (
+        <div className="rounded-xl border border-border bg-card p-4 mt-6">
+          <h3 className="text-sm font-semibold mb-3">Verification</h3>
+          {(() => {
+            const cmp = compareTripartite(tripartite);
+            return (
+              <div>
+                <div className="flex items-center gap-3 text-sm mb-2">
+                  <span className="text-xs text-muted-foreground">
+                    API: {cmp.apiCount} records
+                  </span>
+                  <span className="text-border">|</span>
+                  <span className="text-xs text-muted-foreground">
+                    Nostr: {cmp.nostrCount} records
+                  </span>
+                  <span className="text-border">|</span>
+                  <span className="text-xs text-muted-foreground">
+                    DNS: {cmp.dnsCount} records
+                  </span>
+                </div>
+                {cmp.match ? (
+                  <div className="flex items-center gap-2">
+                    <span className="text-emerald-400">✓</span>
+                    <span className="text-sm text-emerald-400">All sources agree</span>
+                  </div>
+                ) : (
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-yellow-400">⚠</span>
+                      <span className="text-sm text-yellow-400">Sources differ</span>
+                    </div>
+                    {cmp.onlyInApi.length > 0 && (
+                      <p className="text-xs text-muted-foreground">Only in API: {cmp.onlyInApi.join(", ")}</p>
+                    )}
+                    {cmp.onlyInNostr.length > 0 && (
+                      <p className="text-xs text-muted-foreground">Only in Nostr: {cmp.onlyInNostr.join(", ")}</p>
+                    )}
+                    {cmp.onlyInDns.length > 0 && (
+                      <p className="text-xs text-muted-foreground">Only in DNS: {cmp.onlyInDns.join(", ")}</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+        </div>
+      )}
 
       {/* Wallet info bar */}
       <div className="flex items-center gap-4 mt-6 px-4 py-3 rounded-lg bg-card ring-1 ring-foreground/10">

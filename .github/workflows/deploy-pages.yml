@@ -1,11 +1,12 @@
-name: Deploy GitHub Pages
+name: Deploy to GitHub Pages
 
 on:
   push:
     branches: [main]
     paths:
-      - 'gh-pages/**'
+      - 'nodns-frontend/**'
       - 'content/**'
+      - 'docs/**'
   workflow_dispatch:
 
 permissions:
@@ -18,7 +19,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  deploy:
+  build-deploy:
     runs-on: ubuntu-latest
     environment:
       name: github-pages
@@ -26,17 +27,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Prepare site
-        run: |
-          mkdir -p /tmp/gh-pages
-          cp gh-pages/index.html /tmp/gh-pages/
-          # Replace symlink with actual file
-          cp content/consensus.json /tmp/gh-pages/consensus.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: nodns-frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: nodns-frontend
+        run: npm ci
+
+      - name: Build static export
+        working-directory: nodns-frontend
+        run: npm run build
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: /tmp/gh-pages
+          path: nodns-frontend/out
 
       - name: Deploy to GitHub Pages
         id: deployment

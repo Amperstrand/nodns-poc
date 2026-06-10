@@ -10,10 +10,12 @@ import { Badge } from "@/components/ui/badge";
 import { useIdentity } from "@/contexts/IdentityContext";
 import { useWallet } from "@/contexts/WalletContext";
 import { DEFAULT_ZONE } from "@/lib/constants";
-import { fetchZonePricing } from "@/lib/api";
+import { fetchTripartiteRecords, fetchPricing } from "@/lib/sources";
+import type { TripartiteRecords, SourceResult } from "@/lib/sources";
 import { hexPk } from "@/lib/identity";
 import { subscribeToDnsEvents } from "@/lib/nostr";
-import type { NostrEvent, ZonePricing } from "@/lib/types";
+import type { NostrDnsRecord } from "@/lib/nostr";
+import type { NostrEvent, ZonePricing, DnsRecord } from "@/lib/types";
 import {
   PlusIcon,
   GlobeIcon,
@@ -27,9 +29,17 @@ interface DomainInfo {
   fqdn: string;
   recordCount: number;
   lastSeen: number;
+  sources: string[];
 }
 
 type Status = "loading" | "ready" | "error";
+
+function statusDot(status: string) {
+  if (status === "ok") return "🟢";
+  if (status === "error") return "🔴";
+  if (status === "loading") return "🟡";
+  return "⚫";
+}
 
 function DashboardContent() {
   const { npub, initialized, nsec } = useIdentity();
@@ -38,6 +48,7 @@ function DashboardContent() {
   const [pageStatus, setPageStatus] = useState<Status>("loading");
   const [errorMsg, setErrorMsg] = useState("");
   const [pricing, setPricing] = useState<ZonePricing | null>(null);
+  const [tripartite, setTripartite] = useState<TripartiteRecords | null>(null);
 
   const loadRecords = useCallback(async () => {
     if (!initialized || !npub) return;
@@ -47,41 +58,39 @@ function DashboardContent() {
 
     try {
       const pk = hexPk(npub);
+      const results = await fetchTripartiteRecords({ pubkey: pk });
+      setTripartite(results);
 
-      const resp = await fetch(
-        `/api/records?pubkey=${encodeURIComponent(pk)}`
-      );
-
-      if (!resp.ok) {
-        throw new Error(`HTTP ${resp.status}`);
-      }
-
-      const data = await resp.json();
-      const records: Array<{
-        name: string;
-        fqdn: string;
-        type: string;
-        created_at: number;
-      }> = data.records ?? [];
-
-      // Group by fqdn to get domain list
       const domainMap = new Map<string, DomainInfo>();
-      for (const rec of records) {
-        const fqdn = rec.fqdn || `${rec.name}.${DEFAULT_ZONE}`;
-        const existing = domainMap.get(fqdn);
-        if (existing) {
-          existing.recordCount += 1;
-          existing.lastSeen = Math.max(existing.lastSeen, rec.created_at);
-        } else {
-          const label = fqdn.replace(`.${DEFAULT_ZONE}`, "");
-          domainMap.set(fqdn, {
-            name: label,
-            fqdn,
-            recordCount: 1,
-            lastSeen: rec.created_at,
-          });
+
+      const processRecords = (
+        records: Array<{ fqdn?: string; name?: string; created_at: number }>,
+        sourceKey: string
+      ) => {
+        for (const rec of records) {
+          const fqdn = rec.fqdn || `${rec.name}.${DEFAULT_ZONE}`;
+          const existing = domainMap.get(fqdn);
+          if (existing) {
+            existing.recordCount += 1;
+            existing.lastSeen = Math.max(existing.lastSeen, rec.created_at);
+            if (!existing.sources.includes(sourceKey)) {
+              existing.sources.push(sourceKey);
+            }
+          } else {
+            const label = fqdn.replace(`.${DEFAULT_ZONE}`, "");
+            domainMap.set(fqdn, {
+              name: label,
+              fqdn,
+              recordCount: 1,
+              lastSeen: rec.created_at,
+              sources: [sourceKey],
+            });
+          }
         }
-      }
+      };
+
+      processRecords(results.api.records as Array<{ fqdn: string; name: string; created_at: number }>, "api");
+      processRecords(results.nostr.records as Array<{ fqdn: string; name: string; created_at: number }>, "nostr");
 
       setDomains(
         Array.from(domainMap.values()).sort(
@@ -97,13 +106,10 @@ function DashboardContent() {
     }
   }, [initialized, npub]);
 
-  // Fetch pricing
   useEffect(() => {
-    fetchZonePricing(DEFAULT_ZONE)
+    fetchPricing()
       .then(setPricing)
-      .catch(() => {
-        // Pricing fetch is non-fatal
-      });
+      .catch(() => {});
   }, []);
 
   // Load on init
@@ -211,6 +217,19 @@ function DashboardContent() {
             {npub ? `${npub.slice(0, 12)}...` : "—"}
           </span>
         </div>
+        <div className="h-3 w-px bg-border" />
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground">Sources</span>
+          {tripartite ? (
+            <span className="text-xs font-mono">
+              {tripartite.api.icon} {statusDot(tripartite.api.status)}{" "}
+              {tripartite.nostr.icon} {statusDot(tripartite.nostr.status)}{" "}
+              {tripartite.dns.icon} {statusDot(tripartite.dns.status)}
+            </span>
+          ) : (
+            <span className="text-xs text-muted-foreground animate-pulse">Loading...</span>
+          )}
+        </div>
       </div>
 
       {/* Error state */}
@@ -277,6 +296,17 @@ function DashboardContent() {
                 >
                   {domain.fqdn}
                 </Link>
+                <div className="flex items-center gap-0.5">
+                  {domain.sources.includes("api") && (
+                    <span className="text-[10px] px-1 py-0.5 rounded bg-secondary text-muted-foreground" title="API confirmed">🗄</span>
+                  )}
+                  {domain.sources.includes("nostr") && (
+                    <span className="text-[10px] px-1 py-0.5 rounded bg-secondary text-muted-foreground" title="Nostr confirmed">🔐</span>
+                  )}
+                  {domain.sources.includes("dns") && (
+                    <span className="text-[10px] px-1 py-0.5 rounded bg-secondary text-muted-foreground" title="DNS confirmed">🌐</span>
+                  )}
+                </div>
               </div>
 
               {/* Status */}

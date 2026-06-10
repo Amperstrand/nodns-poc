@@ -8,7 +8,20 @@ import { SiteFooter } from "@/components/site-footer";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { DEFAULT_ZONE } from "@/lib/constants";
 import { getPriceForName, sanitizeName, toFqdn } from "@/lib/pricing";
-import { fetchZonePricing, type ZonePricing } from "@/lib/api";
+import {
+  fetchTripartiteRecords,
+  fetchPricing,
+  compareTripartite,
+  type TripartiteRecords,
+} from "@/lib/sources";
+import type { ZonePricing } from "@/lib/types";
+
+function statusDot(status: string) {
+  if (status === "ok") return "🟢";
+  if (status === "error") return "🔴";
+  if (status === "loading") return "🟡";
+  return "⚫";
+}
 
 function SearchContent() {
   const searchParams = useSearchParams();
@@ -19,6 +32,7 @@ function SearchContent() {
   const [loading, setLoading] = useState(false);
   const [pricing, setPricing] = useState<ZonePricing | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [tripartite, setTripartite] = useState<TripartiteRecords | null>(null);
 
   useEffect(() => {
     const clean = sanitizeName(q);
@@ -33,19 +47,18 @@ function SearchContent() {
       try {
         const fqdn = toFqdn(clean);
 
-        // Check availability via backend records endpoint
-        const res = await fetch(`/api/records?domain=${encodeURIComponent(fqdn)}`);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
-        const records = data.records ?? [];
-
+        const results = await fetchTripartiteRecords({ domain: fqdn });
         if (!cancelled) {
-          setAvailable(records.length === 0);
+          setTripartite(results);
+          const anyRecords =
+            results.api.records.length > 0 ||
+            results.nostr.records.length > 0 ||
+            results.dns.records.length > 0;
+          setAvailable(!anyRecords);
         }
 
-        // Fetch pricing info
         try {
-          const p = await fetchZonePricing(DEFAULT_ZONE);
+          const p = await fetchPricing();
           if (!cancelled) setPricing(p);
         } catch {
           // Pricing fetch failure is non-critical
@@ -71,6 +84,8 @@ function SearchContent() {
     const prefixes = ["my", "the", "go", "hi"];
     return prefixes.map((p) => `${p}${name}`).slice(0, 3);
   }, [available, name]);
+
+  const comparison = tripartite ? compareTripartite(tripartite) : null;
 
   if (!q) {
     return (
@@ -162,6 +177,35 @@ function SearchContent() {
           </>
         )}
       </div>
+
+      {/* Source status */}
+      {tripartite && (
+        <div className="rounded-xl border border-border bg-card p-4 mb-6">
+          <div className="flex items-center gap-4 text-sm">
+            <span className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Sources</span>
+            <span className="flex items-center gap-1.5">
+              {tripartite.api.icon} {statusDot(tripartite.api.status)} <span className="text-xs">{comparison?.apiCount ?? 0} records</span>
+            </span>
+            <span className="text-border">|</span>
+            <span className="flex items-center gap-1.5">
+              {tripartite.nostr.icon} {statusDot(tripartite.nostr.status)} <span className="text-xs">{comparison?.nostrCount ?? 0} records</span>
+            </span>
+            <span className="text-border">|</span>
+            <span className="flex items-center gap-1.5">
+              {tripartite.dns.icon} {statusDot(tripartite.dns.status)} <span className="text-xs">{comparison?.dnsCount ?? 0} records</span>
+            </span>
+            {comparison && (
+              <span className="ml-auto text-xs">
+                {comparison.match ? (
+                  <span className="text-emerald-400">✓ Sources agree</span>
+                ) : (
+                  <span className="text-yellow-400">⚠ Sources differ</span>
+                )}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Pricing tiers */}
       <div className="rounded-xl border border-border bg-card p-6">
