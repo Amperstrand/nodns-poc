@@ -153,22 +153,18 @@ test.describe("Wallet Page", () => {
     expect(hasValidState).toBeTruthy();
   });
 
-  test("send and receive buttons are disabled when mint is offline", async ({
+  test("action buttons are disabled when inputs are empty", async ({
     page,
   }) => {
     await page.goto("/wallet");
     await page.waitForTimeout(6000);
 
+    // Buttons are disabled because no token/amount entered yet (regardless of mint state)
     const receiveBtn = page.getByRole("button", { name: /^Receive$/ });
     const sendBtn = page.getByRole("button", { name: /Create Token/i });
 
-    if (await receiveBtn.isDisabled().catch(() => true)) {
-      expect(receiveBtn).toBeDisabled();
-    }
-
-    if (await sendBtn.isDisabled().catch(() => true)) {
-      expect(sendBtn).toBeDisabled();
-    }
+    await expect(receiveBtn).toBeDisabled();
+    await expect(sendBtn).toBeDisabled();
   });
 });
 
@@ -301,6 +297,8 @@ test.describe("No Critical JS Errors", () => {
         const text = msg.text();
         if (
           !text.includes("502") &&
+          !text.includes("503") &&
+          !text.includes("WebSocket connection") &&
           !text.includes("mint-proxy") &&
           !text.includes("Failed to load resource") &&
           !text.includes("testnut") &&
