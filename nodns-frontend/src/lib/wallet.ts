@@ -20,10 +20,19 @@ export async function createWalletManager(
 
   let mintOnline = true;
   try {
-    await manager.mint.addMint(MINT_URL);
+    await manager.mint.addMint(MINT_URL, { trusted: true });
   } catch (err) {
     console.warn('[nodns-wallet] Mint unavailable during init:', err);
     mintOnline = false;
+  }
+
+  if (mintOnline) {
+    try {
+      await manager.enableMintOperationWatcher({ watchExistingPendingOnStart: true });
+      await manager.enableMintOperationProcessor({ processIntervalMs: 3000 });
+    } catch (err) {
+      console.warn('[nodns-wallet] Failed to enable mint watchers:', err);
+    }
   }
 
   return { manager, mintOnline };

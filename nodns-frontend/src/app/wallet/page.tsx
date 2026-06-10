@@ -93,7 +93,7 @@ function FeedbackBanner({
 /* ── main content ───────────────────────────────────────── */
 
 function WalletContent() {
-  const { manager, balance, status, mintOnline } = useWallet();
+  const { manager, balance, status, mintOnline, topUp, topUpState, topUpError } = useWallet();
   const { npub, nsec, initialized } = useIdentity();
 
   /* receive state */
@@ -122,6 +122,11 @@ function WalletContent() {
   /* nsec copy */
   const [nsecCopied, setNsecCopied] = useState(false);
   const [showNsecConfirm, setShowNsecConfirm] = useState(false);
+
+  /* top-up state */
+  const [topUpAmount, setTopUpAmount] = useState("");
+  const [invoice, setInvoice] = useState("");
+  const [invoiceCopied, setInvoiceCopied] = useState(false);
 
   /* ── receive handler ─────────────────────────────────── */
 
@@ -191,6 +196,26 @@ function WalletContent() {
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }, [generatedToken]);
+
+  /* ── top-up handler ──────────────────────────────────── */
+
+  const handleTopUp = useCallback(async () => {
+    const amount = parseInt(topUpAmount, 10);
+    if (!amount || amount <= 0) return;
+    setInvoice("");
+    setInvoiceCopied(false);
+    try {
+      const result = await topUp(amount);
+      setInvoice(result.invoice);
+    } catch {}
+  }, [topUp, topUpAmount]);
+
+  const handleCopyInvoice = useCallback(async () => {
+    if (!invoice) return;
+    await navigator.clipboard.writeText(invoice);
+    setInvoiceCopied(true);
+    setTimeout(() => setInvoiceCopied(false), 2000);
+  }, [invoice]);
 
   /* ── history loading ─────────────────────────────────── */
 
@@ -307,6 +332,84 @@ function WalletContent() {
           >
             Retry connection
           </Button>
+        </div>
+      )}
+
+      {/* ── Top Up Section ─────────────────────────────── */}
+      {mintOnline && (
+        <div className="rounded-xl border border-border bg-card p-6 mb-4">
+          <h2 className="text-xs font-semibold mb-1 text-muted-foreground uppercase tracking-wider">
+            Top Up via Lightning
+          </h2>
+          <p className="text-xs text-muted-foreground mb-4">
+            Request a Lightning invoice. On testnut, it settles automatically.
+          </p>
+
+          <div className="flex items-center gap-3 mb-3">
+            <div className="flex-1 relative">
+              <Input
+                type="number"
+                min={1}
+                value={topUpAmount}
+                onChange={(e) => setTopUpAmount(e.target.value)}
+                placeholder="100"
+                className="pr-12 font-mono"
+              />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">
+                sats
+              </span>
+            </div>
+            <Button
+              onClick={handleTopUp}
+              disabled={
+                topUpState === 'requesting' ||
+                topUpState === 'waiting' ||
+                topUpState === 'minting' ||
+                !topUpAmount ||
+                parseInt(topUpAmount, 10) <= 0
+              }
+            >
+              {topUpState === 'requesting'
+                ? "Requesting..."
+                : topUpState === 'minting'
+                  ? "Minting..."
+                  : "Get Invoice"}
+            </Button>
+          </div>
+
+          {topUpState === 'waiting' && invoice && (
+            <div className="space-y-2">
+              <p className="text-xs text-muted-foreground">
+                Waiting for payment... (auto-settles on testnut)
+              </p>
+              <div className="rounded-lg border border-input bg-muted/50 p-3">
+                <p className="text-xs font-mono text-foreground break-all leading-relaxed">
+                  {invoice}
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                onClick={handleCopyInvoice}
+                className="w-full"
+              >
+                {invoiceCopied ? "Copied!" : "Copy Invoice"}
+              </Button>
+            </div>
+          )}
+
+          {topUpState === 'done' && (
+            <FeedbackBanner
+              success
+              message="Top-up successful! Balance updated."
+            />
+          )}
+
+          {topUpState === 'error' && topUpError && (
+            <FeedbackBanner
+              success={false}
+              message={topUpError}
+            />
+          )}
         </div>
       )}
 
