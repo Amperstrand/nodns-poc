@@ -21,9 +21,12 @@ export function Discoveries() {
           <p className="mb-3 text-muted-foreground">
             Kind 11111 record tags contain no zone information. The wire format
             is purely about the record itself — type, name, data, and metadata.
-            The same event applies to <code className="text-primary">.nostr</code>,{" "}
+            For <code className="text-primary">$npub</code> registrations, the
+            same event applies to{" "}
+            <code className="text-primary">.nostr</code>,{" "}
             <code className="text-primary">.nodns.shop</code>, or any zone
-            running a NoDNS bot.
+            running a NoDNS bot — zone assignment is infrastructure, not
+            protocol.
           </p>
           <div className="my-4 rounded-lg border border-border bg-background p-4">
             <pre className="overflow-x-auto font-mono text-[0.85rem] text-primary">
@@ -31,9 +34,14 @@ export function Discoveries() {
             </pre>
           </div>
           <p className="text-muted-foreground">
-            Zone assignment is infrastructure, not protocol. A bot listening to
-            relays decides which zone it governs. The event is portable across
-            zones without modification.
+            For <code className="text-primary">$string</code> registrations,
+            zone awareness lives in the claim and delegation tags — e.g.{" "}
+            <code className="text-primary">
+              [&quot;claim&quot;, &quot;alice&quot;, &quot;nodns.shop&quot;,
+              ...]
+            </code>{" "}
+            explicitly references the zone to establish ownership. The record
+            wire format itself stays zone-agnostic regardless of name class.
           </p>
         </div>
 

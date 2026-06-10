@@ -376,4 +376,4 @@ Zap payment tag:   ["zap",       ZAP_RECEIPT_EVENT_ID, AMOUNT]
 
 All timestamps are Unix epoch strings. All amounts are in satoshis as strings.
 
-**Note:** Record and delete tags contain no zone identifier. The same event produces records under `.nostr`, `.nodns.shop`, or any zone running a NoDNS bot. Zone assignment is infrastructure, not protocol.
+**Note:** Record and delete tags contain no zone identifier. For `$npub` registrations, zone assignment is purely infrastructure — the bot decides which zone it governs, and the same event is portable across zones. For `$string` registrations, zone awareness lives in the claim and delegation tags (`["claim", NAME, ZONE, ...]`, `["delegation", DOMAIN, ...]`), which explicitly reference the zone to establish ownership.

@@ -22,6 +22,7 @@
 | [04-demo-setup.md](04-demo-setup.md) | ACTIVE | VPS setup guide for a NoDNS zone |
 | [08-deployment-status.md](08-deployment-status.md) | ACTIVE | Production deployment details for nodns.shop |
 | [29-beta-deployment.md](29-beta-deployment.md) | ACTIVE | beta.nodns.shop deployment alongside main site |
+| [32-demo-infrastructure.md](32-demo-infrastructure.md) | ACTIVE | dns4sats dual-resolution demo, DoH resolver, .nostr TLD setup |
 
 ### Protocol
 
@@ -82,6 +83,7 @@ These docs are the authoritative source for reasoning. `content/consensus.json` 
 | Doc | Status | Description |
 |---|---|---|
 | [competitive/01-competitive-analysis.md](competitive/01-competitive-analysis.md) | ACTIVE | ENS, Handshake, Unstoppable Domains comparison |
+| [competitive/nip97-vs-nodns.md](competitive/nip97-vs-nodns.md) | ACTIVE | NIP-97 (kind 30053) vs NoDNS comparison |
 
 ## Relationship to `content/`
 
