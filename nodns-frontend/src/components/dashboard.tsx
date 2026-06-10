@@ -386,20 +386,20 @@ export function Dashboard() {
   return (
     <section
       id="dashboard"
-      className="border-t border-[#222] bg-gradient-to-b from-[#0f0f0f] to-[#0a0a0a] px-6 py-12"
+      className="border-t border-border bg-gradient-to-b from-background to-background px-6 py-12"
     >
       <div className="mx-auto max-w-[960px]">
         <h2 className="mb-6 text-[1.75rem] font-bold tracking-tight">
           Nostr DNS Dashboard
         </h2>
-        <p className="mb-6 text-[#bbb]">
+        <p className="mb-6 text-foreground">
           Generate keys, publish DNS records as Nostr events, and manage your
           nodns.shop domain.
         </p>
 
         <div className="grid gap-4 max-[700px]:grid-cols-1 md:grid-cols-2">
           {/* Key Gen Card */}
-          <div className="rounded-[10px] border border-[#222] bg-[#141414] p-6">
+          <div className="rounded-[10px] border border-border bg-card p-6">
             <h3 className="mb-4 text-lg font-semibold">
               Identity &amp; Domain
             </h3>
@@ -408,49 +408,49 @@ export function Dashboard() {
               <div className="flex gap-2">
                 <button
                   onClick={handleGenerateNew}
-                  className="rounded-lg bg-[#ff6b35] px-4 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90"
+                  className="rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
                 >
                   Generate New Keypair
                 </button>
                 <button
                   onClick={() => setShowKeyInput(true)}
-                  className="rounded-lg bg-[#222] px-4 py-2.5 text-sm font-semibold text-[#e0e0e0] transition-colors hover:bg-[#333]"
+                  className="rounded-lg bg-secondary px-4 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-border"
                 >
                   Load Saved Key
                 </button>
               </div>
             ) : (
               <>
-                <div data-testid="domain-display" className="mb-4 rounded-lg border border-[rgba(255,107,53,0.3)] bg-[rgba(255,107,53,0.15)] p-3.5 text-center font-mono text-base font-semibold text-[#ff6b35]">
+                <div data-testid="domain-display" className="mb-4 rounded-lg border border-primary/30 bg-primary/15 p-3.5 text-center font-mono text-base font-semibold text-primary">
                   {domainDisplay}
                 </div>
 
-                <div className="relative mb-4 rounded-lg border border-[#222] bg-[#0a0a0a] p-3 font-mono text-xs break-all">
-                  <div className="mb-1 font-sans text-[0.7rem] uppercase tracking-wider text-[#666]">
+                <div className="relative mb-4 rounded-lg border border-border bg-background p-3 font-mono text-xs break-all">
+                  <div className="mb-1 font-sans text-[0.7rem] uppercase tracking-wider text-muted-foreground">
                     Public Key (npub)
                   </div>
                   <div data-testid="npub-value">{keyPair.npub}</div>
                   <button
                     onClick={() => handleCopy(keyPair.npub)}
-                    className="absolute right-2 top-2 rounded bg-[#222] px-2 py-1 text-[0.7rem] text-[#666] hover:text-[#e0e0e0]"
+                    className="absolute right-2 top-2 rounded bg-secondary px-2 py-1 text-[0.7rem] text-muted-foreground hover:text-foreground"
                   >
                     Copy
                   </button>
                 </div>
 
-                <div className="mb-4 rounded-lg border border-[rgba(231,76,60,0.25)] bg-[rgba(231,76,60,0.08)] px-4 py-3 text-sm text-[#e8a49c]">
+                <div className="mb-4 rounded-lg border border-red-500/25 bg-red-500/8 px-4 py-3 text-sm text-red-400">
                   Save your nsec somewhere safe. If you lose it, you lose your
                   domain permanently. There is no recovery.
                 </div>
 
-                <div className="relative mb-4 rounded-lg border border-[#222] bg-[#0a0a0a] p-3 font-mono text-xs break-all">
-                  <div className="mb-1 font-sans text-[0.7rem] uppercase tracking-wider text-[#666]">
+                <div className="relative mb-4 rounded-lg border border-border bg-background p-3 font-mono text-xs break-all">
+                  <div className="mb-1 font-sans text-[0.7rem] uppercase tracking-wider text-muted-foreground">
                     Secret Key (nsec)
                   </div>
                   <div data-testid="nsec-value">{keyPair.nsec}</div>
                   <button
                     onClick={() => handleCopy(keyPair.nsec)}
-                    className="absolute right-2 top-2 rounded bg-[#222] px-2 py-1 text-[0.7rem] text-[#666] hover:text-[#e0e0e0]"
+                    className="absolute right-2 top-2 rounded bg-secondary px-2 py-1 text-[0.7rem] text-muted-foreground hover:text-foreground"
                   >
                     Copy
                   </button>
@@ -460,21 +460,21 @@ export function Dashboard() {
                   <div className="space-y-3">
                     <button
                       onClick={() => setShowKeyInput(true)}
-                      className="text-sm text-[#ff6b35] hover:underline"
+                      className="text-sm text-primary hover:underline"
                     >
                       I have an existing key
                     </button>
                     <br />
                     <button
                       onClick={handleClearKeys}
-                      className="rounded-lg bg-[rgba(231,76,60,0.15)] px-3 py-1.5 text-xs font-semibold text-[#e74c3c] hover:bg-[rgba(231,76,60,0.25)]"
+                      className="rounded-lg bg-red-500/15 px-3 py-1.5 text-xs font-semibold text-destructive hover:bg-red-500/25"
                     >
                       Clear Keys
                     </button>
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    <div className="rounded-lg border border-[rgba(231,76,60,0.25)] bg-[rgba(231,76,60,0.08)] px-4 py-3 text-sm text-[#e8a49c]">
+                    <div className="rounded-lg border border-red-500/25 bg-red-500/8 px-4 py-3 text-sm text-red-400">
                       ⚠️ Privacy: Using your personal nsec ties your IP address
                       to your Nostr identity. Consider using an ephemeral key
                       for DNS records.
@@ -487,15 +487,15 @@ export function Dashboard() {
                         setNsecError("");
                       }}
                       placeholder="Enter nsec..."
-                      className="w-full rounded-lg border border-[#222] bg-[#0a0a0a] px-3 py-2.5 text-sm text-[#e0e0e0] outline-none transition-colors focus:border-[#ff6b35]"
+                      className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground outline-none transition-colors focus:border-primary"
                     />
                     {nsecError && (
-                      <p className="text-xs text-[#e74c3c]">{nsecError}</p>
+                      <p className="text-xs text-destructive">{nsecError}</p>
                     )}
                     <div className="flex gap-2">
                       <button
                         onClick={handleLoadNsec}
-                        className="rounded-lg bg-[#ff6b35] px-3 py-2 text-xs font-semibold text-white"
+                        className="rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground"
                       >
                         Load Key
                       </button>
@@ -505,7 +505,7 @@ export function Dashboard() {
                           setNsecInput("");
                           setNsecError("");
                         }}
-                        className="rounded-lg bg-[#222] px-3 py-2 text-xs font-semibold text-[#e0e0e0]"
+                        className="rounded-lg bg-secondary px-3 py-2 text-xs font-semibold text-foreground"
                       >
                         Cancel
                       </button>
@@ -517,12 +517,12 @@ export function Dashboard() {
           </div>
 
           {/* Publish Card */}
-          <div className="rounded-[10px] border border-[#222] bg-[#141414] p-6">
+          <div className="rounded-[10px] border border-border bg-card p-6">
             <h3 className="mb-4 text-lg font-semibold">
               Publish DNS Records
             </h3>
             {pricing?.enabled && (
-              <p className="mb-3 text-xs text-[#888]">
+              <p className="mb-3 text-xs text-muted-foreground">
                 {pricing.create_price} sat{pricing.create_price !== 1 ? 's' : ''} per new record
                 {pricing.update_price === 0 ? ' · Free updates' : ` · ${pricing.update_price} sats to update`}
                 {pricing.delete_price === 0 ? ' · Free deletes' : ` · ${pricing.delete_price} sats to delete`}
@@ -530,34 +530,34 @@ export function Dashboard() {
             )}
 
             {!keyPair ? (
-              <p className="text-sm text-[#666]">
+              <p className="text-sm text-muted-foreground">
                 Generate or load a keypair first to publish records.
               </p>
             ) : (
               <>
                 <div className="mb-3.5">
-                  <label className="mb-1 block text-xs font-medium text-[#666]">
+                  <label className="mb-1 block text-xs font-medium text-muted-foreground">
                     Zone
                   </label>
                   <select
                     value={DEFAULT_ZONE}
                     disabled
-                    className="w-full rounded-lg border border-[#222] bg-[#0a0a0a] px-3 py-2.5 text-sm text-[#e0e0e0] outline-none"
+                    className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground outline-none"
                   >
                     <option value="nodns.shop">nodns.shop</option>
                   </select>
                 </div>
 
-                <div className="mb-3.5 grid gap-2 max-[600px]:grid-cols-2 md:grid-cols-[100px_1fr_1fr_80px_auto]">
+                  <div className="mb-3.5 grid gap-2 max-[600px]:grid-cols-2 md:grid-cols-[100px_1fr_1fr_80px_auto]">
                   <div>
-                    <label className="mb-1 block text-xs font-medium text-[#666]">
+                    <label className="mb-1 block text-xs font-medium text-muted-foreground">
                       Type
                     </label>
                     <select
                       data-testid="rec-type"
                       value={recType}
                       onChange={(e) => setRecType(e.target.value)}
-                      className="w-full rounded-lg border border-[#222] bg-[#0a0a0a] px-3 py-2.5 text-sm text-[#e0e0e0] outline-none focus:border-[#ff6b35]"
+                      className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary"
                     >
                       <option value="TXT">TXT</option>
                       <option value="A">A</option>
@@ -567,7 +567,7 @@ export function Dashboard() {
                     </select>
                   </div>
                   <div>
-                    <label className="mb-1 block text-xs font-medium text-[#666]">
+                    <label className="mb-1 block text-xs font-medium text-muted-foreground">
                       Name
                     </label>
                     <input
@@ -576,11 +576,11 @@ export function Dashboard() {
                       value={recName}
                       onChange={(e) => setRecName(e.target.value)}
                       placeholder="@ for root, or subdomain"
-                      className="w-full rounded-lg border border-[#222] bg-[#0a0a0a] px-3 py-2.5 text-sm text-[#e0e0e0] outline-none focus:border-[#ff6b35]"
+                      className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary"
                     />
                   </div>
                   <div>
-                    <label className="mb-1 block text-xs font-medium text-[#666]">
+                    <label className="mb-1 block text-xs font-medium text-muted-foreground">
                       Value
                     </label>
                     <input
@@ -589,11 +589,11 @@ export function Dashboard() {
                       value={recValue}
                       onChange={(e) => setRecValue(e.target.value)}
                       placeholder="IP, hostname, or text"
-                      className="w-full rounded-lg border border-[#222] bg-[#0a0a0a] px-3 py-2.5 text-sm text-[#e0e0e0] outline-none focus:border-[#ff6b35]"
+                      className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary"
                     />
                   </div>
                   <div>
-                    <label className="mb-1 block text-xs font-medium text-[#666]">
+                    <label className="mb-1 block text-xs font-medium text-muted-foreground">
                       TTL
                     </label>
                     <input
@@ -609,16 +609,16 @@ export function Dashboard() {
                       }
                       min={60}
                       max={86400}
-                      className="w-full rounded-lg border border-[#222] bg-[#0a0a0a] px-3 py-2.5 text-sm text-[#e0e0e0] outline-none focus:border-[#ff6b35]"
+                      className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary"
                     />
                   </div>
                   <div>
-                    <label className="mb-1 block text-xs font-medium text-[#666]">
+                    <label className="mb-1 block text-xs font-medium text-muted-foreground">
                       &nbsp;
                     </label>
                     <button
                       onClick={handleAddRecord}
-                      className="rounded-lg bg-[#222] px-4 py-2.5 text-sm font-semibold text-[#e0e0e0] hover:bg-[#333]"
+                      className="rounded-lg bg-secondary px-4 py-2.5 text-sm font-semibold text-foreground hover:bg-border"
                     >
                       Add
                     </button>
@@ -626,23 +626,23 @@ export function Dashboard() {
                 </div>
 
                 {pendingRecords.length > 0 && (
-                  <div data-testid="record-list" className="mb-3.5 max-h-[200px] overflow-y-auto rounded-lg border border-[#222]">
+                  <div data-testid="record-list" className="mb-3.5 max-h-[200px] overflow-y-auto rounded-lg border border-border">
                     {pendingRecords.map((r, i) => (
                       <div
                         key={i}
-                        className="flex items-center justify-between border-b border-[#222] px-3 py-2 text-sm last:border-b-0"
+                        className="flex items-center justify-between border-b border-border px-3 py-2 text-sm last:border-b-0"
                       >
                         <span>
-                          <span className="mr-2 rounded bg-[rgba(255,107,53,0.15)] px-1.5 py-0.5 text-[0.7rem] font-semibold text-[#ff6b35]">
+                          <span className="mr-2 rounded bg-primary/15 px-1.5 py-0.5 text-[0.7rem] font-semibold text-primary">
                             {r.type}
                           </span>
                           {r.displayName} → {r.value}{" "}
-                          <span className="text-[#666]">(TTL {r.ttl})</span>
+                          <span className="text-muted-foreground">(TTL {r.ttl})</span>
                         </span>
                         <button
                           data-testid="remove-record-btn"
                           onClick={() => handleRemoveRecord(i)}
-                          className="px-1 text-[#e74c3c] opacity-60 hover:opacity-100"
+                          className="px-1 text-destructive opacity-60 hover:opacity-100"
                         >
                           ×
                         </button>
@@ -652,7 +652,7 @@ export function Dashboard() {
                 )}
 
                 {pendingRecords.length > 0 && (
-                  <p data-testid="record-count" className="mb-3 text-xs text-[#666]">
+                  <p data-testid="record-count" className="mb-3 text-xs text-muted-foreground">
                     {pendingRecords.length} record
                     {pendingRecords.length > 1 ? "s" : ""} queued
                   </p>
@@ -661,13 +661,13 @@ export function Dashboard() {
                 <div className="mb-3">
                   <button
                     onClick={() => setShowCashu(!showCashu)}
-                    className="text-xs text-[#666] hover:text-[#e0e0e0]"
+                    className="text-xs text-muted-foreground hover:text-foreground"
                   >
                     {showCashu ? "▾" : "▸"} Payment (optional)
                   </button>
                   {showCashu && (
                     <div className="mt-2">
-                      <label className="mb-1 block text-xs font-medium text-[#666]">
+                      <label className="mb-1 block text-xs font-medium text-muted-foreground">
                         Cashu Token
                       </label>
                       <input
@@ -675,9 +675,9 @@ export function Dashboard() {
                         value={cashuToken}
                         onChange={(e) => setCashuToken(e.target.value)}
                         placeholder="cashuA..."
-                        className="w-full rounded-lg border border-[#222] bg-[#0a0a0a] px-3 py-2.5 text-sm text-[#e0e0e0] outline-none focus:border-[#ff6b35]"
+                        className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary"
                       />
-                      <p className="mt-1 text-xs text-[#666]">
+                      <p className="mt-1 text-xs text-muted-foreground">
                         {pricing?.enabled
                           ? `Required for new records (${pricing.create_price} sat${pricing.create_price !== 1 ? 's' : ''})`
                           : 'Optional Cashu token for payment'}
@@ -689,7 +689,7 @@ export function Dashboard() {
                 <button
                   onClick={handlePublish}
                   disabled={publishing || pendingRecords.length === 0}
-                  className="rounded-lg bg-[#ff6b35] px-4 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {publishing ? "Publishing..." : "Publish to Nostr"}
                 </button>
@@ -699,8 +699,8 @@ export function Dashboard() {
                     data-testid="publish-feedback"
                     className={`mt-3 rounded-lg border px-3.5 py-2.5 text-sm ${
                       feedback.type === "success"
-                        ? "border-[rgba(46,204,113,0.25)] bg-[rgba(46,204,113,0.1)] text-[#2ecc71]"
-                        : "border-[rgba(231,76,60,0.25)] bg-[rgba(231,76,60,0.1)] text-[#e74c3c]"
+                        ? "border-chart-2/25 bg-chart-2/10 text-chart-2"
+                        : "border-red-500/25 bg-red-500/10 text-destructive"
                     }`}
                   >
                     {feedback.message}
@@ -710,23 +710,23 @@ export function Dashboard() {
                 {verifyFqdn &&
                   feedback?.type === "success" &&
                   pipelineStatus === "idle" && (
-                    <div className="mt-4 border-t border-[#222] pt-4">
+                    <div className="mt-4 border-t border-border pt-4">
                       <h4 className="mb-2 text-sm font-semibold">
                         Verify your record
                       </h4>
-                      <pre className="mb-3 overflow-x-auto rounded-lg border border-[#222] bg-[#0a0a0a] p-3 text-xs">
+                      <pre className="mb-3 overflow-x-auto rounded-lg border border-border bg-background p-3 text-xs">
                         <code>
                           dig {keyPair?.npub}.{DEFAULT_ZONE} TXT
                         </code>
                       </pre>
                       <button
                         onClick={handleVerifyDns}
-                        className="rounded-lg bg-[#222] px-3 py-2 text-xs font-semibold text-[#e0e0e0] hover:bg-[#333]"
+                        className="rounded-lg bg-secondary px-3 py-2 text-xs font-semibold text-foreground hover:bg-border"
                       >
                         Check DNS
                       </button>
                       {verifyResult && (
-                        <p className="mt-2 text-xs text-[#bbb]">
+                        <p className="mt-2 text-xs text-foreground">
                           {verifyResult}
                         </p>
                       )}
@@ -738,23 +738,23 @@ export function Dashboard() {
         </div>
 
         {keyPair && publishedRecords.length > 0 && (
-          <div className="mt-4 rounded-[10px] border border-[#222] bg-[#141414] p-6">
+          <div className="mt-4 rounded-[10px] border border-border bg-card p-6">
             <h3 className="mb-4 text-lg font-semibold">Your Records</h3>
             <div className="space-y-2">
               {publishedRecords.map((r, i) => (
-                <div key={i} className="flex items-center justify-between rounded-lg border border-[#222] px-3 py-2">
+                <div key={i} className="flex items-center justify-between rounded-lg border border-border px-3 py-2">
                   <span className="text-sm">
-                    <span className="mr-2 rounded bg-[rgba(255,107,53,0.15)] px-1.5 py-0.5 text-[0.7rem] font-semibold text-[#ff6b35]">
+                    <span className="mr-2 rounded bg-primary/15 px-1.5 py-0.5 text-[0.7rem] font-semibold text-primary">
                       {r.type}
                     </span>
-                    <span className="text-[#e0e0e0]">{r.name === "@" ? "(root)" : r.name}</span>
-                    <span className="mx-2 text-[#666]">→</span>
-                    <span className="text-[#bbb]">{r.rdata}</span>
+                    <span className="text-foreground">{r.name === "@" ? "(root)" : r.name}</span>
+                    <span className="mx-2 text-muted-foreground">→</span>
+                    <span className="text-foreground">{r.rdata}</span>
                   </span>
                   <button
                     onClick={() => handleDelete(r)}
                     disabled={deleting}
-                    className="rounded px-2 py-1 text-xs font-semibold text-[#e74c3c] transition-colors hover:bg-[rgba(231,76,60,0.15)] disabled:opacity-50"
+                    className="rounded px-2 py-1 text-xs font-semibold text-destructive transition-colors hover:bg-red-500/15 disabled:opacity-50"
                   >
                     Delete
                   </button>

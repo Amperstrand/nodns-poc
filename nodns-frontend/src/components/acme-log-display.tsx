@@ -45,36 +45,36 @@ function LogEntry({
   return (
     <div className="flex gap-3">
       {/* Timeline dot and line */}
-      <div className="flex flex-col items-center">
-        <div
-          className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${
-            isLatest && !isComplete
-              ? "animate-pulse bg-[#ff6b35]"
-              : "bg-[#444]"
-          }`}
-        />
-        {!isLatest && <div className="w-px flex-1 bg-[#222]" />}
+        <div className="flex flex-col items-center">
+         <div
+           className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${
+             isLatest && !isComplete
+               ? "animate-pulse bg-primary"
+               : "bg-muted-foreground/50"
+           }`}
+         />
+         {!isLatest && <div className="w-px flex-1 bg-border" />}
       </div>
 
       {/* Content */}
       <div className="min-w-0 flex-1 pb-3">
         <div className="flex items-baseline gap-2">
-          <span className="shrink-0 font-mono text-[0.7rem] text-[#666]">
+          <span className="shrink-0 font-mono text-[0.7rem] text-muted-foreground">
             {formatTimestamp(entry.created_at)}
           </span>
           <span className="text-sm">{icon}</span>
-          <span className="text-sm text-[#bbb]">{entry.message}</span>
+          <span className="text-sm text-foreground">{entry.message}</span>
         </div>
         {entry.details && (
           <button
             onClick={() => setExpanded(!expanded)}
-            className="mt-1 text-[0.65rem] text-[#666] hover:text-[#999]"
+            className="mt-1 text-[0.65rem] text-muted-foreground hover:text-foreground"
           >
             {expanded ? "▾ hide details" : "▸ show details"}
           </button>
         )}
         {entry.details && expanded && (
-          <pre className="mt-1 max-h-[80px] overflow-y-auto rounded bg-[#0a0a0a] p-2 font-mono text-[0.6rem] text-[#888]">
+          <pre className="mt-1 max-h-[80px] overflow-y-auto rounded bg-background p-2 font-mono text-[0.6rem] text-muted-foreground">
             {formatDetails(entry.details)}
           </pre>
         )}
@@ -103,8 +103,8 @@ export function AcmeLogDisplay({ logs, isComplete }: AcmeLogDisplayProps) {
   if (logs.length === 0) return null;
 
   return (
-    <div className="rounded-lg border border-[#222] bg-[#141414] p-3">
-      <div className="mb-2 text-[0.7rem] uppercase tracking-wider text-[#666]">
+    <div className="rounded-lg border border-border bg-card p-3">
+      <div className="mb-2 text-[0.7rem] uppercase tracking-wider text-muted-foreground">
         ACME Progress
       </div>
       <div

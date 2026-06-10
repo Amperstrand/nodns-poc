@@ -1,8 +1,8 @@
 # 04 — Demo Setup Guide
 
-> **Status**: ACTIVE. VPS setup guide for a NoDNS zone.
+> **Status**: ACTIVE. VPS setup guide for a NoDNS zone. **Note**: Some parts reference the old Go bot and `nostr.cv` domain. The Rust bot (`nodns-bot-rs/`) is now authoritative. Multi-zone support (e.g., `nodns.shop` + `.nostr`) and DoH resolver setup are documented in [08-deployment-status.md](08-deployment-status.md).
 
-This guide covers setting up the `nostr.cv` NoDNS demo on a VPS. After setup, any Nostr user will be able to publish a kind 11111 event and have their domain resolve globally.
+This guide covers setting up a NoDNS zone on a VPS. After setup, any Nostr user will be able to publish a kind 11111 event and have their domain resolve globally.
 
 ## Prerequisites
 

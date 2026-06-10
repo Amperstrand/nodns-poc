@@ -95,7 +95,7 @@ docs/                           content/
 ```
 
 - **`docs/`** = authoritative source with full reasoning, alternatives considered, open questions
-- **`content/consensus.json`** = curated JSON for websites (comparison table, 8 models, status badges, principle)
+- **`content/consensus.json`** = curated JSON for websites (comparison table, 9 models, status badges, principle)
 - **If they conflict**: docs win. The JSON is a summary, not the source.
 
 ## Adding a New Doc

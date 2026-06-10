@@ -40,7 +40,7 @@ function CopyButton({ text, label }: { text: string; label: string }) {
   return (
     <button
       onClick={handleCopy}
-      className="rounded bg-[#222] px-2 py-0.5 text-[0.7rem] text-[#666] transition-colors hover:text-[#e0e0e0]"
+      className="rounded bg-secondary px-2 py-0.5 text-[0.7rem] text-muted-foreground transition-colors hover:text-foreground"
     >
       {copied ? "Copied!" : label}
     </button>
@@ -168,19 +168,19 @@ export function CertRequest({ domain, disabled, nsecBytes, npub }: CertRequestPr
 
   return (
     <div className="mt-6">
-      <div className="mb-6 border-t border-[#222]" />
+      <div className="mb-6 border-t border-border" />
 
-      <div className="rounded-[10px] border border-[#222] bg-[#141414] p-5">
+      <div className="rounded-[10px] border border-border bg-card p-5">
         <div className="mb-3 flex items-center gap-3">
           <h3 className="text-lg font-semibold">HTTPS Certificate</h3>
           {environment && (
             <span
               className={`rounded-full px-2.5 py-0.5 text-[0.6rem] font-bold uppercase tracking-wider ${
                 environment === "zerossl"
-                  ? "bg-[rgba(52,152,219,0.15)] text-[#3498db]"
+                  ? "bg-chart-3/15 text-chart-3"
                   : environment === "production" || environment === "letsencrypt-production"
-                    ? "bg-[rgba(46,204,113,0.15)] text-[#2ecc71]"
-                    : "bg-[rgba(255,107,53,0.15)] text-[#ff6b35]"
+                    ? "bg-chart-2/15 text-chart-2"
+                    : "bg-primary/15 text-primary"
               }`}
             >
               {environment === "zerossl"
@@ -203,9 +203,9 @@ export function CertRequest({ domain, disabled, nsecBytes, npub }: CertRequestPr
                   value="zerossl"
                   checked={acmeCa === "zerossl"}
                   onChange={() => setAcmeCa("zerossl")}
-                  className="accent-[#3498db]"
+                  className="accent-chart-3"
                 />
-                <span className="text-[#3498db] font-semibold">ZeroSSL</span>
+                <span className="text-chart-3 font-semibold">ZeroSSL</span>
               </label>
               <label className="flex cursor-pointer items-center gap-1.5">
                 <input
@@ -214,9 +214,9 @@ export function CertRequest({ domain, disabled, nsecBytes, npub }: CertRequestPr
                   value="letsencrypt-staging"
                   checked={acmeCa === "letsencrypt-staging"}
                   onChange={() => setAcmeCa("letsencrypt-staging")}
-                  className="accent-[#ff6b35]"
+                  className="accent-primary"
                 />
-                <span className="text-[#ff6b35] font-semibold">LE Staging</span>
+                <span className="text-primary font-semibold">LE Staging</span>
               </label>
               <label className="flex cursor-pointer items-center gap-1.5">
                 <input
@@ -225,24 +225,24 @@ export function CertRequest({ domain, disabled, nsecBytes, npub }: CertRequestPr
                   value="letsencrypt-production"
                   checked={acmeCa === "letsencrypt-production"}
                   onChange={() => setAcmeCa("letsencrypt-production")}
-                  className="accent-[#2ecc71]"
+                  className="accent-chart-2"
                 />
-                <span className="text-[#2ecc71] font-semibold">LE Production</span>
+                <span className="text-chart-2 font-semibold">LE Production</span>
               </label>
             </div>
             {acmeCa === "letsencrypt-production" && (
-              <p className="mb-3 text-xs text-[#e8a49c]">
+              <p className="mb-3 text-xs text-red-400">
                 ⚠️ Production certificates count against Let's Encrypt rate limits (5 per week per domain). Use Staging for testing.
               </p>
             )}
             <button
               onClick={handleRequest}
               disabled={disabled || loading}
-              className="rounded-lg bg-[#222] px-4 py-2.5 text-sm font-semibold text-[#e0e0e0] transition-colors hover:bg-[#333] disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-lg bg-secondary px-4 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-border disabled:cursor-not-allowed disabled:opacity-50"
             >
               {loading ? "Requesting..." : "Get HTTPS Certificate"}
             </button>
-            <p className="mt-2 text-xs text-[#666]">
+            <p className="mt-2 text-xs text-muted-foreground">
               {nsecBytes ? (
                 <>
                   🔒 Your private key is derived from your nsec and never leaves
@@ -257,12 +257,12 @@ export function CertRequest({ domain, disabled, nsecBytes, npub }: CertRequestPr
               )}
             </p>
             {disabled && (
-              <p className="mt-1 text-xs text-[#666]">
+              <p className="mt-1 text-xs text-muted-foreground">
                 Publish at least one DNS record first.
               </p>
             )}
             {derivationError && (
-              <p className="mt-1 text-xs text-[#ff6b35]">
+              <p className="mt-1 text-xs text-primary">
                 ⚠️ Key derivation failed ({derivationError}). Falling back to
                 server-generated key.
               </p>
@@ -273,12 +273,12 @@ export function CertRequest({ domain, disabled, nsecBytes, npub }: CertRequestPr
         {/* Error */}
         {error && (
           <div className="space-y-3">
-            <div className="rounded-lg border border-[rgba(231,76,60,0.25)] bg-[rgba(231,76,60,0.08)] px-4 py-3 text-sm text-[#e74c3c]">
+            <div className="rounded-lg border border-red-500/25 bg-red-500/8 px-4 py-3 text-sm text-destructive">
               ❌ {error}
             </div>
             <button
               onClick={handleReset}
-              className="rounded-lg bg-[#222] px-3 py-2 text-xs font-semibold text-[#e0e0e0] hover:bg-[#333]"
+              className="rounded-lg bg-secondary px-3 py-2 text-xs font-semibold text-foreground hover:bg-border"
             >
               Try Again
             </button>
@@ -288,9 +288,9 @@ export function CertRequest({ domain, disabled, nsecBytes, npub }: CertRequestPr
         {/* In-progress: ACME logs */}
         {orderStatus && isInProgress && (
           <div className="space-y-3">
-            <div className="flex items-center gap-3 rounded-lg border border-[#222] bg-[#0a0a0a] px-4 py-3">
-              <span className="inline-block h-3 w-3 animate-pulse rounded-full bg-[#ff6b35]" />
-              <span className="text-sm text-[#ff6b35]">
+            <div className="flex items-center gap-3 rounded-lg border border-border bg-background px-4 py-3">
+              <span className="inline-block h-3 w-3 animate-pulse rounded-full bg-primary" />
+              <span className="text-sm text-primary">
                 {status === "pending" && "Creating certificate order..."}
                 {status === "challenge_published" &&
                   "DNS challenge published, waiting for verification..."}
@@ -299,8 +299,8 @@ export function CertRequest({ domain, disabled, nsecBytes, npub }: CertRequestPr
               </span>
             </div>
             <AcmeLogDisplay logs={logs} isComplete={false} />
-            <p className="text-xs text-[#666]">
-              Domain: <code className="text-[#bbb]">{orderStatus.domain}</code>
+            <p className="text-xs text-muted-foreground">
+              Domain: <code className="text-foreground">{orderStatus.domain}</code>
             </p>
           </div>
         )}
@@ -308,11 +308,11 @@ export function CertRequest({ domain, disabled, nsecBytes, npub }: CertRequestPr
         {/* Issued */}
         {orderStatus && status === "issued" && (
           <div className="space-y-4">
-            <div className="rounded-lg border border-[rgba(46,204,113,0.25)] bg-[rgba(46,204,113,0.08)] px-4 py-3 text-center">
-              <p className="text-sm font-semibold text-[#2ecc71]">
+            <div className="rounded-lg border border-chart-2/25 bg-chart-2/8 px-4 py-3 text-center">
+              <p className="text-sm font-semibold text-chart-2">
                 ✅ Certificate ready!
               </p>
-              <p className="mt-1 text-xs text-[#666]">
+              <p className="mt-1 text-xs text-muted-foreground">
                 Certificate valid for 90 days
               </p>
             </div>
@@ -340,10 +340,10 @@ export function CertRequest({ domain, disabled, nsecBytes, npub }: CertRequestPr
                       `${orderStatus.domain}-cert.pem`,
                     )
                   }
-                  className="rounded-lg bg-[#222] px-3 py-2 text-xs font-semibold text-[#e0e0e0] transition-colors hover:bg-[#333]"
-                >
-                  ⬇ Certificate (.pem)
-                </button>
+                  className="rounded-lg bg-secondary px-3 py-2 text-xs font-semibold text-foreground transition-colors hover:bg-border"
+                  >
+                    ⬇ Certificate (.pem)
+                  </button>
                 {effectivePrivateKeyPem && (
                   <button
                     onClick={() =>
@@ -352,7 +352,7 @@ export function CertRequest({ domain, disabled, nsecBytes, npub }: CertRequestPr
                         `${orderStatus.domain}-key.pem`,
                       )
                     }
-                    className="rounded-lg bg-[#222] px-3 py-2 text-xs font-semibold text-[#e0e0e0] transition-colors hover:bg-[#333]"
+                    className="rounded-lg bg-secondary px-3 py-2 text-xs font-semibold text-foreground transition-colors hover:bg-border"
                   >
                     ⬇ Private Key (.pem)
                   </button>
@@ -367,7 +367,7 @@ export function CertRequest({ domain, disabled, nsecBytes, npub }: CertRequestPr
                         `${orderStatus.domain}-combined.pem`,
                       )
                     }
-                    className="rounded-lg bg-[#222] px-3 py-2 text-xs font-semibold text-[#e0e0e0] transition-colors hover:bg-[#333]"
+                    className="rounded-lg bg-secondary px-3 py-2 text-xs font-semibold text-foreground transition-colors hover:bg-border"
                   >
                     ⬇ Combined (.pem)
                   </button>
@@ -377,9 +377,9 @@ export function CertRequest({ domain, disabled, nsecBytes, npub }: CertRequestPr
 
             {/* Certificate PEM */}
             {orderStatus.certificate_pem && (
-              <div className="rounded-lg border border-[#222] bg-[#0a0a0a] p-3">
+              <div className="rounded-lg border border-border bg-background p-3">
                 <div className="mb-2 flex items-center justify-between">
-                  <div className="text-[0.7rem] uppercase tracking-wider text-[#666]">
+                  <div className="text-[0.7rem] uppercase tracking-wider text-muted-foreground">
                     Certificate PEM
                   </div>
                   <div className="flex gap-1">
@@ -389,7 +389,7 @@ export function CertRequest({ domain, disabled, nsecBytes, npub }: CertRequestPr
                     />
                   </div>
                 </div>
-                <pre className="max-h-[120px] overflow-y-auto break-all font-mono text-xs text-[#bbb]">
+                <pre className="max-h-[120px] overflow-y-auto break-all font-mono text-xs text-foreground">
                   {orderStatus.certificate_pem.slice(0, 300)}
                   ...
                 </pre>
@@ -398,9 +398,9 @@ export function CertRequest({ domain, disabled, nsecBytes, npub }: CertRequestPr
 
             {/* Private Key */}
             {effectivePrivateKeyPem && (
-              <div className="rounded-lg border border-[rgba(231,76,60,0.15)] bg-[#0a0a0a] p-3">
+              <div className="rounded-lg border border-red-500/15 bg-background p-3">
                 <div className="mb-2 flex items-center justify-between">
-                  <div className="text-[0.7rem] uppercase tracking-wider text-[#666]">
+                  <div className="text-[0.7rem] uppercase tracking-wider text-muted-foreground">
                     Private Key
                   </div>
                   <div className="flex gap-1">
@@ -408,14 +408,14 @@ export function CertRequest({ domain, disabled, nsecBytes, npub }: CertRequestPr
                   </div>
                 </div>
                 {showKey ? (
-                  <pre className="max-h-[120px] overflow-y-auto break-all font-mono text-xs text-[#bbb]">
+                  <pre className="max-h-[120px] overflow-y-auto break-all font-mono text-xs text-foreground">
                     {effectivePrivateKeyPem.slice(0, 300)}
                     ...
                   </pre>
                 ) : (
                   <button
                     onClick={() => setShowKey(true)}
-                    className="text-xs text-[#ff6b35] hover:underline"
+                    className="text-xs text-primary hover:underline"
                   >
                     Click to reveal private key
                   </button>
@@ -424,7 +424,7 @@ export function CertRequest({ domain, disabled, nsecBytes, npub }: CertRequestPr
             )}
 
             {/* Security note */}
-            <div className="rounded-lg border border-[rgba(231,76,60,0.15)] bg-[rgba(231,76,60,0.05)] px-4 py-3 text-xs text-[#e8a49c]">
+            <div className="rounded-lg border border-red-500/15 bg-red-500/5 px-4 py-3 text-xs text-red-400">
               {usedClientDerivation.current ? (
                 <>
                   🔒 Your private key was derived from your nsec and{" "}
@@ -442,7 +442,7 @@ export function CertRequest({ domain, disabled, nsecBytes, npub }: CertRequestPr
             {/* Try Again */}
             <button
               onClick={handleReset}
-              className="rounded-lg bg-[#222] px-3 py-2 text-xs font-semibold text-[#e0e0e0] hover:bg-[#333]"
+              className="rounded-lg bg-secondary px-3 py-2 text-xs font-semibold text-foreground hover:bg-border"
             >
               Request New Certificate
             </button>
@@ -452,7 +452,7 @@ export function CertRequest({ domain, disabled, nsecBytes, npub }: CertRequestPr
         {/* Failed */}
         {orderStatus && status === "failed" && (
           <div className="space-y-3">
-            <div className="rounded-lg border border-[rgba(231,76,60,0.25)] bg-[rgba(231,76,60,0.08)] px-4 py-3 text-sm text-[#e74c3c]">
+            <div className="rounded-lg border border-red-500/25 bg-red-500/8 px-4 py-3 text-sm text-destructive">
               ❌ Certificate failed: {orderStatus.error || "Unknown error"}
             </div>
             {logs.length > 0 && (
@@ -460,7 +460,7 @@ export function CertRequest({ domain, disabled, nsecBytes, npub }: CertRequestPr
             )}
             <button
               onClick={handleReset}
-              className="rounded-lg bg-[#222] px-3 py-2 text-xs font-semibold text-[#e0e0e0] hover:bg-[#333]"
+              className="rounded-lg bg-secondary px-3 py-2 text-xs font-semibold text-foreground hover:bg-border"
             >
               Try Again
             </button>

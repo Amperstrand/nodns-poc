@@ -285,7 +285,7 @@ export function CertDisplay({ certificatePem, acmeEnvironment }: CertDisplayProp
 
   if (parseError) {
     return (
-      <div className="rounded-lg border border-[rgba(231,76,60,0.25)] bg-[rgba(231,76,60,0.08)] px-4 py-3 text-sm text-[#e74c3c]">
+      <div className="rounded-lg border border-red-500/25 bg-red-500/8 px-4 py-3 text-sm text-destructive">
         Failed to parse certificate: {parseError}
       </div>
     );
@@ -293,7 +293,7 @@ export function CertDisplay({ certificatePem, acmeEnvironment }: CertDisplayProp
 
   if (!certInfo) {
     return (
-      <div className="rounded-lg border border-[#222] bg-[#0a0a0a] px-4 py-3 text-sm text-[#666]">
+      <div className="rounded-lg border border-border bg-background px-4 py-3 text-sm text-muted-foreground">
         Parsing certificate...
       </div>
     );
@@ -313,19 +313,19 @@ export function CertDisplay({ certificatePem, acmeEnvironment }: CertDisplayProp
         ? "Expired"
         : "Not yet valid";
 
-  const validityColor =
-    certInfo.validityStatus === "valid" ? "#2ecc71" : "#e74c3c";
+  const validityClass =
+    certInfo.validityStatus === "valid" ? "text-chart-2" : "text-destructive";
 
   const isStaging = acmeEnvironment === "staging" || acmeEnvironment === "letsencrypt-staging";
 
   return (
-    <div className="rounded-lg border border-[#222] bg-[#0a0a0a] p-4">
+    <div className="rounded-lg border border-border bg-background p-4">
       <div className="mb-3 flex items-center gap-2">
-        <span className="text-sm font-semibold text-[#e0e0e0]">
+        <span className="text-sm font-semibold text-foreground">
           Certificate Details
         </span>
         {isStaging && (
-          <span className="rounded-full bg-[rgba(255,107,53,0.15)] px-2 py-0.5 text-[0.6rem] font-bold uppercase tracking-wider text-[#ff6b35]">
+          <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[0.6rem] font-bold uppercase tracking-wider text-primary">
             Staging
           </span>
         )}
@@ -343,19 +343,19 @@ export function CertDisplay({ certificatePem, acmeEnvironment }: CertDisplayProp
           value={`${formatDate(certInfo.notBefore)} → ${formatDate(certInfo.notAfter)}`}
         />
         <div className="flex items-start gap-3">
-          <span className="shrink-0 text-[#666]">Status</span>
-          <span style={{ color: validityColor }}>
+          <span className="shrink-0 text-muted-foreground">Status</span>
+          <span className={validityClass}>
             {validityIcon} {validityText}
           </span>
         </div>
         {certInfo.sans.length > 0 && (
           <div className="flex items-start gap-3">
-            <span className="shrink-0 text-[#666]">SANs</span>
-            <div className="flex flex-wrap gap-1">
-              {certInfo.sans.map((san, i) => (
-                <span
-                  key={i}
-                  className="rounded bg-[rgba(46,204,113,0.1)] px-1.5 py-0.5 text-[#2ecc71]"
+             <span className="shrink-0 text-muted-foreground">SANs</span>
+             <div className="flex flex-wrap gap-1">
+               {certInfo.sans.map((san, i) => (
+                 <span
+                   key={i}
+                   className="rounded bg-chart-2/10 px-1.5 py-0.5 text-chart-2"
                 >
                   {san}
                 </span>
@@ -372,8 +372,8 @@ export function CertDisplay({ certificatePem, acmeEnvironment }: CertDisplayProp
           value={`${certInfo.publicKeyAlgorithm}${certInfo.publicKeySize ? ` (${certInfo.publicKeySize})` : ""}`}
         />
         <div className="flex items-start gap-3">
-          <span className="shrink-0 text-[#666]">SHA-256</span>
-          <span className="break-all text-[#bbb]">
+           <span className="shrink-0 text-muted-foreground">SHA-256</span>
+           <span className="break-all text-foreground">
             {certInfo.thumbprintSha256}
           </span>
         </div>
@@ -385,8 +385,8 @@ export function CertDisplay({ certificatePem, acmeEnvironment }: CertDisplayProp
 function CertField({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-start gap-3">
-      <span className="shrink-0 text-[#666]">{label}</span>
-      <span className="break-all text-[#bbb]">{value}</span>
+      <span className="shrink-0 text-muted-foreground">{label}</span>
+      <span className="break-all text-foreground">{value}</span>
     </div>
   );
 }

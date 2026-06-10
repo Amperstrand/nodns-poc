@@ -31,12 +31,12 @@ export function Infrastructure() {
           {infraCards.map((card) => (
             <div
               key={card.title}
-              className="rounded-lg border border-[#222] bg-[#141414] p-4"
+              className="rounded-lg border border-border bg-card p-4"
             >
-              <h4 className="mb-1 text-sm font-semibold text-[#e0e0e0]">
+              <h4 className="mb-1 text-sm font-semibold text-foreground">
                 {card.title}
               </h4>
-              <p className="mb-0 text-xs text-[#666]">{card.desc}</p>
+              <p className="mb-0 text-xs text-muted-foreground">{card.desc}</p>
             </div>
           ))}
         </div>

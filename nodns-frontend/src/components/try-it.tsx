@@ -46,10 +46,10 @@ export function TryIt() {
         <h2 className="mb-6 text-[1.75rem] font-bold tracking-tight">
           Try It Now
         </h2>
-        <p className="mb-4 text-[#bbb]">
+        <p className="mb-4 text-foreground">
           Test resolution against the nodns.shop nameserver:
         </p>
-        <pre className="mb-4 overflow-x-auto rounded-lg border border-[#222] bg-[#141414] p-4 text-[0.85rem] leading-relaxed">
+        <pre className="mb-4 overflow-x-auto rounded-lg border border-border bg-card p-4 text-[0.85rem] leading-relaxed">
           <code>{`# Query an A record (resolves to 185.18.221.10)
 dig npub190queyng2pmx0jfw5rkx4fjjl3u0zxz6nlyaja53p2n0ydupr6jsdnqt8q.nodns.shop A
 
@@ -64,11 +64,11 @@ dig +trace npub190queyng2pmx0jfw5rkx4fjjl3u0zxz6nlyaja53p2n0ydupr6jsdnqt8q.nodns
         </pre>
 
         {/* In-Browser DoH Lookup */}
-        <div className="mt-6 border-t border-[#222] pt-6">
+        <div className="mt-6 border-t border-border pt-6">
           <h3 className="mb-3 text-lg font-semibold">
             In-Browser DNS Lookup
           </h3>
-          <p className="mb-4 text-sm text-[#666]">
+          <p className="mb-4 text-sm text-muted-foreground">
             Resolve DNS records directly from your browser via Cloudflare
             DNS-over-HTTPS:
           </p>
@@ -78,12 +78,12 @@ dig +trace npub190queyng2pmx0jfw5rkx4fjjl3u0zxz6nlyaja53p2n0ydupr6jsdnqt8q.nodns
               value={dohFqdn}
               onChange={(e) => setDohFqdn(e.target.value)}
               placeholder="Enter FQDN"
-              className="flex-1 rounded-lg border border-[#222] bg-[#0a0a0a] px-3 py-2.5 text-sm text-[#e0e0e0] outline-none focus:border-[#ff6b35]"
+              className="flex-1 rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary"
             />
             <select
               value={dohType}
               onChange={(e) => setDohType(e.target.value)}
-              className="w-auto rounded-lg border border-[#222] bg-[#0a0a0a] px-3 py-2.5 text-sm text-[#e0e0e0] outline-none"
+              className="w-auto rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground outline-none"
             >
               <option value="A">A</option>
               <option value="TXT">TXT</option>
@@ -94,13 +94,13 @@ dig +trace npub190queyng2pmx0jfw5rkx4fjjl3u0zxz6nlyaja53p2n0ydupr6jsdnqt8q.nodns
             <button
               onClick={handleLookup}
               disabled={dohLoading}
-              className="rounded-lg bg-[#ff6b35] px-3 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
+              className="rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-50"
             >
               Lookup
             </button>
           </div>
           {dohResults && (
-            <pre className="overflow-x-auto rounded-lg border border-[#222] bg-[#141414] p-4 text-xs leading-relaxed">
+            <pre className="overflow-x-auto rounded-lg border border-border bg-card p-4 text-xs leading-relaxed">
               <code>{dohResults}</code>
             </pre>
           )}

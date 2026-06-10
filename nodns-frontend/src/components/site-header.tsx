@@ -32,7 +32,7 @@ export function SiteHeader() {
   };
 
   return (
-    <header className="sticky top-0 z-50 border-b border-border bg-[rgba(10,10,10,0.95)] backdrop-blur-[12px]">
+    <header className="sticky top-0 z-50 border-b border-border bg-background/95 backdrop-blur-[12px]">
       <div className="mx-auto flex max-w-[960px] items-center justify-between gap-3 px-6 py-4">
         {/* Logo */}
         <Link href="/" className="text-xl font-bold tracking-tight shrink-0">
