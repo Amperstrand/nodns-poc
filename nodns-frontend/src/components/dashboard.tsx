@@ -12,6 +12,8 @@ import { DEFAULT_ZONE } from "@/lib/constants";
 import { validateRecord } from "@/lib/validation";
 import { fetchZonePricing, type ZonePricing } from "@/lib/api";
 import type { KeyPair, PendingRecord, DnsRecord, FeedbackType } from "@/lib/types";
+
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "";
 import {
   PublishPipeline,
   type PipelineStatus,
@@ -344,7 +346,7 @@ export function Dashboard() {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 30_000);
     try {
-      const res = await fetch("/api/records", { signal: controller.signal });
+      const res = await fetch(`${API_BASE}/api/records`, { signal: controller.signal });
       if (!res.ok) return;
       const data = await res.json();
       const mine = (data.records || []).filter((r: DnsRecord) => r.npub === keyPair.npub);

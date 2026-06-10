@@ -7,6 +7,8 @@ import { queryDoh } from "@/lib/dns";
 import type { DnsRecord, ApiRecordsResponse, EventWithRelay, NostrEvent } from "@/lib/types";
 import { subscribeToDnsEvents } from "@/lib/nostr";
 
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "";
+
 export function RecordBrowser() {
   const [activeTab, setActiveTab] = useState("api");
   const [records, setRecords] = useState<DnsRecord[]>([]);
@@ -29,7 +31,7 @@ export function RecordBrowser() {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 30_000);
     try {
-      const resp = await fetch("/api/records", { signal: controller.signal });
+      const resp = await fetch(`${API_BASE}/api/records`, { signal: controller.signal });
       if (!resp.ok) {
         setRecords([]);
         return;
