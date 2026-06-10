@@ -10,7 +10,14 @@ export function SiteFooter() {
           nodns.shop
         </a>
         <span className="mx-2">&middot;</span>
-        <span className="text-muted-foreground">You&apos;re on the beta</span>
+        <a
+          href="https://github.com/Amperstrand/nodns-poc"
+          className="text-primary hover:underline"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          GitHub
+        </a>
       </p>
     </footer>
   );

@@ -66,9 +66,9 @@ const ROADMAP_ITEMS: RoadmapEntry[] = [
 ];
 
 const STATUS_STYLES: Record<RoadmapStatus, string> = {
-  done: "bg-[rgba(46,204,113,0.15)] text-[#2ecc71]",
-  wip: "bg-[rgba(255,107,53,0.15)] text-[#ff6b35]",
-  planned: "bg-[rgba(102,102,102,0.2)] text-[#666]",
+  done: "bg-emerald-950/30 text-emerald-400",
+  wip: "bg-primary/10 text-primary",
+  planned: "bg-secondary text-muted-foreground",
 };
 
 const STATUS_LABELS: Record<RoadmapStatus, string> = {
@@ -84,11 +84,11 @@ export function Roadmap() {
         <h2 className="mb-6 text-[1.75rem] font-bold tracking-tight">
           Roadmap
         </h2>
-        <div className="rounded-[10px] border border-[#222] bg-[#141414] p-6">
+        <div className="rounded-xl border border-border bg-card p-6">
           {ROADMAP_ITEMS.map((item, i) => (
             <div
               key={item.title}
-              className={`flex items-center gap-3 py-3 ${i < ROADMAP_ITEMS.length - 1 ? "border-b border-[#222]" : ""}`}
+              className={`flex items-center gap-3 py-3 ${i < ROADMAP_ITEMS.length - 1 ? "border-b border-border" : ""}`}
             >
               <div className="min-w-[48px]">
                 <span

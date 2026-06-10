@@ -5,13 +5,13 @@ export function ProtocolSpec() {
         <h2 className="mb-6 text-[1.75rem] font-bold tracking-tight">
           Protocol Specification
         </h2>
-        <p className="mb-4 text-[#bbb]">
+        <p className="mb-4 text-muted-foreground">
           Nostr kind 11111 events with structured tags for DNS records,
           delegation, payments, and registrar management.
         </p>
 
         <h3 className="mb-3 text-lg font-semibold">Event Structure</h3>
-        <pre className="mb-4 overflow-x-auto rounded-lg border border-[#222] bg-[#141414] p-4 text-[0.85rem] leading-relaxed">
+        <pre className="mb-4 overflow-x-auto rounded-lg border border-border bg-card p-4 text-[0.85rem] leading-relaxed">
           <code>{`{
   "kind": 11111,
   "pubkey": "<hex public key>",
@@ -32,76 +32,76 @@ export function ProtocolSpec() {
           <table className="w-full text-sm">
             <thead>
               <tr>
-                <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-[#666]">
+                <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                   Tag
                 </th>
-                <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-[#666]">
+                <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                   Format
                 </th>
-                <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-[#666]">
+                <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                   Description
                 </th>
               </tr>
             </thead>
             <tbody>
-              <tr className="border-b border-[#222]">
-                <td className="px-3 py-2.5 font-semibold text-[#e0e0e0] whitespace-nowrap">
+              <tr className="border-b border-border">
+                <td className="px-3 py-2.5 font-semibold text-foreground whitespace-nowrap">
                   record
                 </td>
                 <td className="px-3 py-2.5 font-mono text-xs">
                   [&quot;record&quot;, TYPE, NAME, RDATA, &quot;&quot;, &quot;&quot;,
                   &quot;&quot;, &quot;&quot;, &quot;&quot;, &quot;&quot;, TTL]
                 </td>
-                <td className="px-3 py-2.5 text-[#bbb]">
+                <td className="px-3 py-2.5 text-muted-foreground">
                   DNS record entry. 11-element fixed array for forward
                   compatibility.
                 </td>
               </tr>
-              <tr className="border-b border-[#222]">
-                <td className="px-3 py-2.5 font-semibold text-[#e0e0e0] whitespace-nowrap">
+              <tr className="border-b border-border">
+                <td className="px-3 py-2.5 font-semibold text-foreground whitespace-nowrap">
                   delegation
                 </td>
                 <td className="px-3 py-2.5 font-mono text-xs">
                   [&quot;delegation&quot;, DOMAIN, NPUB, VALID_FROM, VALID_UNTIL,
                   RENEW_BY]
                 </td>
-                <td className="px-3 py-2.5 text-[#bbb]">
+                <td className="px-3 py-2.5 text-muted-foreground">
                   Grants a pubkey control over a human-readable name within a
                   zone.
                 </td>
               </tr>
-              <tr className="border-b border-[#222]">
-                <td className="px-3 py-2.5 font-semibold text-[#e0e0e0] whitespace-nowrap">
+              <tr className="border-b border-border">
+                <td className="px-3 py-2.5 font-semibold text-foreground whitespace-nowrap">
                   registrar
                 </td>
                 <td className="px-3 py-2.5 font-mono text-xs">
                   [&quot;registrar&quot;, ZONE, PUBKEY_HEX]
                 </td>
-                <td className="px-3 py-2.5 text-[#bbb]">
+                <td className="px-3 py-2.5 text-muted-foreground">
                   Identifies the registrar authority for a zone. Only this key
                   can issue delegations.
                 </td>
               </tr>
-              <tr className="border-b border-[#222]">
-                <td className="px-3 py-2.5 font-semibold text-[#e0e0e0] whitespace-nowrap">
+              <tr className="border-b border-border">
+                <td className="px-3 py-2.5 font-semibold text-foreground whitespace-nowrap">
                   cashu
                 </td>
                 <td className="px-3 py-2.5 font-mono text-xs">
                   [&quot;cashu&quot;, TOKEN, MINT_URL, AMOUNT]
                 </td>
-                <td className="px-3 py-2.5 text-[#bbb]">
+                <td className="px-3 py-2.5 text-muted-foreground">
                   Anti-spam payment via Cashu ecash tokens (250 sats per new
                   record).
                 </td>
               </tr>
-              <tr className="border-b border-[#222]">
-                <td className="px-3 py-2.5 font-semibold text-[#e0e0e0] whitespace-nowrap">
+              <tr className="border-b border-border">
+                <td className="px-3 py-2.5 font-semibold text-foreground whitespace-nowrap">
                   zap
                 </td>
                 <td className="px-3 py-2.5 font-mono text-xs">
                   [&quot;zap&quot;, ZAP_RECEIPT_EVENT_ID, AMOUNT]
                 </td>
-                <td className="px-3 py-2.5 text-[#bbb]">
+                <td className="px-3 py-2.5 text-muted-foreground">
                   Payment proof via NIP-57 zap receipts.
                 </td>
               </tr>
@@ -116,13 +116,13 @@ export function ProtocolSpec() {
           <table className="w-full text-sm">
             <thead>
               <tr>
-                <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-[#666]">
+                <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                   Index
                 </th>
-                <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-[#666]">
+                <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                   Field
                 </th>
-                <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-[#666]">
+                <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                   Description
                 </th>
               </tr>
@@ -144,14 +144,14 @@ export function ProtocolSpec() {
                 ["4-9", "unused", "Empty strings (legacy padding)"],
                 ["10", "ttl", "TTL in seconds (as string)"],
               ].map(([idx, field, desc]) => (
-                <tr key={idx} className="border-b border-[#222]">
-                  <td className="px-3 py-2.5 font-semibold text-[#e0e0e0]">
+                <tr key={idx} className="border-b border-border">
+                  <td className="px-3 py-2.5 font-semibold text-foreground">
                     {idx}
                   </td>
-                  <td className="px-3 py-2.5 font-semibold text-[#e0e0e0]">
+                  <td className="px-3 py-2.5 font-semibold text-foreground">
                     {field}
                   </td>
-                  <td className="px-3 py-2.5 text-[#bbb]">{desc}</td>
+                  <td className="px-3 py-2.5 text-muted-foreground">{desc}</td>
                 </tr>
               ))}
             </tbody>
@@ -159,7 +159,7 @@ export function ProtocolSpec() {
         </div>
 
         <h3 className="mb-3 text-lg font-semibold">FQDN Construction</h3>
-        <pre className="mb-4 overflow-x-auto rounded-lg border border-[#222] bg-[#141414] p-4 text-[0.85rem] leading-relaxed">
+        <pre className="mb-4 overflow-x-auto rounded-lg border border-border bg-card p-4 text-[0.85rem] leading-relaxed">
           <code>{`{name}.{npub}.{zone}
 
 Examples (full npub truncated for readability):
@@ -175,18 +175,18 @@ Delegated names:
         <h3 className="mb-3 text-lg font-semibold">
           Delegation &amp; Custom Names
         </h3>
-        <p className="mb-4 text-[#bbb]">
-          A zone registrar (identified by a <code className="font-mono text-[#ff6b35]">registrar</code> tag)
+        <p className="mb-4 text-muted-foreground">
+          A zone registrar (identified by a <code className="font-mono text-primary">registrar</code> tag)
           can delegate a human-readable name to a specific Nostr pubkey. For
-          example, the <code className="font-mono text-[#ff6b35]">nodns.shop</code> zone registrar can
-          assign <code className="font-mono text-[#ff6b35]">alice.nodns.shop</code> to{" "}
-          <code className="font-mono text-[#ff6b35]">npub1abc...xyz</code> for a fixed time period.
+          example, the <code className="font-mono text-primary">nodns.shop</code> zone registrar can
+          assign <code className="font-mono text-primary">alice.nodns.shop</code> to{" "}
+          <code className="font-mono text-primary">npub1abc...xyz</code> for a fixed time period.
           The delegation is signed by the registrar&apos;s private key and published as
           a Nostr event.
         </p>
-        <p className="mb-6 text-[#bbb]">
-          Once delegated, the user publishes standard <code className="font-mono text-[#ff6b35]">record</code>{" "}
-          tags with <code className="font-mono text-[#ff6b35]">name</code> set to their delegated name.
+        <p className="mb-6 text-muted-foreground">
+          Once delegated, the user publishes standard <code className="font-mono text-primary">record</code>{" "}
+          tags with <code className="font-mono text-primary">name</code> set to their delegated name.
           The bot verifies the delegation exists and is valid before pushing DNS
           records. Delegations are <strong>irrevocable</strong> within their
           validity period &mdash; the Nostr event is the authoritative proof.
@@ -218,10 +218,10 @@ Delegated names:
           ].map((rec) => (
             <div
               key={rec.type}
-              className="rounded-[10px] border border-[#222] bg-[#141414] p-6"
+              className="rounded-xl border border-border bg-card p-6"
             >
               <h3 className="mb-3 text-lg font-semibold">{rec.type}</h3>
-              <p className="text-[#bbb]">{rec.desc}</p>
+              <p className="text-muted-foreground">{rec.desc}</p>
             </div>
           ))}
         </div>

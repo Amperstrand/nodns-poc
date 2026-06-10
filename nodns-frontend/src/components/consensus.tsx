@@ -87,19 +87,18 @@ interface ConsensusData {
 const data = consensusData as ConsensusData;
 
 const STATUS_STYLES: Record<Status, { bg: string; text: string; label: string }> = {
-  "external-reference": { bg: "rgba(102,102,102,0.2)", text: "#999", label: "External" },
-  draft: { bg: "rgba(52,152,219,0.15)", text: "#3498db", label: "Draft" },
-  "proof-of-concept": { bg: "rgba(46,204,113,0.15)", text: "#2ecc71", label: "Proof of Concept" },
-  "thought-experiment": { bg: "rgba(241,196,15,0.15)", text: "#f1c40f", label: "Thought Experiment" },
-  "research-todo": { bg: "rgba(155,89,182,0.15)", text: "#9b59b6", label: "Research TODO" },
+  "external-reference": { bg: "bg-secondary", text: "text-muted-foreground", label: "External" },
+  draft: { bg: "bg-blue-950/30", text: "text-blue-400", label: "Draft" },
+  "proof-of-concept": { bg: "bg-emerald-950/30", text: "text-emerald-400", label: "Proof of Concept" },
+  "thought-experiment": { bg: "bg-yellow-950/30", text: "text-yellow-400", label: "Thought Experiment" },
+  "research-todo": { bg: "bg-purple-950/30", text: "text-purple-400", label: "Research TODO" },
 };
 
 function StatusBadge({ status }: { status: Status }) {
   const s = STATUS_STYLES[status];
   return (
     <span
-      className="inline-block rounded-full px-2.5 py-0.5 text-[0.7rem] font-semibold uppercase tracking-wider whitespace-nowrap"
-      style={{ background: s.bg, color: s.text }}
+      className={`inline-block rounded-full px-2.5 py-0.5 text-[0.7rem] font-semibold uppercase tracking-wider whitespace-nowrap ${s.bg} ${s.text}`}
     >
       {s.label}
     </span>
@@ -110,29 +109,29 @@ function ModelCard({ model }: { model: Model }) {
   const [expanded, setExpanded] = useState(false);
 
   return (
-    <div id={model.id} className="mb-5 rounded-[10px] border border-[#222] bg-[#141414] p-6">
+    <div id={model.id} className="mb-5 rounded-xl border border-border bg-card p-6">
       <div className="mb-3 flex flex-wrap items-center gap-3">
         <StatusBadge status={model.status} />
         <h3 className="text-lg font-semibold">{model.name}</h3>
-        <span className="text-sm text-[#666]">{model.tagline}</span>
+        <span className="text-sm text-muted-foreground">{model.tagline}</span>
       </div>
 
-      <p className="mb-3 text-[#bbb]">{model.description}</p>
+      <p className="mb-3 text-muted-foreground">{model.description}</p>
 
       <p className="mb-1 text-sm">
         <strong>Authority:</strong>{" "}
-        <span className="text-[#bbb]">{model.authority}</span>
+        <span className="text-muted-foreground">{model.authority}</span>
       </p>
 
       {model.pattern && (
         <p className="mb-1 text-sm">
           <strong>Pattern:</strong>{" "}
-          <code className="font-mono text-[0.85rem] text-[#ff6b35]">{model.pattern}</code>
+          <code className="font-mono text-[0.85rem] text-primary">{model.pattern}</code>
           {model.example && (
             <>
               {" "}
               →{" "}
-              <code className="font-mono text-[0.85rem] text-[#ff6b35]">
+              <code className="font-mono text-[0.85rem] text-primary">
                 {model.example}
               </code>
             </>
@@ -145,7 +144,7 @@ function ModelCard({ model }: { model: Model }) {
           <strong>Ref:</strong>{" "}
           <a
             href={model.reference.url}
-            className="text-[#ff6b35] hover:underline"
+            className="text-primary hover:underline"
             target="_blank"
             rel="noopener noreferrer"
           >
@@ -160,13 +159,13 @@ function ModelCard({ model }: { model: Model }) {
             <p key={ex.name} className="text-sm">
               <a
                 href={ex.url}
-                className="text-[#ff6b35] hover:underline"
+                className="text-primary hover:underline"
                 target="_blank"
                 rel="noopener noreferrer"
               >
                 {ex.name}
               </a>{" "}
-              — <span className="text-[#bbb]">{ex.description}</span>
+              — <span className="text-muted-foreground">{ex.description}</span>
             </p>
           ))}
         </div>
@@ -176,7 +175,7 @@ function ModelCard({ model }: { model: Model }) {
         <p className="text-sm">
           <a
             href={model.url}
-            className="text-[#ff6b35] hover:underline"
+            className="text-primary hover:underline"
             target="_blank"
             rel="noopener noreferrer"
           >
@@ -187,23 +186,23 @@ function ModelCard({ model }: { model: Model }) {
 
       {model.dual_resolution && (
         <div className="my-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <div className="rounded-lg border border-[#222] bg-[#0a0a0a] p-4">
-            <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-[#666]">
+          <div className="rounded-lg border border-border bg-background p-4">
+            <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               DNS
             </h4>
-            <code className="text-[0.8rem] text-[#ff6b35]">{model.dual_resolution.dns}</code>
+            <code className="text-[0.8rem] text-primary">{model.dual_resolution.dns}</code>
           </div>
-          <div className="rounded-lg border border-[#222] bg-[#0a0a0a] p-4">
-            <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-[#666]">
+          <div className="rounded-lg border border-border bg-background p-4">
+            <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               Nostr
             </h4>
-            <code className="text-[0.8rem] text-[#ff6b35]">{model.dual_resolution.nostr}</code>
+            <code className="text-[0.8rem] text-primary">{model.dual_resolution.nostr}</code>
           </div>
-          <div className="rounded-lg border border-[#222] bg-[#0a0a0a] p-4">
-            <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-[#666]">
+          <div className="rounded-lg border border-border bg-background p-4">
+            <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               Conflict
             </h4>
-            <code className="text-[0.8rem] text-[#ff6b35]">{model.dual_resolution.conflict}</code>
+            <code className="text-[0.8rem] text-primary">{model.dual_resolution.conflict}</code>
           </div>
         </div>
       )}
@@ -211,23 +210,23 @@ function ModelCard({ model }: { model: Model }) {
       {model.resolution && !model.dual_resolution && (
         <p className="mt-3 text-sm">
           <strong>Resolution:</strong>{" "}
-          <span className="text-[#bbb]">{model.resolution}</span>
+          <span className="text-muted-foreground">{model.resolution}</span>
         </p>
       )}
 
       <button
         onClick={() => setExpanded(!expanded)}
-        className="mt-3 text-sm font-medium text-[#ff6b35] hover:underline"
+        className="mt-3 text-sm font-medium text-primary hover:underline"
       >
         {expanded ? "▾ Hide details" : "▸ Show details"}
       </button>
 
       {expanded && (
-        <div className="mt-4 space-y-4 border-t border-[#222] pt-4">
+        <div className="mt-4 space-y-4 border-t border-border pt-4">
           {model.philosophy && (
             <div>
               <h4 className="mb-2 text-sm font-semibold">Philosophy</h4>
-              <p className="italic text-[#bbb]">{model.philosophy}</p>
+              <p className="italic text-muted-foreground">{model.philosophy}</p>
             </div>
           )}
 
@@ -235,10 +234,10 @@ function ModelCard({ model }: { model: Model }) {
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               {model.pros && (
                 <div>
-                  <h4 className="mb-2 text-sm font-semibold text-[#2ecc71]">
+                  <h4 className="mb-2 text-sm font-semibold text-emerald-400">
                     ✓ Pros
                   </h4>
-                  <ul className="list-disc pl-5 text-sm text-[#bbb]">
+                  <ul className="list-disc pl-5 text-sm text-muted-foreground">
                     {model.pros.map((p, i) => (
                       <li key={i}>{p}</li>
                     ))}
@@ -247,10 +246,10 @@ function ModelCard({ model }: { model: Model }) {
               )}
               {model.cons && (
                 <div>
-                  <h4 className="mb-2 text-sm font-semibold text-[#e74c3c]">
+                  <h4 className="mb-2 text-sm font-semibold text-red-400">
                     ✗ Cons
                   </h4>
-                  <ul className="list-disc pl-5 text-sm text-[#bbb]">
+                  <ul className="list-disc pl-5 text-sm text-muted-foreground">
                     {model.cons.map((c, i) => (
                       <li key={i}>{c}</li>
                     ))}
@@ -262,10 +261,10 @@ function ModelCard({ model }: { model: Model }) {
 
           {model.open_questions && (
             <div>
-              <h4 className="mb-2 text-sm font-semibold text-[#f1c40f]">
+              <h4 className="mb-2 text-sm font-semibold text-yellow-400">
                 Open Questions
               </h4>
-              <ul className="list-disc pl-5 text-sm text-[#bbb]">
+              <ul className="list-disc pl-5 text-sm text-muted-foreground">
                 {model.open_questions.map((q, i) => (
                   <li key={i}>{q}</li>
                 ))}
@@ -283,26 +282,26 @@ export function Consensus() {
     <section id="consensus" className="px-6 py-16">
       <div className="mx-auto max-w-[960px]">
         <h1 className="mb-2 text-[1.75rem] font-bold tracking-tight">{data.title}</h1>
-        <p className="mb-4 text-lg text-[#bbb]">{data.subtitle}</p>
-        <p className="mb-8 text-[#bbb]">{data.intro}</p>
+        <p className="mb-4 text-lg text-muted-foreground">{data.subtitle}</p>
+        <p className="mb-8 text-muted-foreground">{data.intro}</p>
 
         {/* No-token principle */}
-        <div className="mb-12 rounded-[10px] border border-[rgba(46,204,113,0.3)] bg-[rgba(46,204,113,0.08)] p-6">
-          <h3 className="mb-3 text-lg font-semibold text-[#2ecc71]">
+        <div className="mb-12 rounded-xl border border-emerald-800/30 bg-emerald-950/20 p-6">
+          <h3 className="mb-3 text-lg font-semibold text-emerald-400">
             ⛔ No Token. Ever.
           </h3>
-          <p className="mb-4 text-[#bbb]">{data.principle.statement}</p>
+          <p className="mb-4 text-muted-foreground">{data.principle.statement}</p>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
-              <h4 className="mb-1 text-sm font-semibold text-[#2ecc71]">Anti-spam</h4>
-              <p className="text-sm text-[#bbb]">{data.principle.payments.anti_spam}</p>
+              <h4 className="mb-1 text-sm font-semibold text-emerald-400">Anti-spam</h4>
+              <p className="text-sm text-muted-foreground">{data.principle.payments.anti_spam}</p>
             </div>
             <div>
-              <h4 className="mb-1 text-sm font-semibold text-[#ff6b35]">Namespace lease</h4>
-              <p className="text-sm text-[#bbb]">{data.principle.payments.namespace_lease}</p>
+              <h4 className="mb-1 text-sm font-semibold text-primary">Namespace lease</h4>
+              <p className="text-sm text-muted-foreground">{data.principle.payments.namespace_lease}</p>
             </div>
           </div>
-          <p className="mt-3 text-sm text-[#e74c3c]">{data.principle.payments.never}</p>
+          <p className="mt-3 text-sm text-red-400">{data.principle.payments.never}</p>
         </div>
 
         {/* Models */}
@@ -324,7 +323,7 @@ export function Consensus() {
                 {data.comparison_table.columns.map((col) => (
                   <th
                     key={col}
-                    className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-[#666]"
+                    className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground"
                   >
                     {col}
                   </th>
@@ -333,12 +332,12 @@ export function Consensus() {
             </thead>
             <tbody>
               {data.comparison_table.rows.map((row, i) => (
-                <tr key={i} className="border-b border-[#222]">
+                <tr key={i} className="border-b border-border">
                   {row.map((cell, j) => (
                     <td
                       key={j}
                       className={`px-3 py-2.5 ${
-                        j === 0 ? "font-medium text-[#e0e0e0]" : "text-[#bbb]"
+                        j === 0 ? "font-medium text-foreground" : "text-muted-foreground"
                       }`}
                     >
                       {cell}
@@ -351,20 +350,20 @@ export function Consensus() {
         </div>
 
         {/* Closing */}
-        <div className="mt-12 rounded-[10px] border border-[#222] bg-[#141414] p-8">
+        <div className="mt-12 rounded-xl border border-border bg-card p-8">
           <h2 className="mb-4 text-[1.75rem] font-bold tracking-tight">
             {data.closing.title}
           </h2>
-          <p className="mb-3 text-[#bbb]">{data.closing.body}</p>
+          <p className="mb-3 text-muted-foreground">{data.closing.body}</p>
           <p className="mb-2 text-sm">
             <strong>No token:</strong>{" "}
-            <span className="text-[#bbb]">{data.closing.no_token}</span>
+            <span className="text-muted-foreground">{data.closing.no_token}</span>
           </p>
           <p className="mb-2 text-sm">
             <strong>Research:</strong>{" "}
-            <span className="text-[#bbb]">{data.closing.research}</span>
+            <span className="text-muted-foreground">{data.closing.research}</span>
           </p>
-          <p className="text-sm text-[#f1c40f]">{data.closing.nothing_is_production}</p>
+          <p className="text-sm text-yellow-400">{data.closing.nothing_is_production}</p>
         </div>
       </div>
     </section>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import Link from "next/link";
 import { subscribeToDnsEvents } from "@/lib/nostr";
 import type { NostrEvent } from "@/lib/types";
 
@@ -8,6 +9,8 @@ interface FeedItem {
   event: NostrEvent;
   relay: string;
 }
+
+const MAX_VISIBLE = 5;
 
 export function LiveFeed() {
   const [events, setEvents] = useState<FeedItem[]>([]);
@@ -24,13 +27,7 @@ export function LiveFeed() {
 
   useEffect(() => {
     const cleanup = subscribeToDnsEvents(handleEvent);
-
-    // Only mark connected when we actually receive an event (handleEvent sets connected=true)
-    // Remove the premature 10s timeout that marked connected regardless
-
-    return () => {
-      cleanup();
-    };
+    return () => cleanup();
   }, [handleEvent]);
 
   const getRecordSummary = (event: NostrEvent): string => {
@@ -45,33 +42,48 @@ export function LiveFeed() {
       .join(", ");
   };
 
+  const visible = events.slice(0, MAX_VISIBLE);
+
   return (
-    <section id="live-feed-section" className="px-6 py-16">
+    <section className="px-6 py-16">
       <div className="mx-auto max-w-[960px]">
-        <h2 className="mb-6 text-[1.75rem] font-bold tracking-tight">
-          Live Event Feed
-        </h2>
-        <div data-testid="live-feed-entries" className="max-h-[300px] overflow-y-auto rounded-[10px] border border-[#222] bg-[#141414]">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <h2 className="text-[1.75rem] font-bold tracking-tight">
+              Live Event Feed
+            </h2>
+            {connected && (
+              <span className="inline-block h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+            )}
+          </div>
+          <Link
+            href="/records"
+            className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+          >
+            See more →
+          </Link>
+        </div>
+        <div className="max-h-[220px] overflow-y-auto rounded-xl bg-card ring-1 ring-foreground/10">
           {!connected ? (
-            <div className="py-8 text-center text-sm text-[#666]">
+            <div className="py-8 text-center text-sm text-muted-foreground">
               Connecting to relays...
             </div>
           ) : events.length === 0 ? (
-            <div className="py-8 text-center text-sm text-[#666]">
+            <div className="py-8 text-center text-sm text-muted-foreground">
               No events yet. Waiting for kind 11111 events...
             </div>
           ) : (
-            events.map(({ event: ev }) => {
+            visible.map(({ event: ev }) => {
               const time = new Date(ev.created_at * 1000).toLocaleTimeString();
               const shortPk = ev.pubkey.slice(0, 12) + "...";
               return (
                 <div
                   key={ev.id}
-                  className="border-b border-[#222] px-3 py-2 text-sm last:border-b-0"
+                  className="border-b border-border px-4 py-2.5 text-sm last:border-b-0"
                 >
-                  <span className="mr-2 text-[#666]">{time}</span>
-                  <strong className="font-mono">{shortPk}</strong>{" "}
-                  {getRecordSummary(ev)}
+                  <span className="mr-2 text-muted-foreground">{time}</span>
+                  <span className="font-mono font-medium">{shortPk}</span>{" "}
+                  <span className="text-muted-foreground">{getRecordSummary(ev)}</span>
                 </div>
               );
             })

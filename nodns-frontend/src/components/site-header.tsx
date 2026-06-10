@@ -8,7 +8,9 @@ import { useIdentity } from "@/contexts/IdentityContext";
 
 const NAV_ITEMS = [
   { href: "/", label: "Home" },
+  { href: "/records", label: "Records" },
   { href: "/dashboard", label: "Dashboard" },
+  { href: "/learn", label: "Learn" },
   { href: "/wallet", label: "Wallet" },
 ];
 

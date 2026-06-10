@@ -5,14 +5,19 @@ export default defineConfig({
   timeout: 60_000,
   retries: 2,
   use: {
-    baseURL: "https://beta.nodns.shop",
+    baseURL: "https://amperstrand.github.io/nodns-poc",
     headless: true,
   },
   projects: [
     {
-      name: "beta",
+      name: "pages",
       testDir: "./tests",
-      testMatch: "beta.spec.ts",
+      testMatch: "pages.spec.ts",
+    },
+    {
+      name: "api",
+      testDir: "./tests",
+      testMatch: "api.spec.ts",
     },
   ],
 });

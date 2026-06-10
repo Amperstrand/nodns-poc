@@ -32,13 +32,13 @@ export function HowItWorks() {
           {steps.map((step) => (
             <div
               key={step.num}
-              className="rounded-[10px] border border-[#222] bg-[#141414] p-6 text-center"
+              className="rounded-xl border border-border bg-card p-6 text-center"
             >
-              <div className="mx-auto mb-2 flex h-8 w-8 items-center justify-center rounded-full bg-[#ff6b35] text-sm font-bold text-white">
+              <div className="mx-auto mb-2 flex h-8 w-8 items-center justify-center rounded-full bg-primary text-sm font-bold text-primary-foreground">
                 {step.num}
               </div>
               <h3 className="mb-3 text-lg font-semibold">{step.title}</h3>
-              <p className="text-[#bbb]">{step.desc}</p>
+              <p className="text-muted-foreground">{step.desc}</p>
             </div>
           ))}
         </div>
