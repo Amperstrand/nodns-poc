@@ -29,7 +29,6 @@ use axum::http::{HeaderName, HeaderValue};
 use clap::Parser;
 use tokio::signal;
 use tower_http::set_header::SetResponseHeaderLayer;
-use tower_http::cors::CorsLayer;
 use tracing::{info, warn};
 
 use config::{Config, ZoneConfig};
@@ -351,22 +350,7 @@ async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
             .layer(SetResponseHeaderLayer::overriding(
                 HeaderName::from_static("permissions-policy"),
                 HeaderValue::from_static("camera=(), microphone=(), geolocation=()"),
-            ))
-            .layer(
-                CorsLayer::new()
-                    .allow_origin([
-                        "https://nodns.shop".parse::<HeaderValue>().unwrap(),
-                        "https://beta.nodns.shop".parse::<HeaderValue>().unwrap(),
-                        "https://amperstrand.github.io".parse::<HeaderValue>().unwrap(),
-                        "http://localhost:3000".parse::<HeaderValue>().unwrap(),
-                    ])
-                    .allow_methods([axum::http::Method::GET, axum::http::Method::POST])
-                    .allow_headers([
-                        HeaderName::from_static("content-type"),
-                        HeaderName::from_static("x-nostr-npub"),
-                    ])
-                    .max_age(std::time::Duration::from_secs(3600)),
-            );
+            ));
 
         let listener = tokio::net::TcpListener::bind(&bind).await.unwrap();
         info!(bind = %bind, "health server listening");
