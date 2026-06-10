@@ -2332,6 +2332,7 @@ dependencies = [
  "cashu",
  "cdk",
  "clap",
+ "hex",
  "hickory-client",
  "hickory-proto",
  "hkdf",

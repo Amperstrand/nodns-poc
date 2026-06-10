@@ -63,6 +63,9 @@ pub struct Config {
     pub registrar_keys: std::collections::HashMap<String, String>,
 
     #[serde(default)]
+    pub registrar: RegistrarConfig,
+
+    #[serde(default)]
     pub payment: PaymentConfig,
 
     #[serde(default)]
@@ -329,6 +332,11 @@ impl Default for PaymentConfig {
 pub struct DnssecDerivationConfig {
     #[serde(default)]
     pub enabled: bool,
+}
+
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct RegistrarConfig {
+    pub nsec_hex: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]

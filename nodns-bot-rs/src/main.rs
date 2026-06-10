@@ -161,6 +161,34 @@ async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
         "nodns-bot starting"
     );
 
+    // ── Registrar identity + DNSSEC derivation ──
+    if !cfg.registrar.nsec_hex.is_empty() && cfg.dnssec_derivation.enabled {
+        let nsec_bytes = hex::decode(&cfg.registrar.nsec_hex)
+            .expect("registrar.nsec_hex must be valid hex");
+        assert_eq!(nsec_bytes.len(), 32, "registrar.nsec_hex must be 32 bytes");
+
+        match dnssec_derivation::derive_dnssec_key(&nsec_bytes) {
+            Ok(dnssec_key) => {
+                let pem = dnssec_key.to_pkcs8_pem().expect("PKCS#8 export");
+
+                let secret = p256::SecretKey::from_bytes((&dnssec_key.private_key_bytes().clone()).into())
+                    .expect("valid P-256 key");
+                let pub_key = secret.public_key();
+                let pub_hex = hex::encode(pub_key.to_sec1_bytes());
+
+                info!("registrar DNSSEC key derived via SLIP-10 → P-256");
+                info!("P-256 public key (uncompressed): {}", pub_hex);
+                info!("PKCS#8 PEM:\n{}", pem.trim());
+                info!("import into Knot: keymgr nodns.shop import-pem /dev/stdin algorithm=ECDSAP256SHA256 ksk=yes < pem-file");
+            }
+            Err(e) => {
+                tracing::error!("DNSSEC key derivation failed: {e}");
+            }
+        }
+    } else if cfg.dnssec_derivation.enabled && cfg.registrar.nsec_hex.is_empty() {
+        tracing::warn!("dnssec_derivation.enabled but registrar.nsec_hex is empty — skipping");
+    }
+
     // ── Store ──
     let acme_enc_key: Option<String> = cfg.acme.encryption_key.clone().or_else(|| {
         tracing::warn!("acme.encryption_key not set — generating ephemeral key; encrypted private keys will be unreadable after restart");
