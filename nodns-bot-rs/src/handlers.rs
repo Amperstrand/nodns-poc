@@ -10,6 +10,7 @@ use base64::Engine;
 use serde::{Deserialize, Serialize};
 use tracing::{error, info, warn};
 
+use crate::dns::query_txt_records;
 use crate::types::{AcmeOrderLog, build_fqdn};
 
 // ---------------------------------------------------------------------------
@@ -227,9 +228,30 @@ pub async fn check_handler(
         }).collect(),
     };
 
-    let dns_source = CheckSource {
-        registered: false,
-        records: vec![],
+    let dns_source = {
+        let knot_addr = state.dns_zones.first()
+            .map(|z| z.knot_address.clone())
+            .unwrap_or_default();
+        let nameserver: std::net::SocketAddr = match knot_addr.parse() {
+            Ok(a) => a,
+            Err(_) => {
+                return Json(CheckResponse { name, zone, api: api_source, dns: CheckSource { registered: false, records: vec![] } });
+            }
+        };
+        let fqdn = format!("{name}.{zone}.");
+        let result = query_txt_records(nameserver, &fqdn).await;
+        CheckSource {
+            registered: result.registered,
+            records: result.records.into_iter().map(|r| ApiRecord {
+                npub: String::new(),
+                name: name.clone(),
+                fqdn: format!("{name}.{zone}"),
+                record_type: r.record_type,
+                ttl: r.ttl,
+                rdata: r.rdata,
+                created_at: 0,
+            }).collect(),
+        }
     };
 
     Json(CheckResponse {

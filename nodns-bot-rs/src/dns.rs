@@ -509,3 +509,105 @@ impl Updater {
         Ok(())
     }
 }
+
+pub struct DnsQueryResult {
+    pub registered: bool,
+    pub records: Vec<DnsRecord>,
+}
+
+pub struct DnsRecord {
+    pub record_type: String,
+    pub ttl: u32,
+    pub rdata: String,
+}
+
+pub async fn query_txt_records(nameserver: SocketAddr, fqdn: &str) -> DnsQueryResult {
+    let name = match Name::from_str(fqdn) {
+        Ok(n) => n,
+        Err(_) => return DnsQueryResult { registered: false, records: vec![] },
+    };
+
+    let mut query = Query::new();
+    query.set_name(name).set_query_class(DNSClass::IN).set_query_type(RecordType::TXT);
+
+    let mut msg = Message::new();
+    msg.set_id(generate_id())
+        .set_message_type(MessageType::Query)
+        .set_recursion_desired(false)
+        .add_query(query);
+
+    let timeout = Duration::from_secs(2);
+
+    let stream = match tokio::time::timeout(timeout, TokioTcpStream::connect(nameserver)).await {
+        Ok(Ok(s)) => s,
+        _ => return DnsQueryResult { registered: false, records: vec![] },
+    };
+    let mut stream = stream;
+
+    let bytes = match msg.to_bytes() {
+        Ok(b) => b,
+        Err(_) => return DnsQueryResult { registered: false, records: vec![] },
+    };
+
+    let len = bytes.len() as u16;
+    let write_result = tokio::time::timeout(timeout, async {
+        use tokio::io::AsyncWriteExt;
+        stream.write_all(&len.to_be_bytes()).await?;
+        stream.write_all(&bytes).await
+    }).await;
+
+    if write_result.is_err() || write_result.unwrap().is_err() {
+        return DnsQueryResult { registered: false, records: vec![] };
+    }
+
+    let read_result = tokio::time::timeout(timeout, async {
+        use tokio::io::AsyncReadExt;
+        let mut len_buf = [0u8; 2];
+        stream.read_exact(&mut len_buf).await?;
+        let resp_len = u16::from_be_bytes(len_buf) as usize;
+        let mut resp_buf = vec![0u8; resp_len];
+        stream.read_exact(&mut resp_buf).await?;
+        Ok::<_, std::io::Error>(resp_buf)
+    }).await;
+
+    let buf = match read_result {
+        Ok(Ok(b)) => b,
+        _ => return DnsQueryResult { registered: false, records: vec![] },
+    };
+
+    let resp = match Message::from_vec(&buf) {
+        Ok(m) => m,
+        Err(_) => return DnsQueryResult { registered: false, records: vec![] },
+    };
+
+    if resp.response_code() == ResponseCode::NXDomain
+        || resp.response_code() != ResponseCode::NoError
+    {
+        return DnsQueryResult { registered: false, records: vec![] };
+    }
+
+    let answers = resp.answers();
+    if answers.is_empty() {
+        return DnsQueryResult { registered: false, records: vec![] };
+    }
+
+    let mut records = Vec::new();
+    for rec in answers {
+        if rec.record_type() == RecordType::TXT {
+            let rdata = rec.data();
+            if let RData::TXT(txt) = rdata {
+                for txt_bytes in txt.txt_data() {
+                    let txt_string = String::from_utf8_lossy(txt_bytes).to_string();
+                    records.push(DnsRecord {
+                        record_type: "TXT".to_string(),
+                        ttl: rec.ttl(),
+                        rdata: txt_string,
+                    });
+                }
+            }
+        }
+    }
+
+    let registered = !records.is_empty();
+    DnsQueryResult { registered, records }
+}

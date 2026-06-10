@@ -167,7 +167,8 @@ function WalletContent() {
     setCopied(false);
 
     try {
-      const token = await manager.wallet.send(MINT_URL, amount);
+      const prepared = await manager.ops.send.prepare({ mintUrl: MINT_URL, amount });
+      const { token } = await manager.ops.send.execute(prepared.id);
       const encoded = getEncodedToken(token);
       setGeneratedToken(encoded);
       setSendResult({
@@ -256,9 +257,9 @@ function WalletContent() {
 
   if (status === "loading") {
     return (
-      <div className="mx-auto max-w-[640px] py-12">
+        <div className="mx-auto max-w-[640px] py-8 md:py-12">
         <h1 className="text-2xl font-bold mb-6">Wallet</h1>
-        <div className="rounded-xl border border-border bg-card p-12 text-center">
+        <div className="rounded-xl border border-border bg-card p-8 sm:p-12 text-center">
           <div className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-muted-foreground border-t-transparent" />
           <p className="text-sm text-muted-foreground mt-4">
             Initializing wallet...
@@ -271,9 +272,9 @@ function WalletContent() {
   if (status === "error") {
     const { error } = useWallet();
     return (
-      <div className="mx-auto max-w-[640px] py-12">
+      <div className="mx-auto max-w-[640px] py-8 md:py-12">
         <h1 className="text-2xl font-bold mb-6">Wallet</h1>
-        <div className="rounded-xl border border-red-800 bg-red-950/40 text-red-400 p-6 text-center">
+        <div className="rounded-xl border border-red-800 bg-red-950/40 text-red-400 p-4 sm:p-6 text-center">
           <p className="text-sm mb-4">Wallet failed to initialize.</p>
           {error && (
             <p className="text-xs text-red-300/80 mb-4 font-mono break-all">
@@ -297,11 +298,11 @@ function WalletContent() {
   /* ── main render ─────────────────────────────────────── */
 
   return (
-    <div className="mx-auto max-w-[640px] py-12">
+    <div className="mx-auto max-w-[640px] py-8 md:py-12">
       <h1 className="text-2xl font-bold mb-6">Wallet</h1>
 
       {/* ── Balance Card ──────────────────────────────── */}
-      <div className="rounded-xl border border-border bg-card p-6 mb-4">
+      <div className="rounded-xl border border-border bg-card p-4 sm:p-6 mb-4">
         <div className="flex items-center justify-between mb-4">
           <div>
             <div className="text-sm text-muted-foreground mb-1">Balance</div>
@@ -337,7 +338,7 @@ function WalletContent() {
 
       {/* ── Top Up Section ─────────────────────────────── */}
       {mintOnline && (
-        <div className="rounded-xl border border-border bg-card p-6 mb-4">
+        <div className="rounded-xl border border-border bg-card p-4 sm:p-6 mb-4">
           <h2 className="text-xs font-semibold mb-1 text-muted-foreground uppercase tracking-wider">
             Top Up via Lightning
           </h2>
@@ -345,7 +346,7 @@ function WalletContent() {
             Request a Lightning invoice. On testnut, it settles automatically.
           </p>
 
-          <div className="flex items-center gap-3 mb-3">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-3">
             <div className="flex-1 relative">
               <Input
                 type="number"
@@ -353,7 +354,7 @@ function WalletContent() {
                 value={topUpAmount}
                 onChange={(e) => setTopUpAmount(e.target.value)}
                 placeholder="100"
-                className="pr-12 font-mono"
+                className="pr-12 font-mono min-h-[44px]"
               />
               <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">
                 sats
@@ -368,6 +369,7 @@ function WalletContent() {
                 !topUpAmount ||
                 parseInt(topUpAmount, 10) <= 0
               }
+              className="min-h-[44px]"
             >
               {topUpState === 'requesting'
                 ? "Requesting..."
@@ -414,7 +416,7 @@ function WalletContent() {
       )}
 
       {/* ── Receive Section ───────────────────────────── */}
-      <div className="rounded-xl border border-border bg-card p-6 mb-4">
+      <div className="rounded-xl border border-border bg-card p-4 sm:p-6 mb-4">
         <h2 className="text-xs font-semibold mb-1 text-muted-foreground uppercase tracking-wider">
           Receive Tokens
         </h2>
@@ -449,7 +451,7 @@ function WalletContent() {
       </div>
 
       {/* ── Send Section ──────────────────────────────── */}
-      <div className="rounded-xl border border-border bg-card p-6 mb-4">
+      <div className="rounded-xl border border-border bg-card p-4 sm:p-6 mb-4">
         <h2 className="text-xs font-semibold mb-1 text-muted-foreground uppercase tracking-wider">
           Send Tokens
         </h2>
@@ -457,7 +459,7 @@ function WalletContent() {
           Create a token to send sats to someone.
         </p>
 
-        <div className="flex items-center gap-3 mb-3">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-3">
           <div className="flex-1 relative">
             <Input
               type="number"
@@ -466,7 +468,7 @@ function WalletContent() {
               value={sendAmount}
               onChange={(e) => setSendAmount(e.target.value)}
               placeholder="0"
-              className="pr-12 font-mono"
+              className="pr-12 font-mono min-h-[44px]"
             />
             <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">
               sats
@@ -481,6 +483,7 @@ function WalletContent() {
               parseInt(sendAmount, 10) > balance ||
               !mintOnline
             }
+            className="min-h-[44px]"
           >
             {sending ? "Creating..." : "Create Token"}
           </Button>
@@ -514,7 +517,7 @@ function WalletContent() {
       </div>
 
       {/* ── Transaction History ───────────────────────── */}
-      <div className="rounded-xl border border-border bg-card p-6 mb-4">
+      <div className="rounded-xl border border-border bg-card p-4 sm:p-6 mb-4">
         <h2 className="text-xs font-semibold mb-4 text-muted-foreground uppercase tracking-wider">
           History
         </h2>
@@ -532,24 +535,24 @@ function WalletContent() {
             {history.map((entry) => (
               <div
                 key={entry.id}
-                className="flex items-center justify-between py-3 border-b border-border last:border-b-0"
+                className="flex items-center justify-between py-3 border-b border-border last:border-b-0 gap-2"
               >
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 min-w-0">
                   <span
-                    className={`text-xs font-mono font-semibold ${historyColor(entry.type)}`}
+                    className={`text-xs font-mono font-semibold shrink-0 ${historyColor(entry.type)}`}
                   >
                     {historySign(entry.type)}
                   </span>
-                  <div>
+                  <div className="min-w-0">
                     <div className="text-sm font-medium">
                       {historyLabel(entry.type)}
                     </div>
-                    <div className="text-xs text-muted-foreground font-mono">
+                    <div className="text-xs text-muted-foreground font-mono truncate">
                       {formatTimestamp(entry.createdAt)}
                     </div>
                   </div>
                 </div>
-                <div className="text-right">
+                <div className="text-right shrink-0">
                   <span
                     className={`text-sm font-mono font-semibold ${historyColor(entry.type)}`}
                   >
@@ -579,24 +582,25 @@ function WalletContent() {
 
       {/* ── Identity Section ──────────────────────────── */}
       {initialized && (
-        <div className="rounded-xl border border-border bg-card p-6 mb-4">
+        <div className="rounded-xl border border-border bg-card p-4 sm:p-6 mb-4">
           <h2 className="text-xs font-semibold mb-4 text-muted-foreground uppercase tracking-wider">
             Identity
           </h2>
 
           <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <div>
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0">
                 <div className="text-xs text-muted-foreground mb-0.5">
                   Public Key (npub)
                 </div>
-                <div className="text-sm font-mono">
+                <div className="text-sm font-mono truncate">
                   {truncateMiddle(npub, 12, 8)}
                 </div>
               </div>
               <Button
                 variant="ghost"
                 size="xs"
+                className="shrink-0 min-h-[44px] min-w-[44px]"
                 onClick={async () => {
                   await navigator.clipboard.writeText(npub);
                 }}
@@ -606,8 +610,8 @@ function WalletContent() {
             </div>
 
             <div className="border-t border-border pt-3">
-              <div className="flex items-center justify-between">
-                <div>
+              <div className="flex items-center justify-between gap-2">
+                <div className="min-w-0">
                   <div className="text-xs text-muted-foreground mb-0.5">
                     Private Key (nsec)
                   </div>
@@ -618,6 +622,7 @@ function WalletContent() {
                 <Button
                   variant="ghost"
                   size="xs"
+                  className="shrink-0 min-h-[44px] min-w-[44px]"
                   onClick={() => setShowNsecConfirm(true)}
                 >
                   {nsecCopied ? "Copied!" : "Copy"}
