@@ -899,3 +899,790 @@ fn rand_bytes() -> [u8; 32] {
     OsRng.fill_bytes(&mut buf);
     buf
 }
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+    use std::time::Instant;
+
+    use axum::Router;
+    use axum::body;
+    use axum::extract::ConnectInfo;
+    use http::Request;
+    use nostr_sdk::nips::nip19::ToBech32;
+    use nostr_sdk::Keys;
+    use tower::ServiceExt;
+
+    use crate::config;
+    use crate::dns;
+    use crate::nip05;
+    use crate::types::Metrics;
+
+    // =======================================================================
+    // Test helpers
+    // =======================================================================
+
+    fn make_zone_config() -> config::ZoneConfig {
+        config::ZoneConfig {
+            knot_address: "127.0.0.1:1".to_string(),
+            zone: "nodns.shop".to_string(),
+            tsig_key_name: "test-key.".to_string(),
+            tsig_key_secret: "dGVzdA==".to_string(),
+            tsig_algorithm: "hmac-sha256".to_string(),
+            default_ttl: 3600,
+            ..Default::default()
+        }
+    }
+
+    fn create_test_state() -> Arc<AppState> {
+        let store = Arc::new(crate::store::Store::new(":memory:", None).unwrap());
+        store.init().unwrap();
+
+        let nip05_state = Arc::new(nip05::Nip05State {
+            store: store.clone(),
+            registrar_pubkeys: HashMap::new(),
+            relays: vec![],
+            zones: vec!["nodns.shop".to_string()],
+        });
+
+        Arc::new(AppState {
+            store,
+            nip05: nip05_state,
+            acme: None,
+            acme_environment: "staging".to_string(),
+            metrics: Metrics::default(),
+            start_time: Instant::now(),
+            dns_zones: vec![make_zone_config()],
+            updaters: Arc::new(HashMap::new()),
+        })
+    }
+
+    fn create_test_state_with_updater() -> Arc<AppState> {
+        let store = Arc::new(crate::store::Store::new(":memory:", None).unwrap());
+        store.init().unwrap();
+
+        let zc = make_zone_config();
+        let updater = dns::Updater::new(&zc).unwrap();
+        let mut updaters = HashMap::new();
+        updaters.insert("nodns.shop".to_string(), updater);
+
+        let nip05_state = Arc::new(nip05::Nip05State {
+            store: store.clone(),
+            registrar_pubkeys: HashMap::new(),
+            relays: vec![],
+            zones: vec!["nodns.shop".to_string()],
+        });
+
+        Arc::new(AppState {
+            store,
+            nip05: nip05_state,
+            acme: None,
+            acme_environment: "staging".to_string(),
+            metrics: Metrics::default(),
+            start_time: Instant::now(),
+            dns_zones: vec![zc],
+            updaters: Arc::new(updaters),
+        })
+    }
+
+    fn build_router(state: Arc<AppState>) -> Router {
+        Router::new()
+            .route(
+                "/nic/update",
+                axum::routing::get(dyndns_update_handler).post(dyndns_update_handler),
+            )
+            .route("/register", axum::routing::post(acmedns_register_handler))
+            .route("/update", axum::routing::post(acmedns_update_handler))
+            .with_state(state)
+    }
+
+    fn make_auth_header(npub: &str, nsec: &str) -> String {
+        let credentials = format!("{npub}:{nsec}");
+        let encoded = base64::engine::general_purpose::STANDARD.encode(credentials);
+        format!("Basic {encoded}")
+    }
+
+    fn make_connect_info() -> ConnectInfo<std::net::SocketAddr> {
+        ConnectInfo(std::net::SocketAddr::from(([127, 0, 0, 1], 12345)))
+    }
+
+    async fn response_body(response: axum::response::Response) -> String {
+        let bytes = body::to_bytes(response.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        String::from_utf8(bytes.to_vec()).unwrap()
+    }
+
+    async fn response_json(response: axum::response::Response) -> serde_json::Value {
+        let bytes = body::to_bytes(response.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        serde_json::from_slice(&bytes).unwrap()
+    }
+
+    // =======================================================================
+    // parse_basic_auth
+    // =======================================================================
+
+    #[test]
+    fn parse_basic_auth_valid_credentials() {
+        let encoded = base64::engine::general_purpose::STANDARD.encode("user:pass");
+        let header = format!("Basic {encoded}");
+        assert_eq!(
+            parse_basic_auth(&header),
+            Some(("user".to_string(), "pass".to_string()))
+        );
+    }
+
+    #[test]
+    fn parse_basic_auth_missing_prefix() {
+        let encoded = base64::engine::general_purpose::STANDARD.encode("user:pass");
+        assert_eq!(parse_basic_auth(&encoded), None);
+    }
+
+    #[test]
+    fn parse_basic_auth_invalid_base64() {
+        assert_eq!(parse_basic_auth("Basic !!!invalid!!!"), None);
+    }
+
+    #[test]
+    fn parse_basic_auth_no_colon_separator() {
+        let encoded = base64::engine::general_purpose::STANDARD.encode("userpass");
+        let header = format!("Basic {encoded}");
+        assert_eq!(parse_basic_auth(&header), None);
+    }
+
+    #[test]
+    fn parse_basic_auth_empty_password() {
+        let encoded = base64::engine::general_purpose::STANDARD.encode("user:");
+        let header = format!("Basic {encoded}");
+        assert_eq!(
+            parse_basic_auth(&header),
+            Some(("user".to_string(), String::new()))
+        );
+    }
+
+    #[test]
+    fn parse_basic_auth_colon_in_password() {
+        // split_once(':') splits on the FIRST colon only
+        let encoded =
+            base64::engine::general_purpose::STANDARD.encode("user:pass:word");
+        let header = format!("Basic {encoded}");
+        assert_eq!(
+            parse_basic_auth(&header),
+            Some(("user".to_string(), "pass:word".to_string()))
+        );
+    }
+
+    // =======================================================================
+    // find_zone_for_hostname
+    // =======================================================================
+
+    #[test]
+    fn find_zone_hostname_subdomain() {
+        let zones = vec![make_zone_config()];
+        assert_eq!(
+            find_zone_for_hostname("test.nodns.shop", &zones),
+            Some(&"nodns.shop".to_string())
+        );
+    }
+
+    #[test]
+    fn find_zone_hostname_exact_zone() {
+        let zones = vec![make_zone_config()];
+        assert_eq!(
+            find_zone_for_hostname("nodns.shop", &zones),
+            Some(&"nodns.shop".to_string())
+        );
+    }
+
+    #[test]
+    fn find_zone_hostname_different_zone_returns_none() {
+        let zones = vec![make_zone_config()];
+        assert_eq!(
+            find_zone_for_hostname("test.example.com", &zones),
+            None
+        );
+    }
+
+    #[test]
+    fn find_zone_hostname_multiple_zones() {
+        let zones = vec![
+            make_zone_config(),
+            config::ZoneConfig {
+                zone: "example.com".to_string(),
+                knot_address: "127.0.0.1:2".to_string(),
+                tsig_key_name: "k2.".to_string(),
+                tsig_key_secret: "dGVzdA==".to_string(),
+                ..Default::default()
+            },
+        ];
+        assert_eq!(
+            find_zone_for_hostname("foo.example.com", &zones),
+            Some(&"example.com".to_string())
+        );
+        assert_eq!(
+            find_zone_for_hostname("bar.nodns.shop", &zones),
+            Some(&"nodns.shop".to_string())
+        );
+    }
+
+    #[test]
+    fn find_zone_hostname_case_sensitive() {
+        // find_zone_for_hostname does NOT lowercase — the handler does that
+        // before calling. Documenting current behavior: case-sensitive match.
+        let zones = vec![make_zone_config()];
+        assert_eq!(
+            find_zone_for_hostname("TEST.NODNS.SHOP", &zones),
+            None,
+            "hostname is case-sensitive; handler lowercases before calling"
+        );
+        assert_eq!(
+            find_zone_for_hostname("test.nodns.shop", &zones),
+            Some(&"nodns.shop".to_string())
+        );
+    }
+
+    // =======================================================================
+    // DynDNS v2 integration tests
+    // =======================================================================
+
+    #[tokio::test]
+    async fn dyndns_valid_auth_no_updater_returns_911() {
+        // With valid npub/nsec pair but no DNS updater for the zone,
+        // auth passes but the handler returns 500 "911" (no updater).
+        let state = create_test_state();
+        let app = build_router(state);
+
+        let keys = Keys::generate();
+        let npub = keys.public_key().to_bech32().unwrap();
+        let nsec = keys.secret_key().to_bech32().unwrap();
+        let hostname = format!("{npub}.nodns.shop");
+
+        let uri = format!("/nic/update?hostname={hostname}&myip=1.2.3.4");
+
+        let mut request = Request::builder()
+            .method("GET")
+            .uri(&uri)
+            .header("authorization", make_auth_header(&npub, &nsec))
+            .body(body::Body::empty())
+            .unwrap();
+        request.extensions_mut().insert(make_connect_info());
+
+        let response = app.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), 500);
+        let text = response_body(response).await;
+        assert_eq!(text, "911");
+    }
+
+    #[tokio::test]
+    async fn dyndns_wrong_nsec_returns_badauth() {
+        let state = create_test_state();
+        let app = build_router(state);
+
+        let keys_correct = Keys::generate();
+        let keys_wrong = Keys::generate();
+        let npub_correct = keys_correct.public_key().to_bech32().unwrap();
+        let nsec_wrong = keys_wrong.secret_key().to_bech32().unwrap();
+
+        let uri = format!(
+            "/nic/update?hostname={npub_correct}.nodns.shop&myip=1.2.3.4"
+        );
+
+        let mut request = Request::builder()
+            .method("GET")
+            .uri(&uri)
+            .header(
+                "authorization",
+                make_auth_header(&npub_correct, &nsec_wrong),
+            )
+            .body(body::Body::empty())
+            .unwrap();
+        request.extensions_mut().insert(make_connect_info());
+
+        let response = app.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), 401);
+        assert_eq!(response_body(response).await, "badauth");
+    }
+
+    #[tokio::test]
+    async fn dyndns_empty_password_returns_badauth() {
+        let state = create_test_state();
+        let app = build_router(state);
+
+        let keys = Keys::generate();
+        let npub = keys.public_key().to_bech32().unwrap();
+
+        let auth = base64::engine::general_purpose::STANDARD.encode(format!("{npub}:"));
+        let uri = format!("/nic/update?hostname={npub}.nodns.shop&myip=1.2.3.4");
+
+        let mut request = Request::builder()
+            .method("GET")
+            .uri(&uri)
+            .header("authorization", format!("Basic {auth}"))
+            .body(body::Body::empty())
+            .unwrap();
+        request.extensions_mut().insert(make_connect_info());
+
+        let response = app.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), 401);
+        assert_eq!(response_body(response).await, "badauth");
+    }
+
+    #[tokio::test]
+    async fn dyndns_missing_auth_returns_badauth() {
+        let state = create_test_state();
+        let app = build_router(state);
+
+        let mut request = Request::builder()
+            .method("GET")
+            .uri("/nic/update?hostname=test.nodns.shop&myip=1.2.3.4")
+            .body(body::Body::empty())
+            .unwrap();
+        request.extensions_mut().insert(make_connect_info());
+
+        let response = app.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), 401);
+        assert_eq!(response_body(response).await, "badauth");
+    }
+
+    #[tokio::test]
+    async fn dyndns_hostname_without_dot_returns_notfqdn() {
+        let state = create_test_state();
+        let app = build_router(state);
+
+        let keys = Keys::generate();
+        let npub = keys.public_key().to_bech32().unwrap();
+        let nsec = keys.secret_key().to_bech32().unwrap();
+
+        let mut request = Request::builder()
+            .method("GET")
+            .uri("/nic/update?hostname=test&myip=1.2.3.4")
+            .header("authorization", make_auth_header(&npub, &nsec))
+            .body(body::Body::empty())
+            .unwrap();
+        request.extensions_mut().insert(make_connect_info());
+
+        let response = app.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), 400);
+        assert_eq!(response_body(response).await, "notfqdn");
+    }
+
+    #[tokio::test]
+    async fn dyndns_hostname_not_in_managed_zone_returns_notfqdn() {
+        let state = create_test_state();
+        let app = build_router(state);
+
+        let keys = Keys::generate();
+        let npub = keys.public_key().to_bech32().unwrap();
+        let nsec = keys.secret_key().to_bech32().unwrap();
+
+        let mut request = Request::builder()
+            .method("GET")
+            .uri("/nic/update?hostname=test.example.com&myip=1.2.3.4")
+            .header("authorization", make_auth_header(&npub, &nsec))
+            .body(body::Body::empty())
+            .unwrap();
+        request.extensions_mut().insert(make_connect_info());
+
+        let response = app.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), 400);
+        assert_eq!(response_body(response).await, "notfqdn");
+    }
+
+    #[tokio::test]
+    async fn dyndns_custom_name_no_delegation_returns_nohost() {
+        let state = create_test_state();
+        let app = build_router(state);
+
+        let keys = Keys::generate();
+        let npub = keys.public_key().to_bech32().unwrap();
+        let nsec = keys.secret_key().to_bech32().unwrap();
+
+        let mut request = Request::builder()
+            .method("GET")
+            .uri("/nic/update?hostname=alice.nodns.shop&myip=1.2.3.4")
+            .header("authorization", make_auth_header(&npub, &nsec))
+            .body(body::Body::empty())
+            .unwrap();
+        request.extensions_mut().insert(make_connect_info());
+
+        let response = app.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), 403);
+        assert_eq!(response_body(response).await, "nohost");
+    }
+
+    #[tokio::test]
+    async fn dyndns_ipv6_address_accepted_through_auth() {
+        // IPv6 address passes IP validation; fails later at updater (no updater)
+        let state = create_test_state();
+        let app = build_router(state);
+
+        let keys = Keys::generate();
+        let npub = keys.public_key().to_bech32().unwrap();
+        let nsec = keys.secret_key().to_bech32().unwrap();
+        let hostname = format!("{npub}.nodns.shop");
+
+        let uri = format!("/nic/update?hostname={hostname}&myip=2001:db8::1");
+
+        let mut request = Request::builder()
+            .method("GET")
+            .uri(&uri)
+            .header("authorization", make_auth_header(&npub, &nsec))
+            .body(body::Body::empty())
+            .unwrap();
+        request.extensions_mut().insert(make_connect_info());
+
+        let response = app.oneshot(request).await.unwrap();
+        // Auth + IP validation pass; fails at "no updater" → 911
+        assert_eq!(response.status(), 500);
+        assert_eq!(response_body(response).await, "911");
+    }
+
+    #[tokio::test]
+    async fn dyndns_missing_myip_uses_connect_info_ip() {
+        // When myip is absent, handler falls back to ConnectInfo IP (127.0.0.1).
+        // Still reaches "no updater" → 911, proving auth passed.
+        let state = create_test_state();
+        let app = build_router(state);
+
+        let keys = Keys::generate();
+        let npub = keys.public_key().to_bech32().unwrap();
+        let nsec = keys.secret_key().to_bech32().unwrap();
+        let hostname = format!("{npub}.nodns.shop");
+
+        let uri = format!("/nic/update?hostname={hostname}");
+
+        let mut request = Request::builder()
+            .method("GET")
+            .uri(&uri)
+            .header("authorization", make_auth_header(&npub, &nsec))
+            .body(body::Body::empty())
+            .unwrap();
+        request.extensions_mut().insert(make_connect_info());
+
+        let response = app.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), 500);
+        assert_eq!(response_body(response).await, "911");
+    }
+
+    #[tokio::test]
+    async fn dyndns_with_updater_dns_push_fails_returns_911() {
+        // Updater exists but points at 127.0.0.1:1 (nothing listening).
+        // DNS push fails → 500 "911". This proves the full path up to DNS push.
+        let state = create_test_state_with_updater();
+        let app = build_router(state);
+
+        let keys = Keys::generate();
+        let npub = keys.public_key().to_bech32().unwrap();
+        let nsec = keys.secret_key().to_bech32().unwrap();
+        let hostname = format!("{npub}.nodns.shop");
+
+        let uri = format!("/nic/update?hostname={hostname}&myip=1.2.3.4");
+
+        let mut request = Request::builder()
+            .method("GET")
+            .uri(&uri)
+            .header("authorization", make_auth_header(&npub, &nsec))
+            .body(body::Body::empty())
+            .unwrap();
+        request.extensions_mut().insert(make_connect_info());
+
+        let response = app.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), 500);
+        assert_eq!(response_body(response).await, "911");
+    }
+
+    // =======================================================================
+    // acme-dns register integration tests
+    // =======================================================================
+
+    #[tokio::test]
+    async fn acmedns_register_returns_201_with_fields() {
+        let state = create_test_state();
+        let app = build_router(state);
+
+        let request = Request::builder()
+            .method("POST")
+            .uri("/register")
+            .body(body::Body::empty())
+            .unwrap();
+
+        let response = app.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), 201);
+
+        let json = response_json(response).await;
+        assert!(json["fulldomain"].is_string());
+        assert!(json["username"].is_string());
+        assert!(json["password"].is_string());
+        assert!(json["subdomain"].is_string());
+        assert!(json["allowfrom"].is_array());
+    }
+
+    #[tokio::test]
+    async fn acmedns_register_fulldomain_format() {
+        let state = create_test_state();
+        let app = build_router(state);
+
+        let request = Request::builder()
+            .method("POST")
+            .uri("/register")
+            .body(body::Body::empty())
+            .unwrap();
+
+        let response = app.oneshot(request).await.unwrap();
+        let json = response_json(response).await;
+
+        let fulldomain = json["fulldomain"].as_str().unwrap();
+        assert!(
+            fulldomain.ends_with(".acme.nodns.shop"),
+            "fulldomain should end with .acme.nodns.shop, got: {fulldomain}"
+        );
+    }
+
+    #[tokio::test]
+    async fn acmedns_register_subdomain_is_uuid() {
+        let state = create_test_state();
+        let app = build_router(state);
+
+        let request = Request::builder()
+            .method("POST")
+            .uri("/register")
+            .body(body::Body::empty())
+            .unwrap();
+
+        let response = app.oneshot(request).await.unwrap();
+        let json = response_json(response).await;
+
+        let subdomain = json["subdomain"].as_str().unwrap();
+        assert!(
+            uuid::Uuid::parse_str(subdomain).is_ok(),
+            "subdomain should be a valid UUID, got: {subdomain}"
+        );
+    }
+
+    #[tokio::test]
+    async fn acmedns_register_with_npub_header_stores_npub() {
+        let state = create_test_state();
+        let app = build_router(state.clone());
+
+        let request = Request::builder()
+            .method("POST")
+            .uri("/register")
+            .header("X-Nostr-Npub", "npub1test")
+            .body(body::Body::empty())
+            .unwrap();
+
+        let response = app.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), 201);
+
+        let json = response_json(response).await;
+        let subdomain = json["subdomain"].as_str().unwrap();
+
+        let reg = state
+            .store
+            .get_acme_dns_registration_by_username(json["username"].as_str().unwrap())
+            .unwrap()
+            .unwrap();
+        assert_eq!(reg.npub, "npub1test");
+        assert_eq!(reg.subdomain, subdomain);
+    }
+
+    #[tokio::test]
+    async fn acmedns_register_twice_produces_different_subdomains() {
+        let state = create_test_state();
+        let app = build_router(state);
+
+        let req1 = Request::builder()
+            .method("POST")
+            .uri("/register")
+            .body(body::Body::empty())
+            .unwrap();
+        let resp1 = app.clone().oneshot(req1).await.unwrap();
+        let json1 = response_json(resp1).await;
+
+        let req2 = Request::builder()
+            .method("POST")
+            .uri("/register")
+            .body(body::Body::empty())
+            .unwrap();
+        let resp2 = app.oneshot(req2).await.unwrap();
+        let json2 = response_json(resp2).await;
+
+        assert_ne!(
+            json1["subdomain"].as_str().unwrap(),
+            json2["subdomain"].as_str().unwrap(),
+            "two registrations must produce different subdomains"
+        );
+    }
+
+    // =======================================================================
+    // acme-dns update integration tests
+    // =======================================================================
+
+    async fn register_acmedns(
+        app: &Router,
+    ) -> (String, String, String) {
+        let request = Request::builder()
+            .method("POST")
+            .uri("/register")
+            .body(body::Body::empty())
+            .unwrap();
+        let response = app.clone().oneshot(request).await.unwrap();
+        let json = response_json(response).await;
+        let subdomain = json["subdomain"].as_str().unwrap().to_string();
+        let username = json["username"].as_str().unwrap().to_string();
+        let password = json["password"].as_str().unwrap().to_string();
+        (subdomain, username, password)
+    }
+
+    #[tokio::test]
+    async fn acmedns_update_correct_credentials_dns_fails() {
+        // Register, then update with correct credentials.
+        // DNS push fails (updater points at 127.0.0.1:1) → 500.
+        let state = create_test_state_with_updater();
+        let app = build_router(state);
+
+        let (subdomain, username, password) = register_acmedns(&app).await;
+
+        let body = serde_json::json!({
+            "subdomain": subdomain,
+            "txt": "test-challenge-token"
+        });
+
+        let request = Request::builder()
+            .method("POST")
+            .uri("/update")
+            .header("X-Api-User", &username)
+            .header("X-Api-Key", &password)
+            .header("content-type", "application/json")
+            .body(body::Body::from(serde_json::to_vec(&body).unwrap()))
+            .unwrap();
+
+        let response = app.oneshot(request).await.unwrap();
+        // DNS delete fails → 500
+        assert_eq!(response.status(), 500);
+    }
+
+    #[tokio::test]
+    async fn acmedns_update_wrong_api_key_returns_401() {
+        let state = create_test_state();
+        let app = build_router(state);
+
+        let (subdomain, username, _password) = register_acmedns(&app).await;
+
+        let body = serde_json::json!({
+            "subdomain": subdomain,
+            "txt": "test-challenge"
+        });
+
+        let request = Request::builder()
+            .method("POST")
+            .uri("/update")
+            .header("X-Api-User", &username)
+            .header("X-Api-Key", "wrong-key")
+            .header("content-type", "application/json")
+            .body(body::Body::from(serde_json::to_vec(&body).unwrap()))
+            .unwrap();
+
+        let response = app.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), 401);
+    }
+
+    #[tokio::test]
+    async fn acmedns_update_missing_api_user_returns_401() {
+        let state = create_test_state();
+        let app = build_router(state);
+
+        let body = serde_json::json!({
+            "subdomain": "irrelevant",
+            "txt": "test"
+        });
+
+        let request = Request::builder()
+            .method("POST")
+            .uri("/update")
+            .header("X-Api-Key", "some-key")
+            .header("content-type", "application/json")
+            .body(body::Body::from(serde_json::to_vec(&body).unwrap()))
+            .unwrap();
+
+        let response = app.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), 401);
+    }
+
+    #[tokio::test]
+    async fn acmedns_update_missing_api_key_returns_401() {
+        let state = create_test_state();
+        let app = build_router(state);
+
+        let body = serde_json::json!({
+            "subdomain": "irrelevant",
+            "txt": "test"
+        });
+
+        let request = Request::builder()
+            .method("POST")
+            .uri("/update")
+            .header("X-Api-User", "some-user")
+            .header("content-type", "application/json")
+            .body(body::Body::from(serde_json::to_vec(&body).unwrap()))
+            .unwrap();
+
+        let response = app.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), 401);
+    }
+
+    #[tokio::test]
+    async fn acmedns_update_nonexistent_username_returns_401() {
+        let state = create_test_state();
+        let app = build_router(state);
+
+        let body = serde_json::json!({
+            "subdomain": "irrelevant",
+            "txt": "test"
+        });
+
+        let request = Request::builder()
+            .method("POST")
+            .uri("/update")
+            .header("X-Api-User", "nonexistent-user-id")
+            .header("X-Api-Key", "some-key")
+            .header("content-type", "application/json")
+            .body(body::Body::from(serde_json::to_vec(&body).unwrap()))
+            .unwrap();
+
+        let response = app.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), 401);
+    }
+
+    #[tokio::test]
+    async fn acmedns_update_wrong_subdomain_returns_403() {
+        let state = create_test_state();
+        let app = build_router(state);
+
+        let (_subdomain, username, password) = register_acmedns(&app).await;
+
+        let body = serde_json::json!({
+            "subdomain": "wrong-subdomain-uuid",
+            "txt": "test-challenge"
+        });
+
+        let request = Request::builder()
+            .method("POST")
+            .uri("/update")
+            .header("X-Api-User", &username)
+            .header("X-Api-Key", &password)
+            .header("content-type", "application/json")
+            .body(body::Body::from(serde_json::to_vec(&body).unwrap()))
+            .unwrap();
+
+        let response = app.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), 403);
+    }
+}

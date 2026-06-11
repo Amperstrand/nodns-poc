@@ -499,3 +499,208 @@ fn extract_npub_from_fqdn(fqdn: &str, zone: &str) -> String {
     }
     "unknown".to_string()
 }
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use hickory_client::proto::rr::rdata::{A, AAAA, TXT};
+    use std::net::{Ipv4Addr, Ipv6Addr};
+
+    // =======================================================================
+    // find_zone_for_domain
+    // =======================================================================
+
+    #[test]
+    fn find_zone_subdomain_of_zone() {
+        let zones = vec!["nodns.shop".to_string()];
+        assert_eq!(
+            find_zone_for_domain("foo.nodns.shop", &zones),
+            Some("nodns.shop")
+        );
+    }
+
+    #[test]
+    fn find_zone_exact_match() {
+        let zones = vec!["nodns.shop".to_string()];
+        assert_eq!(
+            find_zone_for_domain("nodns.shop", &zones),
+            Some("nodns.shop")
+        );
+    }
+
+    #[test]
+    fn find_zone_trailing_dot() {
+        let zones = vec!["nodns.shop".to_string()];
+        // Trailing dot is stripped before matching
+        assert_eq!(
+            find_zone_for_domain("foo.nodns.shop.", &zones),
+            Some("nodns.shop")
+        );
+    }
+
+    #[test]
+    fn find_zone_no_match() {
+        let zones = vec!["nodns.shop".to_string()];
+        assert_eq!(
+            find_zone_for_domain("foo.example.com", &zones),
+            None
+        );
+    }
+
+    #[test]
+    fn find_zone_multiple_zones_picks_correct() {
+        let zones = vec!["nodns.shop".to_string(), "example.com".to_string()];
+        assert_eq!(
+            find_zone_for_domain("bar.example.com", &zones),
+            Some("example.com")
+        );
+        assert_eq!(
+            find_zone_for_domain("baz.nodns.shop", &zones),
+            Some("nodns.shop")
+        );
+    }
+
+    // =======================================================================
+    // record_type_to_string
+    // =======================================================================
+
+    #[test]
+    fn record_type_known_types() {
+        assert_eq!(record_type_to_string(RecordType::A), "A");
+        assert_eq!(record_type_to_string(RecordType::AAAA), "AAAA");
+        assert_eq!(record_type_to_string(RecordType::CNAME), "CNAME");
+        assert_eq!(record_type_to_string(RecordType::TXT), "TXT");
+        assert_eq!(record_type_to_string(RecordType::MX), "MX");
+        assert_eq!(record_type_to_string(RecordType::SRV), "SRV");
+        assert_eq!(record_type_to_string(RecordType::NS), "NS");
+        assert_eq!(record_type_to_string(RecordType::PTR), "PTR");
+    }
+
+    #[test]
+    fn record_type_unknown_falls_back() {
+        assert_eq!(
+            record_type_to_string(RecordType::Unknown(999)),
+            "UNKNOWN"
+        );
+    }
+
+    // =======================================================================
+    // is_allowed_record_type
+    // =======================================================================
+
+    #[test]
+    fn allowed_record_types() {
+        assert!(is_allowed_record_type(RecordType::A));
+        assert!(is_allowed_record_type(RecordType::AAAA));
+        assert!(is_allowed_record_type(RecordType::CNAME));
+        assert!(is_allowed_record_type(RecordType::TXT));
+        assert!(is_allowed_record_type(RecordType::MX));
+        assert!(is_allowed_record_type(RecordType::SRV));
+    }
+
+    #[test]
+    fn disallowed_record_types() {
+        assert!(!is_allowed_record_type(RecordType::NS));
+        assert!(!is_allowed_record_type(RecordType::PTR));
+        assert!(!is_allowed_record_type(RecordType::SOA));
+        assert!(!is_allowed_record_type(RecordType::Unknown(999)));
+    }
+
+    // =======================================================================
+    // rdata_to_string
+    // =======================================================================
+
+    #[test]
+    fn rdata_a_record() {
+        let rdata = RData::A(A::from(Ipv4Addr::new(1, 2, 3, 4)));
+        assert_eq!(rdata_to_string(&rdata, RecordType::A), "1.2.3.4");
+    }
+
+    #[test]
+    fn rdata_aaaa_loopback() {
+        let rdata = RData::AAAA(AAAA::from(Ipv6Addr::LOCALHOST));
+        assert_eq!(rdata_to_string(&rdata, RecordType::AAAA), "::1");
+    }
+
+    #[test]
+    fn rdata_txt_single_part() {
+        let rdata = RData::TXT(TXT::new(vec!["hello".to_string()]));
+        assert_eq!(rdata_to_string(&rdata, RecordType::TXT), "hello");
+    }
+
+    #[test]
+    fn rdata_txt_multiple_parts_concatenated() {
+        let rdata = RData::TXT(TXT::new(vec![
+            "hel".to_string(),
+            "lo".to_string(),
+        ]));
+        assert_eq!(rdata_to_string(&rdata, RecordType::TXT), "hello");
+    }
+
+    #[test]
+    fn rdata_mismatched_type_returns_empty() {
+        let rdata = RData::A(A::from(Ipv4Addr::new(1, 2, 3, 4)));
+        // Pass AAAA type but A rdata — should hit the catch-all arm.
+        assert!(rdata_to_string(&rdata, RecordType::AAAA).is_empty());
+    }
+
+    // =======================================================================
+    // extract_name_from_fqdn
+    // =======================================================================
+
+    #[test]
+    fn extract_name_subdomain_prefix() {
+        // "foo.npub1abc.nodns.shop" → strip zone suffix → "foo.npub1abc" → first label "foo"
+        assert_eq!(
+            extract_name_from_fqdn("foo.npub1abc.nodns.shop", "nodns.shop"),
+            "foo"
+        );
+    }
+
+    #[test]
+    fn extract_name_exact_zone_is_apex() {
+        assert_eq!(extract_name_from_fqdn("nodns.shop", "nodns.shop"), "@");
+    }
+
+    #[test]
+    fn extract_name_no_match_returns_fqdn() {
+        assert_eq!(
+            extract_name_from_fqdn("foo.example.com", "nodns.shop"),
+            "foo.example.com"
+        );
+    }
+
+    // =======================================================================
+    // extract_npub_from_fqdn
+    // =======================================================================
+
+    #[test]
+    fn extract_npub_with_name_prefix() {
+        // "foo.npub1abc.nodns.shop" → strip zone → "foo.npub1abc" → last part "npub1abc"
+        assert_eq!(
+            extract_npub_from_fqdn("foo.npub1abc.nodns.shop", "nodns.shop"),
+            "npub1abc"
+        );
+    }
+
+    #[test]
+    fn extract_npub_bare_npub() {
+        // "npub1abc.nodns.shop" → strip zone → "npub1abc" → no dot → "npub1abc"
+        assert_eq!(
+            extract_npub_from_fqdn("npub1abc.nodns.shop", "nodns.shop"),
+            "npub1abc"
+        );
+    }
+
+    #[test]
+    fn extract_npub_no_match_returns_unknown() {
+        assert_eq!(
+            extract_npub_from_fqdn("foo.example.com", "nodns.shop"),
+            "unknown"
+        );
+    }
+}
