@@ -31,7 +31,7 @@ pub async fn process_nostr_event(
 ) {
     let event_id = evt.id.to_hex();
     let pubkey_hex = evt.pubkey.to_hex();
-    let created_at = evt.created_at.as_u64() as i64;
+    let created_at = evt.created_at.as_secs() as i64;
 
     let npub = match evt.pubkey.to_bech32() {
         Ok(n) => n,

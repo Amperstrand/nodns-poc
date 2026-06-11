@@ -991,7 +991,7 @@ mod tests {
     fn test_parse_payment_tags_cashu() {
         let t1 = Tag::parse(["cashu", "token123", "https://mint.example.com", "100"]).unwrap();
         let t2 = Tag::parse(["e", "someeventid", ""]).unwrap();
-        let tags = Tags::new(vec![t1, t2]);
+        let tags = Tags::from_list(vec![t1, t2]);
         let payments = parse_payment_tags(&tags).unwrap();
         assert_eq!(payments.len(), 1);
         assert_eq!(payments[0].method, "cashu");
@@ -1004,7 +1004,7 @@ mod tests {
     fn test_parse_payment_tags_zap() {
         let t1 = Tag::parse(["zap", "receipt_event_id", "500"]).unwrap();
         let t2 = Tag::parse(["e", "someeventid", ""]).unwrap();
-        let tags = Tags::new(vec![t1, t2]);
+        let tags = Tags::from_list(vec![t1, t2]);
         let payments = parse_payment_tags(&tags).unwrap();
         assert_eq!(payments.len(), 1);
         assert_eq!(payments[0].method, "zap");

@@ -1,0 +1,44 @@
+name: Build Bot Binary
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'nodns-bot-rs/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            nodns-bot-rs/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('nodns-bot-rs/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      - name: Build release binary
+        working-directory: nodns-bot-rs
+        run: cargo build --release
+
+      - name: Run tests
+        working-directory: nodns-bot-rs
+        run: cargo test
+
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: nodns-bot-linux-x86_64
+          path: nodns-bot-rs/target/release/nodns-bot
+          retention-days: 5
