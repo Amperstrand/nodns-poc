@@ -93,7 +93,7 @@ function FeedbackBanner({
 /* ── main content ───────────────────────────────────────── */
 
 function WalletContent() {
-  const { manager, balance, status, mintOnline, topUp, topUpState, topUpError } = useWallet();
+  const { manager, balance, status, mintOnline, topUp, topUpState, topUpError, error: walletError } = useWallet();
   const { npub, nsec, initialized } = useIdentity();
 
   /* receive state */
@@ -128,6 +128,26 @@ function WalletContent() {
   const [invoice, setInvoice] = useState("");
   const [invoiceCopied, setInvoiceCopied] = useState(false);
 
+  /* ── history loading ─────────────────────────────────── */
+
+  const loadHistory = useCallback(
+    async (offset: number) => {
+      if (!manager) return;
+      await Promise.resolve();
+      setLoadingHistory(true);
+      try {
+        const entries = await manager.history.getPaginatedHistory(offset, 50);
+        setHistory(entries);
+        setHistoryOffset(offset);
+      } catch {
+        // History fetch failure is non-fatal
+      } finally {
+        setLoadingHistory(false);
+      }
+    },
+    [manager],
+  );
+
   /* ── receive handler ─────────────────────────────────── */
 
   const handleReceive = useCallback(async () => {
@@ -152,7 +172,7 @@ function WalletContent() {
     } finally {
       setReceiving(false);
     }
-  }, [manager, tokenInput]);
+  }, [manager, tokenInput, loadHistory]);
 
   /* ── send handler ────────────────────────────────────── */
 
@@ -187,7 +207,7 @@ function WalletContent() {
     } finally {
       setSending(false);
     }
-  }, [manager, sendAmount]);
+  }, [manager, sendAmount, loadHistory]);
 
   /* ── copy token ──────────────────────────────────────── */
 
@@ -218,28 +238,10 @@ function WalletContent() {
     setTimeout(() => setInvoiceCopied(false), 2000);
   }, [invoice]);
 
-  /* ── history loading ─────────────────────────────────── */
-
-  const loadHistory = useCallback(
-    async (offset: number) => {
-      if (!manager) return;
-      setLoadingHistory(true);
-      try {
-        const entries = await manager.history.getPaginatedHistory(offset, 50);
-        setHistory(entries);
-        setHistoryOffset(offset);
-      } catch {
-        // History fetch failure is non-fatal
-      } finally {
-        setLoadingHistory(false);
-      }
-    },
-    [manager],
-  );
-
   useEffect(() => {
     if (status === "ready" && manager) {
-      loadHistory(0);
+      const id = requestAnimationFrame(() => loadHistory(0));
+      return () => cancelAnimationFrame(id);
     }
   }, [status, manager, loadHistory]);
 
@@ -270,15 +272,14 @@ function WalletContent() {
   }
 
   if (status === "error") {
-    const { error } = useWallet();
     return (
       <div className="mx-auto max-w-[640px] py-8 md:py-12">
         <h1 className="text-2xl font-bold mb-6">Wallet</h1>
         <div className="rounded-xl border border-red-800 bg-red-950/40 text-red-400 p-4 sm:p-6 text-center">
           <p className="text-sm mb-4">Wallet failed to initialize.</p>
-          {error && (
+          {walletError && (
             <p className="text-xs text-red-300/80 mb-4 font-mono break-all">
-              {error}
+              {walletError}
             </p>
           )}
           <p className="text-xs text-red-400/70 mb-4">

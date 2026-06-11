@@ -1,3 +1,5 @@
+#![allow(clippy::too_many_arguments, clippy::result_large_err)]
+
 mod acme;
 mod auth;
 mod config;
@@ -10,11 +12,11 @@ mod parser;
 mod payment;
 mod store;
 mod subscriber;
-mod tls_derivation;
 pub mod types;
 
 use std::collections::HashMap;
 use std::net::SocketAddr;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::time::Instant;
@@ -94,7 +96,7 @@ async fn lease_expiry_task(
                 .map(|z| z.lease.grace_period_days as i64 * 86400)
                 .unwrap_or(30 * 86400);
 
-            let state = DelegationState::from_str(&del.status);
+            let state = DelegationState::from_str(&del.status).unwrap_or(DelegationState::Active);
             let grace_deadline = del.valid_until + grace_period_secs;
 
             if now >= grace_deadline {
@@ -414,10 +416,7 @@ async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
 fn base64_dnskey(pub_hex: &str) -> String {
     use base64::Engine;
     let pub_bytes = hex::decode(pub_hex).expect("valid hex pubkey");
-    let mut rdata = vec![];
-    rdata.push(1); rdata.push(1); // flags: 257 (Zone Key + SEP = KSK)
-    rdata.push(3); // protocol: 3 (DNSSEC)
-    rdata.push(13); // algorithm: ECDSAP256SHA256
+    let mut rdata = vec![1, 1, 3, 13]; // flags: 257 (Zone Key + SEP = KSK), protocol: 3 (DNSSEC), algorithm: ECDSAP256SHA256
     rdata.extend_from_slice(&pub_bytes);
     base64::engine::general_purpose::STANDARD.encode(&rdata)
 }

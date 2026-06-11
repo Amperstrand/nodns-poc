@@ -179,7 +179,7 @@ impl Store {
         conn.execute_batch("PRAGMA journal_mode=WAL")
             .map_err(StoreError::WalMode)?;
 
-        let acme_encryption_key = acme_encryption_key.map(|k| derive_key(k));
+        let acme_encryption_key = acme_encryption_key.map(derive_key);
 
         Ok(Self {
             conn: Mutex::new(conn),
@@ -343,7 +343,7 @@ impl Store {
             .map_err(|e| StoreError::GetEvent(event_id.to_string(), e))?;
 
         let result = stmt
-            .query_row(params![event_id], |row| scan_event_row(row))
+            .query_row(params![event_id], scan_event_row)
             .optional()
             .map_err(|e| StoreError::GetEvent(event_id.to_string(), e))?;
 
@@ -361,7 +361,7 @@ impl Store {
             .map_err(|e| StoreError::GetRecordsByPubkey(pubkey.to_string(), e))?;
 
         let records = stmt
-            .query_map(params![pubkey], |row| scan_event_row(row))
+            .query_map(params![pubkey], scan_event_row)
             .map_err(|e| StoreError::GetRecordsByPubkey(pubkey.to_string(), e))?
             .collect::<Result<Vec<_>, _>>()
             .map_err(StoreError::ScanRecord)?;
@@ -481,7 +481,7 @@ impl Store {
             .map_err(StoreError::ListAllRecords)?;
 
         let records = stmt
-            .query_map([], |row| scan_event_row(row))
+            .query_map([], scan_event_row)
             .map_err(StoreError::ListAllRecords)?
             .collect::<Result<Vec<_>, _>>()
             .map_err(StoreError::ScanRecord)?;
@@ -501,7 +501,7 @@ impl Store {
             .map_err(StoreError::ListAllRecords)?;
 
         let records = stmt
-            .query_map(params![pattern], |row| scan_event_row(row))
+            .query_map(params![pattern], scan_event_row)
             .map_err(StoreError::ListAllRecords)?
             .collect::<Result<Vec<_>, _>>()
             .map_err(StoreError::ScanRecord)?;
@@ -588,7 +588,7 @@ impl Store {
             .map_err(|e| StoreError::GetActiveDelegation(domain.to_string(), zone.to_string(), e))?;
 
         let result = stmt
-            .query_row(params![domain, zone, now, now], |row| scan_delegation_row(row))
+            .query_row(params![domain, zone, now, now], scan_delegation_row)
             .optional()
             .map_err(|e| StoreError::GetActiveDelegation(domain.to_string(), zone.to_string(), e))?;
 
@@ -613,7 +613,7 @@ impl Store {
             .map_err(|e| StoreError::GetActiveDelegation(domain.to_string(), zone.to_string(), e))?;
 
         let result = stmt
-            .query_row(params![domain, zone], |row| scan_delegation_row(row))
+            .query_row(params![domain, zone], scan_delegation_row)
             .optional()
             .map_err(|e| StoreError::GetActiveDelegation(domain.to_string(), zone.to_string(), e))?;
 
@@ -667,7 +667,7 @@ impl Store {
             .map_err(|e| StoreError::GetDelegationsByPubkey(npub.to_string(), e))?;
 
         let records = stmt
-            .query_map(params![npub, now, now], |row| scan_delegation_row(row))
+            .query_map(params![npub, now, now], scan_delegation_row)
             .map_err(|e| StoreError::GetDelegationsByPubkey(npub.to_string(), e))?
             .collect::<Result<Vec<_>, _>>()
             .map_err(StoreError::ScanRecord)?;
@@ -718,7 +718,7 @@ impl Store {
             .map_err(StoreError::ListAllRecords)?;
 
         let records = stmt
-            .query_map(params![now], |row| scan_delegation_row(row))
+            .query_map(params![now], scan_delegation_row)
             .map_err(StoreError::ListAllRecords)?
             .collect::<Result<Vec<_>, _>>()
             .map_err(StoreError::ScanRecord)?;
@@ -874,7 +874,7 @@ impl Store {
             .map_err(|e| StoreError::GetAcmeOrder(id.to_string(), e))?;
 
         let result = stmt
-            .query_row(params![id], |row| scan_acme_order_row(row))
+            .query_row(params![id], scan_acme_order_row)
             .optional()
             .map_err(|e| StoreError::GetAcmeOrder(id.to_string(), e))?;
 
@@ -902,7 +902,7 @@ impl Store {
             .map_err(|e| StoreError::ListAcmeOrdersByNpub(npub.to_string(), e))?;
 
         let records = stmt
-            .query_map(params![npub], |row| scan_acme_order_row(row))
+            .query_map(params![npub], scan_acme_order_row)
             .map_err(|e| StoreError::ListAcmeOrdersByNpub(npub.to_string(), e))?
             .collect::<Result<Vec<_>, _>>()
             .map_err(StoreError::ScanAcmeOrder)?;
@@ -937,7 +937,7 @@ impl Store {
             .map_err(|e| StoreError::GetAcmeOrderLogs(order_id.to_string(), e))?;
 
         let records = stmt
-            .query_map(params![order_id], |row| scan_acme_order_log_row(row))
+            .query_map(params![order_id], scan_acme_order_log_row)
             .map_err(|e| StoreError::GetAcmeOrderLogs(order_id.to_string(), e))?
             .collect::<Result<Vec<_>, _>>()
             .map_err(StoreError::ScanAcmeOrderLog)?;
@@ -1130,31 +1130,6 @@ fn scan_acme_order_log_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<AcmeOrde
         details: row.get(4)?,
         created_at: row.get(5)?,
     })
-}
-
-// ---------------------------------------------------------------------------
-// Utility: get_zone_for_domain (ported from Go)
-// ---------------------------------------------------------------------------
-
-/// Determine which configured zone a domain belongs to.
-///
-/// Returns `(prefix, zone, found)`:
-/// - `prefix` is the subdomain part before the zone suffix.
-/// - `zone` is the matching zone name.
-/// - `found` is `true` when a zone matched.
-pub fn get_zone_for_domain<'a>(domain: &'a str, zones: &'a [String]) -> (&'a str, &'a str, bool) {
-    let domain = domain.trim_end_matches('.');
-    for zone in zones {
-        let suffix = format!(".{zone}");
-        if domain.ends_with(&suffix) {
-            let prefix = &domain[..domain.len() - suffix.len()];
-            return (prefix, zone.as_str(), true);
-        }
-        if domain == zone.as_str() {
-            return ("", zone.as_str(), true);
-        }
-    }
-    ("", "", false)
 }
 
 // ---------------------------------------------------------------------------

@@ -41,7 +41,6 @@ function pemToDer(pem: string): Uint8Array {
 }
 
 function parseAsn1(data: Uint8Array, offset: number): Asn1Node {
-  const start = offset;
   const tag = data[offset++];
 
   let length: number;
@@ -166,7 +165,6 @@ function getPublicKeyInfo(spki: Asn1Node): { algorithm: string; size: string } {
 
   if (algOid === "1.2.840.113549.1.1.1") {
     const bitString = spki.children[1];
-    const unusedBits = bitString.content[0];
     const keyData = bitString.content.slice(1);
     const rsaSeq = parseAsn1(keyData, 0);
     const modulusContent = rsaSeq.children[0].content;

@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { SiteHeader } from "@/components/site-header";
@@ -27,17 +27,16 @@ function SearchContent() {
   const searchParams = useSearchParams();
   const q = searchParams.get("q") || "";
 
-  const [name, setName] = useState("");
   const [available, setAvailable] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(false);
   const [pricing, setPricing] = useState<ZonePricing | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tripartite, setTripartite] = useState<TripartiteRecords | null>(null);
 
+  const name = useMemo(() => sanitizeName(q), [q]);
+
   useEffect(() => {
-    const clean = sanitizeName(q);
-    if (!clean) return;
-    setName(clean);
+    if (!name) return;
 
     let cancelled = false;
 
@@ -45,7 +44,7 @@ function SearchContent() {
       setLoading(true);
       setError(null);
       try {
-        const fqdn = toFqdn(clean);
+        const fqdn = toFqdn(name);
 
         const results = await fetchTripartiteRecords({ domain: fqdn });
         if (!cancelled) {
@@ -73,9 +72,9 @@ function SearchContent() {
       }
     }
 
-    check();
+    requestAnimationFrame(() => check());
     return () => { cancelled = true; };
-  }, [q]);
+  }, [name]);
 
   const price = name ? getPriceForName(name) : 0;
 

@@ -257,6 +257,7 @@ export function Dashboard() {
     const kp = generateEphemeralKeyPair();
     setKeyPair(kp);
     keyPairRef.current = kp;
+    setPublishedRecords([]);
     setFeedback(null);
   }, []);
 
@@ -266,6 +267,7 @@ export function Dashboard() {
       const kp = keyPairFromNsec(nsecInput.trim());
       setKeyPair(kp);
       keyPairRef.current = kp;
+      setPublishedRecords([]);
       setShowKeyInput(false);
       setNsecInput("");
       setNsecError("");
@@ -279,6 +281,7 @@ export function Dashboard() {
     setKeyPair(null);
     keyPairRef.current = null;
     setPendingRecords([]);
+    setPublishedRecords([]);
     setFeedback(null);
     setPipelineStatus("idle");
     stopPipelineTimers();
@@ -376,11 +379,9 @@ export function Dashboard() {
   }, [keyPair, fetchRecords]);
 
   useEffect(() => {
-    if (!keyPair) {
-      setPublishedRecords([]);
-      return;
-    }
-    fetchRecords();
+    if (!keyPair) return;
+    const id = requestAnimationFrame(() => fetchRecords());
+    return () => cancelAnimationFrame(id);
   }, [keyPair, fetchRecords]);
 
   return (

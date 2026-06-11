@@ -56,6 +56,7 @@ pub struct AcmeOrderRequest {
     domain: String,
     email: Option<String>,
     csr_der: Option<String>,
+    #[allow(dead_code)]
     environment: Option<String>,
     ca: Option<String>,
 }
@@ -322,7 +323,8 @@ pub async fn acme_order_handler(
     let directory_url = match effective_ca.as_str() {
         "zerossl" => "https://acme.zerossl.com/v2/DV90".to_string(),
         "letsencrypt-production" | "production" => "https://acme-v02.api.letsencrypt.org/directory".to_string(),
-        "letsencrypt-staging" | "staging" | _ => "https://acme-staging-v02.api.letsencrypt.org/directory".to_string(),
+        "letsencrypt-staging" | "staging" => "https://acme-staging-v02.api.letsencrypt.org/directory".to_string(),
+        _ => "https://acme-staging-v02.api.letsencrypt.org/directory".to_string(),
     };
     let effective_env = effective_ca.clone();
 

@@ -3,6 +3,7 @@
 //! These map directly to the Go bot's data structures for 1:1 port fidelity.
 
 use std::fmt;
+use std::str::FromStr;
 
 /// DNS record type constants.
 pub const KIND_DNS_RECORD: u64 = 11111;
@@ -114,13 +115,17 @@ impl DelegationState {
             DelegationState::Expired => "expired",
         }
     }
+}
 
-    pub fn from_str(s: &str) -> Self {
-        match s {
+impl FromStr for DelegationState {
+    type Err = std::convert::Infallible;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(match s {
             "grace" => DelegationState::Grace,
             "expired" => DelegationState::Expired,
             _ => DelegationState::Active,
-        }
+        })
     }
 }
 
@@ -221,10 +226,10 @@ mod tests {
 
     #[test]
     fn delegation_state_from_str() {
-        assert_eq!(DelegationState::from_str("active"), DelegationState::Active);
-        assert_eq!(DelegationState::from_str("grace"), DelegationState::Grace);
-        assert_eq!(DelegationState::from_str("expired"), DelegationState::Expired);
-        assert_eq!(DelegationState::from_str("unknown"), DelegationState::Active);
+        assert_eq!(DelegationState::from_str("active").unwrap(), DelegationState::Active);
+        assert_eq!(DelegationState::from_str("grace").unwrap(), DelegationState::Grace);
+        assert_eq!(DelegationState::from_str("expired").unwrap(), DelegationState::Expired);
+        assert_eq!(DelegationState::from_str("unknown").unwrap(), DelegationState::Active);
     }
 
     #[test]

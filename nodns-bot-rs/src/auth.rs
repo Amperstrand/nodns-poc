@@ -5,6 +5,7 @@
 //! an active delegation from the zone's registrar.
 
 use std::collections::HashMap;
+use std::str::FromStr;
 use std::sync::Arc;
 
 use nostr_sdk::nips::nip19::ToBech32;
@@ -51,6 +52,7 @@ pub enum AuthError {
     #[error("delegation domain {domain:?} is not within zone {zone:?}")]
     DelegationNotInZone { domain: String, zone: String },
     #[error("checking registrar status: {0}")]
+    #[allow(dead_code)]
     RegistrarCheck(StoreError),
     #[error("signer {signer} is not the registrar for zone {zone}")]
     NotRegistrar { signer: String, zone: String },
@@ -161,7 +163,7 @@ impl AuthorityChecker {
                 })
             }
             Some(del) => {
-                let state = DelegationState::from_str(&del.status);
+                let state = DelegationState::from_str(&del.status).unwrap_or(DelegationState::Active);
                 if state == DelegationState::Expired {
                     warn!(domain = %domain, zone = %zone, "delegation expired");
                     return Err(AuthError::NoActiveDelegation {

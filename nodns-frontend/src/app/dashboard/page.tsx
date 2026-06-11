@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
@@ -11,11 +11,10 @@ import { useIdentity } from "@/contexts/IdentityContext";
 import { useWallet } from "@/contexts/WalletContext";
 import { DEFAULT_ZONE } from "@/lib/constants";
 import { fetchTripartiteRecords, fetchPricing } from "@/lib/sources";
-import type { TripartiteRecords, SourceResult } from "@/lib/sources";
+import type { TripartiteRecords } from "@/lib/sources";
 import { hexPk } from "@/lib/identity";
 import { subscribeToDnsEvents } from "@/lib/nostr";
-import type { NostrDnsRecord } from "@/lib/nostr";
-import type { NostrEvent, ZonePricing, DnsRecord } from "@/lib/types";
+import type { ZonePricing } from "@/lib/types";
 import {
   PlusIcon,
   GlobeIcon,
@@ -42,19 +41,17 @@ function statusDot(status: string) {
 }
 
 function DashboardContent() {
-  const { npub, initialized, nsec } = useIdentity();
+  const { npub, initialized } = useIdentity();
   const { balance, status: walletStatus } = useWallet();
   const [domains, setDomains] = useState<DomainInfo[]>([]);
   const [pageStatus, setPageStatus] = useState<Status>("loading");
   const [errorMsg, setErrorMsg] = useState("");
   const [pricing, setPricing] = useState<ZonePricing | null>(null);
   const [tripartite, setTripartite] = useState<TripartiteRecords | null>(null);
+  const [now, setNow] = useState(() => Math.floor(Date.now() / 1000));
 
   const loadRecords = useCallback(async () => {
     if (!initialized || !npub) return;
-
-    setPageStatus("loading");
-    setErrorMsg("");
 
     try {
       const pk = hexPk(npub);
@@ -112,21 +109,26 @@ function DashboardContent() {
       .catch(() => {});
   }, []);
 
-  // Load on init
   useEffect(() => {
-    loadRecords();
-  }, [loadRecords]);
+    const id = setInterval(() => setNow(Math.floor(Date.now() / 1000)), 60_000);
+    return () => clearInterval(id);
+  }, []);
 
-  // Live subscription for updates
+  // Live subscription for updates (also triggers initial load)
   useEffect(() => {
     if (!initialized) return;
 
-    const unsub = subscribeToDnsEvents((event: NostrEvent) => {
+    const id = requestAnimationFrame(() => loadRecords());
+
+    const unsub = subscribeToDnsEvents(() => {
       // Re-fetch on new events
       loadRecords();
     });
 
-    return unsub;
+    return () => {
+      cancelAnimationFrame(id);
+      unsub();
+    };
   }, [initialized, loadRecords]);
 
   // Derived expiry date (approximate: 1 year from last seen)
@@ -139,7 +141,6 @@ function DashboardContent() {
   };
 
   const getStatusBadge = (lastSeen: number) => {
-    const now = Math.floor(Date.now() / 1000);
     const age = now - lastSeen;
     const oneYear = 365 * 86400;
 

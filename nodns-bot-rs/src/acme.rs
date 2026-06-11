@@ -160,7 +160,7 @@ impl AcmeService {
             Some(&serde_json::json!({ "email": email, "directory_url": directory_url, "ca": ca_name }).to_string()),
         );
 
-        let contact = vec![format!("mailto:{}", email)];
+        let contact = [format!("mailto:{}", email)];
         let contact_refs: Vec<&str> = contact.iter().map(|s| s.as_str()).collect();
 
         let eab = if directory_url.contains("zerossl.com") {
@@ -211,7 +211,7 @@ impl AcmeService {
             error!(order_id = %order_id, error = %err_msg, "ACME order failed");
             self.log_stage(order_id, "error", &format!("Order failed: {}", err_msg), None);
             if let Err(se) = self.store.update_acme_order_status(
-                &order_id,
+                order_id,
                 "failed",
                 None,
                 None,

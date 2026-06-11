@@ -17,8 +17,6 @@ use crate::types::{
 
 #[derive(Error, Debug)]
 pub enum ParserError {
-    #[error("nil event")]
-    NilEvent,
     #[error("expected kind {expected}, got {got}")]
     WrongKind { expected: u64, got: u64 },
     #[error("tag {index}: {message}")]
@@ -27,10 +25,6 @@ pub enum ParserError {
     Validation(String),
     #[error("no recognized tags found (need record, delete, delegation, or registrar)")]
     NoRecognizedTags,
-    #[error("content must be empty string")]
-    ContentNotEmpty,
-    #[error("no record tags found")]
-    NoRecordTags,
     #[error("CNAME records cannot coexist with other record types at the same name")]
     CannotCoexistWithCname,
 }
@@ -198,24 +192,6 @@ pub fn classify_event(
     }
 
     Ok(result)
-}
-
-/// Backward-compatible entry point that enforces content-must-be-empty.
-/// New callers should use `classify_event`.
-pub fn parse_event(
-    event: &Event,
-    allowed_types: &[String],
-    block_private_ip: bool,
-    max_txt_length: usize,
-) -> Result<Vec<DnsRecord>, ParserError> {
-    if !event.content.is_empty() {
-        return Err(ParserError::ContentNotEmpty);
-    }
-    let parsed = classify_event(event, allowed_types, block_private_ip, max_txt_length)?;
-    if parsed.records.is_empty() {
-        return Err(ParserError::NoRecordTags);
-    }
-    Ok(parsed.records)
 }
 
 /// Parse a delegation tag.

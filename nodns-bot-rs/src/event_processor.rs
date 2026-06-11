@@ -349,10 +349,6 @@ async fn process_claim(
 // process_renewal
 // ---------------------------------------------------------------------------
 
-const GRACE_PERIOD_SECS: i64 = 30 * 24 * 3600;
-
-const DEFAULT_GRACE_PERIOD_SECS: i64 = 30 * 24 * 3600;
-
 async fn process_renewal(
     renewal: &RenewalRequest,
     payments: &[crate::types::Payment],

@@ -78,12 +78,16 @@ pub struct Verifier {
     update_free: bool,
     create_price: u64,
     update_price: u64,
+    #[allow(dead_code)]
     delete_price: u64,
+    #[allow(dead_code)]
     npub_names_free: bool,
     mint_filter: Option<String>,
 }
 
+#[allow(dead_code)]
 impl Verifier {
+    #[allow(dead_code)]
     pub fn new(mint_url: &str, required_sats: i64, update_free: bool) -> Self {
         Self {
             mint_url: mint_url.to_string(),

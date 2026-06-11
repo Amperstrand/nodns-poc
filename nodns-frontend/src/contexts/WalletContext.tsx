@@ -39,6 +39,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   const [mintOnline, setMintOnline] = useState(true);
   const [topUpState, setTopUpState] = useState<TopUpState>('idle');
   const [topUpError, setTopUpError] = useState<string | null>(null);
+  const [manager, setManager] = useState<Manager | null>(null);
   const managerRef = useRef<Manager | null>(null);
 
   const refreshBalance = useCallback(async () => {
@@ -91,6 +92,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         }
 
         managerRef.current = manager;
+        setManager(manager);
 
         const unsubSaved = manager.on('proofs:saved', () => refreshBalance());
         cleanups.push(unsubSaved);
@@ -143,12 +145,13 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         managerRef.current.dispose().catch(() => {});
         managerRef.current = null;
       }
+      setManager(null);
     };
   }, [refreshBalance]);
 
   return (
     <WalletContext.Provider value={{
-      manager: managerRef.current,
+      manager,
       status,
       error,
       balance,

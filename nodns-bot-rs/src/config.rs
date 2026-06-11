@@ -98,6 +98,7 @@ impl Default for ServerConfig {
 /// bare integer of seconds). We accept both.
 #[derive(Debug, Clone, Copy, Deserialize)]
 #[serde(try_from = "toml::Value")]
+#[allow(dead_code)]
 pub struct HumaneDuration(pub Duration);
 
 impl TryFrom<toml::Value> for HumaneDuration {
@@ -123,6 +124,7 @@ impl TryFrom<toml::Value> for HumaneDuration {
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
+#[derive(Default)]
 pub struct NostrConfig {
     #[serde(default)]
     pub relays: Vec<String>,
@@ -130,21 +132,8 @@ pub struct NostrConfig {
     /// Single-zone shorthand (used for backward compat).
     #[serde(default)]
     pub zone: String,
-
-    pub reconnect_min: Option<HumaneDuration>,
-    pub reconnect_max: Option<HumaneDuration>,
 }
 
-impl Default for NostrConfig {
-    fn default() -> Self {
-        Self {
-            relays: Vec::new(),
-            zone: String::new(),
-            reconnect_min: Some(HumaneDuration(Duration::from_secs(1))),
-            reconnect_max: Some(HumaneDuration(Duration::from_secs(60))),
-        }
-    }
-}
 
 /// Per-zone payment configuration.
 ///
@@ -402,14 +391,6 @@ impl Config {
             self.server.bind = "127.0.0.1:9090".to_string();
         }
 
-        // Nostr reconnect timing
-        if self.nostr.reconnect_min.is_none() {
-            self.nostr.reconnect_min = Some(HumaneDuration(Duration::from_secs(1)));
-        }
-        if self.nostr.reconnect_max.is_none() {
-            self.nostr.reconnect_max = Some(HumaneDuration(Duration::from_secs(60)));
-        }
-
         // DNS top-level defaults
         if self.dns.default_ttl == 0 {
             self.dns.default_ttl = 3600;
@@ -555,22 +536,6 @@ impl Config {
             }
         }
         Ok(())
-    }
-
-    /// Helper: return the configured reconnect_min as a `Duration`.
-    pub fn reconnect_min(&self) -> Duration {
-        self.nostr
-            .reconnect_min
-            .map(|d| d.0)
-            .unwrap_or(Duration::from_secs(1))
-    }
-
-    /// Helper: return the configured reconnect_max as a `Duration`.
-    pub fn reconnect_max(&self) -> Duration {
-        self.nostr
-            .reconnect_max
-            .map(|d| d.0)
-            .unwrap_or(Duration::from_secs(60))
     }
 }
 

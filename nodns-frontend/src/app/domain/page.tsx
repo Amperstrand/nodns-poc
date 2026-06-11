@@ -5,10 +5,9 @@ import {
   useCallback,
   useEffect,
   useMemo,
-  useRef,
   useState,
 } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
@@ -35,7 +34,6 @@ import {
 import { useIdentity } from "@/contexts/IdentityContext";
 import { useWallet } from "@/contexts/WalletContext";
 import { MINT_URL } from "@/lib/wallet";
-import { DEFAULT_ZONE } from "@/lib/constants";
 import { toFqdn } from "@/lib/pricing";
 import {
   fetchTripartiteRecords,
@@ -43,7 +41,6 @@ import {
   compareTripartite,
   type TripartiteRecords,
 } from "@/lib/sources";
-import { hexPk } from "@/lib/identity";
 import {
   publishDnsEvent,
   publishDeleteEvent,
@@ -52,7 +49,7 @@ import {
 } from "@/lib/nostr";
 import { validateRecord } from "@/lib/validation";
 import { getEncodedToken } from "coco-cashu-core";
-import type { NostrEvent, ZonePricing, KeyPair } from "@/lib/types";
+import type { ZonePricing, KeyPair } from "@/lib/types";
 import {
   ArrowLeftIcon,
   PlusIcon,
@@ -98,11 +95,10 @@ function statusDot(status: string) {
 
 function DomainDetailContent() {
   const searchParams = useSearchParams();
-  const router = useRouter();
   const nameParam = searchParams.get("name") || "";
   const fqdn = nameParam ? toFqdn(nameParam) : "";
 
-  const { npub, initialized, nsec } = useIdentity();
+  const { initialized, nsec } = useIdentity();
   const { manager, balance, status: walletStatus } = useWallet();
 
   const [records, setRecords] = useState<DnsRecordRow[]>([]);
@@ -136,9 +132,6 @@ function DomainDetailContent() {
 
   const loadRecords = useCallback(async () => {
     if (!initialized || !nameParam) return;
-
-    setPageStatus("loading");
-    setErrorMsg("");
 
     try {
       const domain = toFqdn(nameParam);
@@ -222,18 +215,19 @@ function DomainDetailContent() {
       .catch(() => {});
   }, []);
 
-  // Load on init
-  useEffect(() => {
-    loadRecords();
-  }, [loadRecords]);
-
-  // Live subscription
   useEffect(() => {
     if (!initialized) return;
+
+    const id = requestAnimationFrame(() => loadRecords());
+
     const unsub = subscribeToDnsEvents(() => {
       loadRecords();
     });
-    return unsub;
+
+    return () => {
+      cancelAnimationFrame(id);
+      unsub();
+    };
   }, [initialized, loadRecords]);
 
   // --- Computed ---

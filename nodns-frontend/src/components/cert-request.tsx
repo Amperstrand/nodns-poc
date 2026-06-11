@@ -65,7 +65,7 @@ export function CertRequest({ domain, disabled, nsecBytes, npub }: CertRequestPr
   const [acmeCa, setAcmeCa] = useState<"zerossl" | "letsencrypt-staging" | "letsencrypt-production">("letsencrypt-staging");
 
   // Track if we used client-side key derivation for this order
-  const usedClientDerivation = useRef(false);
+  const [usedClientDerivation, setUsedClientDerivation] = useState(false);
 
   // Extract subdomain from domain (e.g., "blog.npub123.nodns.shop" → "blog")
   // Or full npub.nodns.shop → use npub as subdomain for derivation
@@ -90,7 +90,7 @@ export function CertRequest({ domain, disabled, nsecBytes, npub }: CertRequestPr
     }, 3000);
 
     return () => clearInterval(interval);
-  }, [orderId, orderStatus?.status]);
+  }, [orderId, orderStatus?.status, npub]);
 
   const handleRequest = useCallback(async () => {
     if (disabled || loading) return;
@@ -101,7 +101,7 @@ export function CertRequest({ domain, disabled, nsecBytes, npub }: CertRequestPr
     setOrderId(null);
     setShowKey(false);
     setDerivedPrivateKeyPem(null);
-    usedClientDerivation.current = false;
+    setUsedClientDerivation(false);
 
     let csrDerBase64: string | undefined;
 
@@ -113,7 +113,7 @@ export function CertRequest({ domain, disabled, nsecBytes, npub }: CertRequestPr
           subdomain,
         );
         setDerivedPrivateKeyPem(privateKeyPem);
-        usedClientDerivation.current = true;
+        setUsedClientDerivation(true);
 
         const csrResult = await generateCsr(keyPair, domain);
         csrDerBase64 = csrResult.csrDerBase64;
@@ -142,7 +142,7 @@ export function CertRequest({ domain, disabled, nsecBytes, npub }: CertRequestPr
       setError(msg);
     }
     setLoading(false);
-  }, [domain, subdomain, disabled, loading, nsecBytes, acmeCa]);
+  }, [domain, subdomain, disabled, loading, nsecBytes, acmeCa, npub]);
 
   const handleReset = useCallback(() => {
     setError(null);
@@ -151,7 +151,7 @@ export function CertRequest({ domain, disabled, nsecBytes, npub }: CertRequestPr
     setShowKey(false);
     setDerivedPrivateKeyPem(null);
     setDerivationError(null);
-    usedClientDerivation.current = false;
+    setUsedClientDerivation(false);
   }, []);
 
   const status = orderStatus?.status;
@@ -232,7 +232,7 @@ export function CertRequest({ domain, disabled, nsecBytes, npub }: CertRequestPr
             </div>
             {acmeCa === "letsencrypt-production" && (
               <p className="mb-3 text-xs text-red-400">
-                ⚠️ Production certificates count against Let's Encrypt rate limits (5 per week per domain). Use Staging for testing.
+                ⚠️ Production certificates count against Let&apos;s Encrypt rate limits (5 per week per domain). Use Staging for testing.
               </p>
             )}
             <button
@@ -425,7 +425,7 @@ export function CertRequest({ domain, disabled, nsecBytes, npub }: CertRequestPr
 
             {/* Security note */}
             <div className="rounded-lg border border-red-500/15 bg-red-500/5 px-4 py-3 text-xs text-red-400">
-              {usedClientDerivation.current ? (
+              {usedClientDerivation ? (
                 <>
                   🔒 Your private key was derived from your nsec and{" "}
                   <strong>never left your browser</strong>. The certificate

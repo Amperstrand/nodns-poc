@@ -76,17 +76,17 @@ pub async fn nip05_handler(
     }
 
     // Try exact npub match
-    if let Some(response) = lookup_by_npub(nip05, &name) {
+    if let Some(response) = lookup_by_npub(nip05, name) {
         return response;
     }
 
     // Try npub prefix (hex pubkey prefix, 8+ chars)
-    if let Some(response) = lookup_by_pubkey_prefix(nip05, &name) {
+    if let Some(response) = lookup_by_pubkey_prefix(nip05, name) {
         return response;
     }
 
     // Try delegated name
-    if let Some(response) = lookup_by_delegation(nip05, &name) {
+    if let Some(response) = lookup_by_delegation(nip05, name) {
         return response;
     }
 

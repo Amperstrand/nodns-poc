@@ -27,12 +27,14 @@ export function IdentityProvider({ children }: { children: React.ReactNode }) {
   });
 
   useEffect(() => {
-    const id: Identity = getOrCreateIdentity();
-    setIdentity({
-      npub: id.npub,
-      nsec: id.nsec,
-      pk: id.pk,
-      initialized: true,
+    requestAnimationFrame(() => {
+      const id: Identity = getOrCreateIdentity();
+      setIdentity({
+        npub: id.npub,
+        nsec: id.nsec,
+        pk: id.pk,
+        initialized: true,
+      });
     });
   }, []);
 

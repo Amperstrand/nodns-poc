@@ -1,12 +1,11 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useState } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
+import { Suspense, useCallback, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
 import { ErrorBoundary } from "@/components/error-boundary";
-import { DEFAULT_ZONE } from "@/lib/constants";
 import { MINT_URL } from "@/lib/wallet";
 import { getPriceForName, sanitizeName, toFqdn } from "@/lib/pricing";
 import { publishDnsEvent, keyPairFromNsec } from "@/lib/nostr";
@@ -19,21 +18,15 @@ type Step = "review" | "paying" | "success" | "error";
 
 function RegisterContent() {
   const searchParams = useSearchParams();
-  const router = useRouter();
   const nameParam = searchParams.get("name") || "";
 
   const { manager, status: walletStatus, balance } = useWallet();
   const { nsec } = useIdentity();
 
-  const [name, setName] = useState("");
+  const name = useMemo(() => sanitizeName(nameParam), [nameParam]);
   const [step, setStep] = useState<Step>("review");
   const [errorMsg, setErrorMsg] = useState("");
   const [txEventId, setTxEventId] = useState<string | null>(null);
-
-  useEffect(() => {
-    const clean = sanitizeName(nameParam);
-    setName(clean);
-  }, [nameParam]);
 
   const price = name ? getPriceForName(name) : 0;
   const fqdn = name ? toFqdn(name) : "";

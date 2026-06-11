@@ -26,9 +26,11 @@ use crate::types::KIND_DNS_RECORD;
 #[derive(Debug, Error)]
 pub enum SubscriberError {
     #[error("relay connection failed: {0}")]
+    #[allow(dead_code)]
     Connection(String),
 
     #[error("subscription failed: {0}")]
+    #[allow(dead_code)]
     Subscription(String),
 }
 
