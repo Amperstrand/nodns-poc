@@ -369,6 +369,45 @@ impl Store {
         Ok(records)
     }
 
+    /// Return all non-deleted records for an exact npub match.
+    pub fn get_records_by_npub_exact(&self, npub: &str) -> Result<Vec<EventRecord>, StoreError> {
+        let conn = self.conn();
+        let mut stmt = conn
+            .prepare(
+                "SELECT event_id, npub, pubkey, name, record_type, ttl, rdata, zone, created_at, processed_at, deleted
+                 FROM events WHERE npub = ?1 AND deleted = 0",
+            )
+            .map_err(|e| StoreError::GetRecordsByPubkey(npub.to_string(), e))?;
+
+        let records = stmt
+            .query_map(params![npub], scan_event_row)
+            .map_err(|e| StoreError::GetRecordsByPubkey(npub.to_string(), e))?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(StoreError::ScanRecord)?;
+
+        Ok(records)
+    }
+
+    /// Return all non-deleted records matching a hex pubkey prefix (LIKE prefix%).
+    pub fn lookup_by_pubkey_prefix(&self, prefix: &str) -> Result<Vec<EventRecord>, StoreError> {
+        let pattern = format!("{}%", prefix.to_lowercase());
+        let conn = self.conn();
+        let mut stmt = conn
+            .prepare(
+                "SELECT event_id, npub, pubkey, name, record_type, ttl, rdata, zone, created_at, processed_at, deleted
+                 FROM events WHERE pubkey LIKE ?1 AND deleted = 0",
+            )
+            .map_err(|e| StoreError::GetRecordsByPubkey(prefix.to_string(), e))?;
+
+        let records = stmt
+            .query_map(params![pattern], scan_event_row)
+            .map_err(|e| StoreError::GetRecordsByPubkey(prefix.to_string(), e))?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(StoreError::ScanRecord)?;
+
+        Ok(records)
+    }
+
     /// Return the count of active (non-deleted) records for a pubkey.
     pub fn record_count_by_pubkey(&self, pubkey: &str) -> Result<usize, StoreError> {
         let conn = self.conn();

@@ -123,7 +123,7 @@ fn registrar_response(state: &Nip05State, name: &str) -> Response {
 
 /// Look up by exact npub (e.g. `npub1abc...xyz`).
 fn lookup_by_npub(state: &Nip05State, name: &str) -> Option<Response> {
-    let records = state.store.list_all_records().ok()?;
+    let records = state.store.get_records_by_npub_exact(name).ok()?;
 
     for record in &records {
         if record.npub == name {
@@ -135,17 +135,15 @@ fn lookup_by_npub(state: &Nip05State, name: &str) -> Option<Response> {
 
 /// Look up by hex pubkey prefix (first 8+ chars).
 fn lookup_by_pubkey_prefix(state: &Nip05State, prefix: &str) -> Option<Response> {
-    // Require at least 8 hex chars to avoid false positives
     if prefix.len() < 8 {
         return None;
     }
-    // Validate hex characters
     if !prefix.chars().all(|c| c.is_ascii_hexdigit()) {
         return None;
     }
 
-    let records = state.store.list_all_records().ok()?;
     let prefix_lower = prefix.to_lowercase();
+    let records = state.store.lookup_by_pubkey_prefix(&prefix_lower).ok()?;
 
     for record in &records {
         if record.pubkey.to_lowercase().starts_with(&prefix_lower) {

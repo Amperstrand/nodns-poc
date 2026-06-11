@@ -1,17 +1,18 @@
-name: Build Bot Binary
+name: Build Binaries
 
 on:
   push:
     branches: [main]
     paths:
       - 'nodns-bot-rs/**'
+      - 'nodns-cli/**'
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  build:
+  build-bot:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -28,8 +29,8 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             nodns-bot-rs/target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('nodns-bot-rs/Cargo.lock') }}
-          restore-keys: ${{ runner.os }}-cargo-
+          key: ${{ runner.os }}-cargo-bot-${{ hashFiles('nodns-bot-rs/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-bot-
 
       - name: Build release binary
         working-directory: nodns-bot-rs
@@ -44,4 +45,57 @@ jobs:
         with:
           name: nodns-bot-linux-x86_64
           path: nodns-bot-rs/target/release/nodns-bot
+          retention-days: 5
+
+  build-cli:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            nodns-cli/target
+          key: ${{ runner.os }}-cargo-cli-${{ hashFiles('nodns-cli/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-cli-
+
+      - name: Build release binary
+        working-directory: nodns-cli
+        run: cargo build --release
+
+      - name: Run clippy
+        working-directory: nodns-cli
+        run: cargo clippy -- -D warnings
+
+      - name: Smoke test — key generate
+        working-directory: nodns-cli
+        run: ./target/release/nodns key generate | grep -q 'nsec1'
+
+      - name: Smoke test — key derive roundtrip
+        working-directory: nodns-cli
+        run: |
+          OUTPUT=$(./target/release/nodns key generate)
+          NSEC=$(echo "$OUTPUT" | grep '^nsec1' | head -1)
+          NPUB=$(echo "$OUTPUT" | grep '^npub1' | head -1)
+          DERIVED=$(./target/release/nodns key derive "$NSEC")
+          [ "$NPUB" = "$DERIVED" ]
+
+      - name: Smoke test — add --dry-run
+        working-directory: nodns-cli
+        run: |
+          OUTPUT=$(./target/release/nodns --sec nsec14churx82dcet4sj0j7r27zql0km994f2jglfds3v9304r8gusyysmy50zt add --type TXT --data "ci test" --dry-run 2>/dev/null)
+          echo "$OUTPUT" | grep -q '"kind": 11111'
+          echo "$OUTPUT" | grep -q '"record"'
+          echo "$OUTPUT" | grep -q '"TXT"'
+
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: nodns-cli-linux-x86_64
+          path: nodns-cli/target/release/nodns
           retention-days: 5

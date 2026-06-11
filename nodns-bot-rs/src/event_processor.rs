@@ -17,6 +17,28 @@ use crate::store::Store;
 use crate::types::{ClaimRequest, Metrics, ParsedEvent, Delegation, RegistrarKey, RenewalRequest, build_fqdn, record_type_to_u16};
 
 // ---------------------------------------------------------------------------
+// FQDN resolution
+// ---------------------------------------------------------------------------
+
+/// Resolve the correct FQDN for a record, accounting for delegated custom names.
+///
+/// If the npub has an active delegation in this zone, use the delegated domain
+/// as the owner label (e.g., `alice.nodns.shop.` instead of `npub1xxx.nodns.shop.`).
+/// Falls back to `build_fqdn` for non-delegated (npub-based) names.
+pub(crate) fn resolve_fqdn(npub: &str, name: &str, zone: &str, store: &Arc<Store>) -> String {
+    if let Ok(delegations) = store.get_delegations_by_pubkey(npub) {
+        if let Some(del) = delegations.iter().find(|d| d.zone == zone) {
+            if name == "@" || name.is_empty() {
+                return format!("{}.{}.", del.domain, zone);
+            } else {
+                return format!("{}.{}.{}.", name, del.domain, zone);
+            }
+        }
+    }
+    build_fqdn(npub, name, zone)
+}
+
+// ---------------------------------------------------------------------------
 // Event processing
 // ---------------------------------------------------------------------------
 
@@ -575,18 +597,6 @@ async fn process_dns_update(
         return;
     }
 
-    for (zone_name, _) in updaters.iter() {
-        if let Some(v) = zone_verifiers.get(zone_name) {
-            if let Err(e) = payment::check_event_payment(
-                &parsed.payments, npub, &parsed.records, zone_name, store, Some(v),
-            ).await {
-                warn!(event_id = %event_id, zone = %zone_name, error = %e, "payment verification failed");
-                metrics.events_rejected.fetch_add(1, Ordering::Relaxed);
-                return;
-            }
-        }
-    }
-
     // Record count
     match store.record_count_by_pubkey(pubkey_hex) {
         Ok(count) if count + parsed.records.len() > cfg.policy.max_records => {
@@ -620,8 +630,21 @@ async fn process_dns_update(
     // Update each record in each zone
     let mut all_ok = true;
     for (zone_name, updater) in updaters.iter() {
+        // Per-zone payment verification: skip this zone if payment fails,
+        // but allow other zones to proceed independently.
+        if let Some(v) = zone_verifiers.get(zone_name) {
+            if let Err(e) = payment::check_event_payment(
+                &parsed.payments, npub, &parsed.records, zone_name, store, Some(v),
+            ).await {
+                warn!(event_id = %event_id, zone = %zone_name, error = %e, "payment verification failed, skipping zone");
+                metrics.events_rejected.fetch_add(1, Ordering::Relaxed);
+                all_ok = false;
+                continue;
+            }
+        }
+
         for rec in &parsed.records {
-            let fqdn = build_fqdn(npub, &rec.name, zone_name);
+            let fqdn = resolve_fqdn(npub, &rec.name, zone_name, store);
 
             if let Err(e) = authority.check_authority(&fqdn, zone_name, pubkey_hex) {
                 warn!(event_id = %event_id, fqdn = %fqdn, error = %e, "authority check failed");
@@ -728,7 +751,7 @@ async fn process_dns_deletes(
 ) {
     for (zone_name, updater) in updaters.iter() {
         for del in &parsed.deletes {
-            let fqdn = build_fqdn(npub, &del.name, zone_name);
+            let fqdn = resolve_fqdn(npub, &del.name, zone_name, store);
 
             if let Err(e) = authority.check_authority(&fqdn, zone_name, pubkey_hex) {
                 warn!(event_id = %event_id, fqdn = %fqdn, error = %e, "delete authority check failed");

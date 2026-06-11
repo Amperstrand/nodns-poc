@@ -4,6 +4,15 @@
 > This is a proof-of-concept protocol for Nostr-native DNS management. Nothing here is production.
 > See also: [Arjen's nodns-nameserver](https://gitworkshop.dev/npub1hw6amg8p24ne08c9gdq8hhpqx0t0pwanpae9z25crn7m9uy7yarse465gr/nos.lol/nodns-nameserver) — the `$npub.nostr` reference implementation.
 
+## Kind Number
+
+We use **kind 11111**. This is a temporary, arbitrary choice.
+
+- **11111 is in the replaceable range** (10000–20000 per NIP-01). Relays will only retain the latest event per pubkey+kind. This is fine for our bot — it processes events in real-time and writes to Knot DNS immediately, so it doesn't depend on historical relay storage.
+- **No known collision with any NIP**. NIP-37 uses kind 31234 (draft wraps). No other NIP or widespread protocol uses 11111.
+- **This will change before any "v1" release**. If NoDNS matures beyond a demo, we will submit a NIP proposal and get an officially allocated kind number.
+- **Do not build production systems on kind 11111.**
+
 ## Overview
 
 NoDNS uses Nostr events to manage DNS records. Three operations are supported:

@@ -11,7 +11,8 @@ use serde::{Deserialize, Serialize};
 use tracing::{error, info, warn};
 
 use crate::dns::query_txt_records;
-use crate::types::{AcmeOrderLog, build_fqdn};
+use crate::event_processor::resolve_fqdn;
+use crate::types::AcmeOrderLog;
 
 // ---------------------------------------------------------------------------
 // API response types
@@ -138,7 +139,7 @@ pub async fn records_handler(
             ApiRecord {
                 npub: r.npub.clone(),
                 name,
-                fqdn: build_fqdn(&r.npub, &r.name, &r.zone),
+                fqdn: resolve_fqdn(&r.npub, &r.name, &r.zone, &state.store),
                 record_type: r.record_type,
                 ttl: r.ttl,
                 rdata: r.rdata,
@@ -221,7 +222,7 @@ pub async fn check_handler(
         records: api_records.into_iter().map(|r| ApiRecord {
             npub: r.npub.clone(),
             name: if r.name == "@" || r.name.is_empty() { String::new() } else { r.name.clone() },
-            fqdn: build_fqdn(&r.npub, &r.name, &r.zone),
+            fqdn: resolve_fqdn(&r.npub, &r.name, &r.zone, &state.store),
             record_type: r.record_type,
             ttl: r.ttl,
             rdata: r.rdata,
@@ -302,7 +303,7 @@ pub async fn acme_order_handler(
     };
 
     let domain_matches = records.iter().any(|r| {
-        let fqdn = build_fqdn(&r.npub, &r.name, &r.zone);
+        let fqdn = resolve_fqdn(&r.npub, &r.name, &r.zone, &state.store);
         fqdn.trim_end_matches('.').eq_ignore_ascii_case(&domain)
     });
 

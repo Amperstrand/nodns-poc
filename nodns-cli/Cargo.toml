@@ -1,0 +1,37 @@
+[package]
+name = "nodns"
+version = "0.1.0"
+edition = "2021"
+description = "NoDNS CLI — manage DNS records published via Nostr events"
+
+[[bin]]
+name = "nodns"
+path = "src/main.rs"
+
+[dependencies]
+# Nostr
+nostr-sdk = "0.44"
+
+# CLI
+clap = { version = "4", features = ["derive", "env"] }
+
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+
+# Config
+serde = { version = "1", features = ["derive"] }
+toml = "0.8"
+
+# DNS resolution (for `nodns resolve`)
+hickory-resolver = "0.25"
+hickory-proto = "0.25"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = "0.3"
+
+# Error handling
+thiserror = "2"
+
+# JSON
+serde_json = "1"
