@@ -174,6 +174,21 @@ pub struct AcmeOrderLog {
     pub created_at: i64,
 }
 
+/// A stored acme-dns registration (maps to `acme_dns_registrations` table).
+#[derive(Debug, Clone)]
+pub struct AcmeDnsRegistration {
+    pub subdomain: String,
+    pub username: String,
+    pub password: String,
+    pub npub: String,
+    pub zone: String,
+    pub fulldomain: String,
+    pub txt_value: Option<String>,
+    pub txt_value_prev: Option<String>,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
 /// Metrics tracked by the bot.
 #[derive(Debug, Default)]
 pub struct Metrics {

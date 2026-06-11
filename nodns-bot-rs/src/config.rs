@@ -73,6 +73,9 @@ pub struct Config {
 
     #[serde(default)]
     pub acme: AcmeConfig,
+
+    #[serde(default)]
+    pub dns_update: DnsUpdateConfig,
 }
 
 // ---------------------------------------------------------------------------
@@ -315,6 +318,18 @@ impl Default for PaymentConfig {
             cashu_mint_url: String::new(),
         }
     }
+}
+
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct DnsUpdateConfig {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default)]
+    pub listen: String,
+    #[serde(default)]
+    pub tsig_key_name: String,
+    #[serde(default)]
+    pub tsig_key_secret: String,
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]

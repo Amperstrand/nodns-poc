@@ -16,7 +16,7 @@ use sha2::{Digest, Sha256};
 use thiserror::Error;
 use tracing::info;
 
-use crate::types::{AcmeOrder, AcmeOrderLog, DelegationRecord, EventRecord};
+use crate::types::{AcmeDnsRegistration, AcmeOrder, AcmeOrderLog, DelegationRecord, EventRecord};
 
 // ---------------------------------------------------------------------------
 // AES-256-GCM encryption helpers
@@ -153,6 +153,15 @@ pub enum StoreError {
 
     #[error("setting meta value: {0}")]
     SetMeta(#[source] rusqlite::Error),
+
+    #[error("saving acme-dns registration {0}: {1}")]
+    SaveAcmeDnsRegistration(String, #[source] rusqlite::Error),
+
+    #[error("getting acme-dns registration {0}: {1}")]
+    GetAcmeDnsRegistration(String, #[source] rusqlite::Error),
+
+    #[error("updating acme-dns TXT {0}: {1}")]
+    UpdateAcmeDnsTxt(String, #[source] rusqlite::Error),
 }
 
 // ---------------------------------------------------------------------------
@@ -1011,6 +1020,63 @@ impl Store {
         .map_err(StoreError::SetMeta)?;
         Ok(())
     }
+
+    // -----------------------------------------------------------------------
+    // acme-dns registrations
+    // -----------------------------------------------------------------------
+
+    pub fn save_acme_dns_registration(
+        &self,
+        subdomain: &str,
+        username: &str,
+        password: &str,
+        npub: &str,
+        zone: &str,
+        fulldomain: &str,
+    ) -> Result<(), StoreError> {
+        let conn = self.conn();
+        conn.execute(
+            "INSERT INTO acme_dns_registrations (subdomain, username, password, npub, zone, fulldomain)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![subdomain, username, password, npub, zone, fulldomain],
+        )
+        .map_err(|e| StoreError::SaveAcmeDnsRegistration(subdomain.to_string(), e))?;
+        Ok(())
+    }
+
+    pub fn get_acme_dns_registration_by_username(
+        &self,
+        username: &str,
+    ) -> Result<Option<AcmeDnsRegistration>, StoreError> {
+        let conn = self.conn();
+        let mut stmt = conn
+            .prepare(
+                "SELECT subdomain, username, password, npub, zone, fulldomain, txt_value, txt_value_prev, created_at, updated_at
+                 FROM acme_dns_registrations WHERE username = ?1",
+            )
+            .map_err(|e| StoreError::GetAcmeDnsRegistration(username.to_string(), e))?;
+
+        let result = stmt
+            .query_row(params![username], scan_acme_dns_registration_row)
+            .optional()
+            .map_err(|e| StoreError::GetAcmeDnsRegistration(username.to_string(), e))?;
+
+        Ok(result)
+    }
+
+    pub fn update_acme_dns_txt(
+        &self,
+        subdomain: &str,
+        txt_value: &str,
+    ) -> Result<(), StoreError> {
+        let conn = self.conn();
+        conn.execute(
+            "UPDATE acme_dns_registrations SET txt_value_prev = txt_value, txt_value = ?1, updated_at = unixepoch() WHERE subdomain = ?2",
+            params![txt_value, subdomain],
+        )
+        .map_err(|e| StoreError::UpdateAcmeDnsTxt(subdomain.to_string(), e))?;
+        Ok(())
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -1099,6 +1165,22 @@ const SCHEMA: &str = r#"
     );
 
     CREATE INDEX IF NOT EXISTS idx_acme_order_logs_order ON acme_order_logs(order_id);
+
+    CREATE TABLE IF NOT EXISTS acme_dns_registrations (
+        subdomain TEXT PRIMARY KEY,
+        username TEXT NOT NULL UNIQUE,
+        password TEXT NOT NULL UNIQUE,
+        npub TEXT NOT NULL,
+        zone TEXT NOT NULL,
+        fulldomain TEXT NOT NULL,
+        txt_value TEXT,
+        txt_value_prev TEXT,
+        created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+        updated_at INTEGER NOT NULL DEFAULT (unixepoch())
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_acme_dns_reg_username ON acme_dns_registrations(username);
+    CREATE INDEX IF NOT EXISTS idx_acme_dns_reg_npub ON acme_dns_registrations(npub);
 "#;
 
 // ---------------------------------------------------------------------------
@@ -1168,6 +1250,21 @@ fn scan_acme_order_log_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<AcmeOrde
         message: row.get(3)?,
         details: row.get(4)?,
         created_at: row.get(5)?,
+    })
+}
+
+fn scan_acme_dns_registration_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<AcmeDnsRegistration> {
+    Ok(AcmeDnsRegistration {
+        subdomain: row.get(0)?,
+        username: row.get(1)?,
+        password: row.get(2)?,
+        npub: row.get(3)?,
+        zone: row.get(4)?,
+        fulldomain: row.get(5)?,
+        txt_value: row.get(6)?,
+        txt_value_prev: row.get(7)?,
+        created_at: row.get(8)?,
+        updated_at: row.get(9)?,
     })
 }
 

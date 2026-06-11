@@ -24,6 +24,7 @@
 | [29-beta-deployment.md](29-beta-deployment.md) | ACTIVE | beta.nodns.shop deployment alongside main site |
 | [32-demo-infrastructure.md](32-demo-infrastructure.md) | ACTIVE | dns4sats dual-resolution demo, DoH resolver, .nostr TLD setup |
 | [33-faq.md](33-faq.md) | ACTIVE | Common questions, gotchas, and misconceptions |
+| [34-backwards-compatible-apis.md](34-backwards-compatible-apis.md) | ACTIVE | DynDNS v2, acme-dns, and RFC 2136 backwards-compatible DNS APIs |
 
 ### Protocol
 

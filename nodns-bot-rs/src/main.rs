@@ -4,6 +4,7 @@ mod acme;
 mod auth;
 mod config;
 mod dns;
+mod dns_update_server;
 mod dnssec_derivation;
 mod event_processor;
 mod handlers;
@@ -63,6 +64,7 @@ pub struct AppState {
     pub metrics: Metrics,
     pub start_time: Instant,
     pub dns_zones: Vec<config::ZoneConfig>,
+    pub updaters: Arc<HashMap<String, dns::Updater>>,
 }
 
 // ---------------------------------------------------------------------------
@@ -282,6 +284,33 @@ async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
         None
     };
 
+    // ── RFC 2136 DNS UPDATE server ──
+    if cfg.dns_update.enabled {
+        let listen_addr: SocketAddr = cfg.dns_update.listen.parse().map_err(|e: std::net::AddrParseError| {
+            format!("invalid dns_update.listen address '{}': {}", cfg.dns_update.listen, e)
+        })?;
+        let zones = cfg.dns.zones.iter().map(|z| z.zone.clone()).collect();
+        match dns_update_server::DnsUpdateServer::new(
+            listen_addr,
+            store.clone(),
+            updaters.clone(),
+            zones,
+            &cfg.dns_update.tsig_key_name,
+            &cfg.dns_update.tsig_key_secret,
+        ) {
+            Ok(server) => {
+                let server = Arc::new(server);
+                tokio::spawn(async move {
+                    server.run().await;
+                });
+                info!(listen = %cfg.dns_update.listen, "RFC 2136 DNS UPDATE server started");
+            }
+            Err(e) => {
+                warn!(error = %e, "failed to create DNS UPDATE server — skipping");
+            }
+        }
+    }
+
     // ── HTTP health server ──
     let nip05_state = Arc::new(nip05::Nip05State {
         store: store.clone(),
@@ -297,6 +326,7 @@ async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
         metrics: Metrics::default(),
         start_time: Instant::now(),
         dns_zones: cfg.dns.zones.clone(),
+        updaters: updaters.clone(),
     });
     let bind = cfg.server.bind.clone();
     let http_state = app_state.clone();
@@ -331,6 +361,10 @@ async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
 .route("/api/records", axum::routing::get(handlers::records_handler))
 .route("/api/check", axum::routing::get(handlers::check_handler))
 .route("/api/zones/{zone}/pricing", axum::routing::get(handlers::zone_pricing_handler))
+            .route("/nic/update", axum::routing::get(handlers::dyndns_update_handler))
+            .route("/nic/update", axum::routing::post(handlers::dyndns_update_handler))
+            .route("/register", axum::routing::post(handlers::acmedns_register_handler))
+            .route("/update", axum::routing::post(handlers::acmedns_update_handler))
             .layer(GovernorLayer::new(api_limit))
             .with_state(http_state);
 

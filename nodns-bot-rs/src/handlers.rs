@@ -1,3 +1,4 @@
+use std::net::SocketAddr;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
@@ -7,6 +8,8 @@ use axum::extract::Query;
 use axum::http::HeaderMap;
 use axum::response::{IntoResponse, Json, Response};
 use base64::Engine;
+use nostr_sdk::nips::nip19::ToBech32;
+use nostr_sdk::Keys;
 use serde::{Deserialize, Serialize};
 use tracing::{error, info, warn};
 
@@ -424,7 +427,7 @@ pub async fn acme_cert_handler(
             axum::http::StatusCode::NOT_FOUND,
             Json(serde_json::json!({"error": "order not found"})),
         )
-            .into_response(),
+             .into_response(),
         Err(e) => {
             error!(error = %e, "failed to get ACME order");
             (
@@ -434,4 +437,465 @@ pub async fn acme_cert_handler(
                 .into_response()
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+// DynDNS v2 compatible update handler
+// ---------------------------------------------------------------------------
+
+#[derive(Deserialize)]
+pub struct DynDnsUpdateParams {
+    hostname: Option<String>,
+    myip: Option<String>,
+}
+
+/// Plain-text response helper for DynDNS protocol.
+fn dyndns_response(status_code: axum::http::StatusCode, body: &str) -> Response {
+    (
+        status_code,
+        [(axum::http::header::CONTENT_TYPE, "text/plain")],
+        body.to_string(),
+    )
+        .into_response()
+}
+
+pub async fn dyndns_update_handler(
+    AxumState(state): AxumState<Arc<AppState>>,
+    headers: HeaderMap,
+    connect_info: axum::extract::ConnectInfo<SocketAddr>,
+    Query(params): Query<DynDnsUpdateParams>,
+) -> Response {
+    let auth_header = match headers.get("authorization").and_then(|v| v.to_str().ok()) {
+        Some(h) => h,
+        None => return dyndns_response(axum::http::StatusCode::UNAUTHORIZED, "badauth"),
+    };
+
+    let (username, password) = match parse_basic_auth(auth_header) {
+        Some(pair) => pair,
+        None => return dyndns_response(axum::http::StatusCode::UNAUTHORIZED, "badauth"),
+    };
+
+    if password.is_empty() {
+        return dyndns_response(axum::http::StatusCode::UNAUTHORIZED, "badauth");
+    }
+
+    let keys = match Keys::parse(&password) {
+        Ok(k) => k,
+        Err(e) => {
+            warn!(error = %e, "dyndns: failed to parse nsec");
+            return dyndns_response(axum::http::StatusCode::UNAUTHORIZED, "badauth");
+        }
+    };
+
+    let derived_npub = match keys.public_key().to_bech32() {
+        Ok(n) => n,
+        Err(e) => {
+            warn!(error = %e, "dyndns: failed to encode derived npub");
+            return dyndns_response(axum::http::StatusCode::UNAUTHORIZED, "badauth");
+        }
+    };
+    let derived_pubkey_hex = keys.public_key().to_hex();
+
+    if !username.is_empty() && username != derived_npub {
+        return dyndns_response(axum::http::StatusCode::UNAUTHORIZED, "badauth");
+    }
+
+    let hostname = match params.hostname {
+        Some(ref h) if !h.is_empty() => h.trim().to_lowercase(),
+        _ => return dyndns_response(axum::http::StatusCode::BAD_REQUEST, "notfqdn"),
+    };
+
+    if !hostname.contains('.') {
+        return dyndns_response(axum::http::StatusCode::BAD_REQUEST, "notfqdn");
+    }
+
+    let zone = match find_zone_for_hostname(&hostname, &state.dns_zones) {
+        Some(z) => z.clone(),
+        None => return dyndns_response(axum::http::StatusCode::BAD_REQUEST, "notfqdn"),
+    };
+
+    let zone_config = state.dns_zones.iter().find(|z| z.zone == zone);
+    let default_ttl = zone_config.map(|z| z.default_ttl).unwrap_or(3600);
+
+    let zone_suffix = format!(".{}", zone);
+    let (name, is_npub_name) = if hostname.ends_with(&zone_suffix) {
+        let prefix = &hostname[..hostname.len() - zone_suffix.len()];
+        if prefix.is_empty() {
+            return dyndns_response(axum::http::StatusCode::BAD_REQUEST, "notfqdn");
+        }
+        if prefix.starts_with("npub1") {
+            if prefix != derived_npub {
+                return dyndns_response(axum::http::StatusCode::FORBIDDEN, "nohost");
+            }
+            ("@".to_string(), true)
+        } else {
+            (prefix.to_string(), false)
+        }
+    } else {
+        return dyndns_response(axum::http::StatusCode::BAD_REQUEST, "notfqdn");
+    };
+
+    if !is_npub_name {
+        match state.store.get_active_delegation(&name, &zone) {
+            Ok(Some(del)) => {
+                if del.npub != derived_npub {
+                    return dyndns_response(axum::http::StatusCode::FORBIDDEN, "nohost");
+                }
+            }
+            Ok(None) => {
+                return dyndns_response(axum::http::StatusCode::FORBIDDEN, "nohost");
+            }
+            Err(e) => {
+                error!(error = %e, "dyndns: failed to check delegation");
+                return dyndns_response(
+                    axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                    "911",
+                );
+            }
+        }
+    }
+
+    let ip_str = match &params.myip {
+        Some(ip) if !ip.is_empty() => ip.clone(),
+        _ => connect_info.0.ip().to_string(),
+    };
+
+    let (record_type_str, record_type_u16) = if ip_str.contains(':') {
+        ("AAAA", 28)
+    } else {
+        ("A", 1)
+    };
+
+    if record_type_u16 == 1 {
+        if ip_str.parse::<std::net::Ipv4Addr>().is_err() {
+            return dyndns_response(axum::http::StatusCode::BAD_REQUEST, "notfqdn");
+        }
+    } else if ip_str.parse::<std::net::Ipv6Addr>().is_err() {
+        return dyndns_response(axum::http::StatusCode::BAD_REQUEST, "notfqdn");
+    }
+
+    let fqdn = if name == "@" {
+        format!("{}.{}.", derived_npub, zone)
+    } else {
+        format!("{}.{}.", name, zone)
+    };
+
+    let existing_records = state
+        .store
+        .get_records_by_pubkey(&derived_pubkey_hex)
+        .unwrap_or_default();
+
+    let current_ip = existing_records.iter().find(|r| {
+        r.record_type == record_type_str
+            && r.name == name
+            && r.zone == zone
+            && !r.deleted
+    }).map(|r| r.rdata.clone());
+
+    if current_ip.as_deref() == Some(&ip_str) {
+        return dyndns_response(axum::http::StatusCode::OK, &format!("nochg {ip_str}"));
+    }
+
+    let updater = match state.updaters.get(&zone) {
+        Some(u) => u,
+        None => {
+            error!(zone = %zone, "dyndns: no updater for zone");
+            return dyndns_response(
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                "911",
+            );
+        }
+    };
+
+    if let Err(e) = updater.update_record(&fqdn, default_ttl, record_type_u16, &ip_str).await {
+        error!(error = %e, fqdn = %fqdn, "dyndns: DDNS update failed");
+        return dyndns_response(
+            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+            "911",
+        );
+    }
+
+    let event_id = format!("dyndns-{}", uuid::Uuid::new_v4());
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs() as i64;
+
+    if let Err(e) = state.store.save_event(
+        &event_id,
+        &derived_npub,
+        &derived_pubkey_hex,
+        &name,
+        record_type_str,
+        default_ttl,
+        &ip_str,
+        &zone,
+        now,
+    ) {
+        error!(error = %e, "dyndns: failed to save event to store");
+    }
+
+    info!(
+        hostname = %hostname,
+        ip = %ip_str,
+        record_type = record_type_str,
+        npub = %derived_npub,
+        "dyndns: update successful"
+    );
+
+    dyndns_response(axum::http::StatusCode::OK, &format!("good {ip_str}"))
+}
+
+// ---------------------------------------------------------------------------
+// DynDNS helpers
+// ---------------------------------------------------------------------------
+
+/// Parse a Basic Authorization header into (username, password).
+fn parse_basic_auth(header: &str) -> Option<(String, String)> {
+    let encoded = header.strip_prefix("Basic ")?;
+    let decoded = base64::engine::general_purpose::STANDARD
+        .decode(encoded)
+        .ok()?;
+    let decoded_str = String::from_utf8(decoded).ok()?;
+    let (user, pass) = decoded_str.split_once(':')?;
+    Some((user.to_string(), pass.to_string()))
+}
+
+/// Find which configured zone a hostname belongs to.
+/// Returns the zone name (e.g. "nodns.shop") if the hostname ends with it.
+fn find_zone_for_hostname<'a>(
+    hostname: &str,
+    zones: &'a [crate::config::ZoneConfig],
+) -> Option<&'a String> {
+    for zc in zones {
+        let suffix = format!(".{}", zc.zone);
+        if hostname.ends_with(&suffix) || hostname == zc.zone {
+            return Some(&zc.zone);
+        }
+    }
+    None
+}
+
+// ---------------------------------------------------------------------------
+// acme-dns compatible handlers
+// ---------------------------------------------------------------------------
+
+#[derive(Serialize)]
+pub struct AcmeDnsRegisterResponse {
+    allowfrom: Vec<String>,
+    fulldomain: String,
+    password: String,
+    subdomain: String,
+    username: String,
+}
+
+pub async fn acmedns_register_handler(
+    AxumState(state): AxumState<Arc<AppState>>,
+    headers: HeaderMap,
+) -> Response {
+    let npub = headers
+        .get("X-Nostr-Npub")
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| "anonymous".to_string());
+
+    let zone = match state.dns_zones.first() {
+        Some(zc) => zc.zone.clone(),
+        None => {
+            return (
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": "no DNS zones configured"})),
+            )
+                .into_response();
+        }
+    };
+
+    let subdomain = uuid::Uuid::new_v4().to_string();
+    let username = uuid::Uuid::new_v4().to_string();
+
+    let password_bytes: [u8; 32] = rand_bytes();
+    let password = base64::engine::general_purpose::STANDARD_NO_PAD.encode(password_bytes);
+
+    let fulldomain = format!("{}.acme.{}", subdomain, zone);
+
+    if let Err(e) = state.store.save_acme_dns_registration(
+        &subdomain,
+        &username,
+        &password,
+        &npub,
+        &zone,
+        &fulldomain,
+    ) {
+        error!(error = %e, "acme-dns register: failed to save registration");
+        return (
+            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({"error": "Internal error"})),
+        )
+            .into_response();
+    }
+
+    info!(
+        subdomain = %subdomain,
+        fulldomain = %fulldomain,
+        npub = %npub,
+        "acme-dns registration created"
+    );
+
+    (
+        axum::http::StatusCode::CREATED,
+        Json(AcmeDnsRegisterResponse {
+            allowfrom: vec![],
+            fulldomain,
+            password,
+            subdomain,
+            username,
+        }),
+    )
+        .into_response()
+}
+
+#[derive(Deserialize)]
+pub struct AcmeDnsUpdateRequest {
+    subdomain: String,
+    txt: String,
+}
+
+#[derive(Serialize)]
+pub struct AcmeDnsUpdateResponse {
+    txt: String,
+}
+
+pub async fn acmedns_update_handler(
+    AxumState(state): AxumState<Arc<AppState>>,
+    headers: HeaderMap,
+    Json(body): Json<AcmeDnsUpdateRequest>,
+) -> Response {
+    let api_user = match headers.get("X-Api-User").and_then(|v| v.to_str().ok()) {
+        Some(u) => u.to_string(),
+        None => {
+            return (
+                axum::http::StatusCode::UNAUTHORIZED,
+                Json(serde_json::json!({"error": "X-Api-User header required"})),
+            )
+                .into_response();
+        }
+    };
+
+    let api_key = match headers.get("X-Api-Key").and_then(|v| v.to_str().ok()) {
+        Some(k) => k.to_string(),
+        None => {
+            return (
+                axum::http::StatusCode::UNAUTHORIZED,
+                Json(serde_json::json!({"error": "X-Api-Key header required"})),
+            )
+                .into_response();
+        }
+    };
+
+    let registration = match state.store.get_acme_dns_registration_by_username(&api_user) {
+        Ok(Some(r)) => r,
+        Ok(None) => {
+            return (
+                axum::http::StatusCode::UNAUTHORIZED,
+                Json(serde_json::json!({"error": "invalid credentials"})),
+            )
+                .into_response();
+        }
+        Err(e) => {
+            error!(error = %e, "acme-dns update: failed to look up registration");
+            return (
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": "Internal error"})),
+            )
+                .into_response();
+        }
+    };
+
+    if registration.password != api_key {
+        return (
+            axum::http::StatusCode::UNAUTHORIZED,
+            Json(serde_json::json!({"error": "invalid credentials"})),
+        )
+            .into_response();
+    }
+
+    if registration.subdomain != body.subdomain {
+        return (
+            axum::http::StatusCode::FORBIDDEN,
+            Json(serde_json::json!({"error": "subdomain mismatch"})),
+        )
+            .into_response();
+    }
+
+    if let Err(e) = state.store.update_acme_dns_txt(&body.subdomain, &body.txt) {
+        error!(error = %e, "acme-dns update: failed to update TXT in store");
+        return (
+            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({"error": "Internal error"})),
+        )
+            .into_response();
+    }
+
+    let updater = match state.updaters.get(&registration.zone) {
+        Some(u) => u,
+        None => {
+            error!(zone = %registration.zone, "acme-dns update: no updater for zone");
+            return (
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": "Internal error"})),
+            )
+                .into_response();
+        }
+    };
+
+    let fqdn = format!("{}.", registration.fulldomain);
+    let ttl = 120;
+
+    if let Err(e) = updater.delete_record(&fqdn, 16).await {
+        error!(error = %e, fqdn = %fqdn, "acme-dns update: failed to delete existing TXT RRset");
+        return (
+            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({"error": "DDNS update failed"})),
+        )
+            .into_response();
+    }
+
+    if let Err(e) = updater.append_record(&fqdn, ttl, 16, &body.txt).await {
+        error!(error = %e, fqdn = %fqdn, "acme-dns update: failed to append current TXT");
+        return (
+            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({"error": "DDNS update failed"})),
+        )
+            .into_response();
+    }
+
+    let refreshed = state.store.get_acme_dns_registration_by_username(&api_user);
+    if let Ok(Some(ref reg)) = refreshed {
+        if let Some(ref prev) = reg.txt_value_prev {
+            if !prev.is_empty() {
+                if let Err(e) = updater.append_record(&fqdn, ttl, 16, prev).await {
+                    warn!(error = %e, "acme-dns update: failed to append previous TXT (non-fatal)");
+                }
+            }
+        }
+    }
+
+    info!(
+        subdomain = %body.subdomain,
+        txt = %body.txt,
+        "acme-dns TXT updated"
+    );
+
+    Json(AcmeDnsUpdateResponse {
+        txt: body.txt,
+    })
+    .into_response()
+}
+
+fn rand_bytes() -> [u8; 32] {
+    use aes_gcm::aead::OsRng;
+    use nostr_sdk::secp256k1::rand::RngCore;
+    let mut buf = [0u8; 32];
+    OsRng.fill_bytes(&mut buf);
+    buf
 }
