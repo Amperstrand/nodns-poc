@@ -237,3 +237,30 @@ No. Cashu tokens are one-time-use bearer ecash. Each token can only be spent onc
 ### ❌ "I need an account to use NoDNS"
 
 No. Your Nostr keypair IS your account. Generate one with any Nostr client, or use the ephemeral key generator on the web UI.
+
+---
+
+## Backwards-Compatible APIs
+
+### Can I use my router's built-in DDNS with NoDNS?
+
+Yes. NoDNS implements the DynDNS v2 protocol (`/nic/update`). Configure your router or ddclient with:
+- Server: `nodns.shop`
+- Username: your npub
+- Password: your nsec
+
+See [34-backwards-compatible-apis.md](34-backwards-compatible-apis.md) for full setup instructions.
+
+### Can I get Let's Encrypt certificates?
+
+Yes. NoDNS implements the acme-dns protocol for DNS-01 challenges. Use the certbot manual hook in `docs/examples/certbot-dns-hook.sh`.
+
+### Can I use nsupdate?
+
+Yes. NoDNS runs an RFC 2136 DNS UPDATE server (UDP, configurable port). See `docs/examples/nsupdate-example.sh`.
+
+### Isn't sending my nsec to a server insecure?
+
+It's the same threat model as every DynDNS provider. Namecheap, Cloudflare, GoDaddy — they all require a password or API key stored in your router. If someone compromises your router, they can update your DNS records regardless of provider.
+
+The difference with NoDNS: **you can run the gateway yourself**. The bot is open source. Run your own instance, configure your own TLS, and never send your nsec to a third party. Self-hosting equivalent infrastructure with traditional DynDNS providers is far more complex.

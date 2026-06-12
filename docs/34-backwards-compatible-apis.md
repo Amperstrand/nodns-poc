@@ -592,17 +592,40 @@ This ensures that all record changes go through the same validation and persiste
 
 ## Security Considerations
 
+### The nsec-as-password tradeoff
+
+DynDNS v2 uses HTTP Basic Auth with the user's nsec (Nostr private key) as the password. This sounds worse than it is. Consider what happens with every other DynDNS provider:
+
+- **Namecheap**, **Cloudflare**, **GoDaddy** — you get an API key or password stored in your router's config file. Anyone with access to the router (web UI, config backup, firmware dump) has your credentials. The key is a shared secret between you and the provider.
+- **DynDNS providers** — same model. A password or token stored in plaintext on a $30 home router.
+
+NoDNS is no worse. The nsec is a shared secret between you and the NoDNS gateway — except unlike Namecheap, **you can run the gateway yourself**. The nodns-bot is open source (Unlicense). You can:
+
+1. Run your own nodns-bot instance pointing at your own Knot DNS
+2. Configure your own TSIG keys, your own zones
+3. Put TLS termination (Caddy) in front
+4. Never send your nsec to a third party
+
+With traditional DynDNS providers, self-hosting the equivalent (a DynDNS update receiver + authoritative DNS) is significantly more complex. With NoDNS, it's one binary + one config file.
+
+The real risk is the same as every DynDNS setup: if someone compromises your router, they can update your DNS records. Mitigate this by:
+- Running your own gateway (no third-party trust)
+- Using TLS (Caddy handles this automatically)
+- Keeping router firmware updated
+- Using delegated names with limited scope rather than the apex npub domain
+
+### Prototype limitations
+
 These are prototype/demo quality implementations, not production-hardened:
 
-- No rate limiting on incoming requests
 - No brute force protection for authentication
-- Credentials sent over HTTP (use TLS in production via Caddy)
 - No audit logging of API requests
 - Single shared TSIG key for RFC 2136 (compromise affects all users)
 - No IP restrictions or geo-blocking
 
+The existing rate limiting (`tower_governor`) applies to all routes, which provides basic request throttling.
+
 In production deployment, consider adding:
-- Rate limiting per client or per user
 - Request logging and audit trails
 - Per-user TSIG keys for RFC 2136
 - IP allowlists for acme-dns updates
