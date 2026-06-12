@@ -155,6 +155,52 @@ pub async fn records_handler(
 }
 
 // ---------------------------------------------------------------------------
+// Record lookup by npub / pubkey prefix
+// ---------------------------------------------------------------------------
+
+pub async fn records_by_npub_handler(
+    AxumState(state): AxumState<Arc<AppState>>,
+    Path(npub): Path<String>,
+) -> Json<RecordsResponse> {
+    let records = state.store.get_records_by_npub_exact(&npub).unwrap_or_default();
+    let out: Vec<ApiRecord> = records
+        .into_iter()
+        .map(|r| ApiRecord {
+            npub: r.npub.clone(),
+            name: if r.name == "@" || r.name.is_empty() { String::new() } else { r.name.clone() },
+            fqdn: resolve_fqdn(&r.npub, &r.name, &r.zone, &state.store),
+            record_type: r.record_type,
+            ttl: r.ttl,
+            rdata: r.rdata,
+            created_at: r.created_at,
+        })
+        .collect();
+    let count = out.len();
+    Json(RecordsResponse { records: out, count })
+}
+
+pub async fn records_by_prefix_handler(
+    AxumState(state): AxumState<Arc<AppState>>,
+    Path(prefix): Path<String>,
+) -> Json<RecordsResponse> {
+    let records = state.store.lookup_by_pubkey_prefix(&prefix).unwrap_or_default();
+    let out: Vec<ApiRecord> = records
+        .into_iter()
+        .map(|r| ApiRecord {
+            npub: r.npub.clone(),
+            name: if r.name == "@" || r.name.is_empty() { String::new() } else { r.name.clone() },
+            fqdn: resolve_fqdn(&r.npub, &r.name, &r.zone, &state.store),
+            record_type: r.record_type,
+            ttl: r.ttl,
+            rdata: r.rdata,
+            created_at: r.created_at,
+        })
+        .collect();
+    let count = out.len();
+    Json(RecordsResponse { records: out, count })
+}
+
+// ---------------------------------------------------------------------------
 // Zone pricing handler
 // ---------------------------------------------------------------------------
 
@@ -898,6 +944,29 @@ fn rand_bytes() -> [u8; 32] {
     let mut buf = [0u8; 32];
     OsRng.fill_bytes(&mut buf);
     buf
+}
+
+// ---------------------------------------------------------------------------
+// On-demand TLS domain validation (called by Caddy before cert issuance)
+// ---------------------------------------------------------------------------
+
+#[derive(Deserialize)]
+pub struct TlsCheckQuery {
+    domain: Option<String>,
+}
+
+pub async fn tls_check_handler(Query(params): Query<TlsCheckQuery>) -> Response {
+    let domain = match params.domain {
+        Some(d) if !d.is_empty() => d,
+        _ => return (axum::http::StatusCode::FORBIDDEN, "").into_response(),
+    };
+
+    let valid = domain.ends_with(".nodns.shop") && domain != "nodns.shop";
+    if valid {
+        (axum::http::StatusCode::OK, "").into_response()
+    } else {
+        (axum::http::StatusCode::FORBIDDEN, "").into_response()
+    }
 }
 
 // ---------------------------------------------------------------------------
