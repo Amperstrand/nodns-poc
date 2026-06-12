@@ -50,6 +50,7 @@ import {
 import { validateRecord } from "@/lib/validation";
 import { getEncodedToken } from "coco-cashu-core";
 import type { ZonePricing, KeyPair } from "@/lib/types";
+import { SourceIndicator } from "@/components/source-indicator";
 import {
   ArrowLeftIcon,
   PlusIcon,
@@ -512,15 +513,9 @@ function DomainDetailContent() {
         <span className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Sources</span>
         {tripartite ? (
           <>
-            <span className="flex items-center gap-1.5 text-sm">
-              {tripartite.api.icon} {statusDot(tripartite.api.status)} <span className="text-xs">{tripartite.api.status}</span>
-            </span>
-            <span className="flex items-center gap-1.5 text-sm">
-              {tripartite.nostr.icon} {statusDot(tripartite.nostr.status)} <span className="text-xs">{tripartite.nostr.status}</span>
-            </span>
-            <span className="flex items-center gap-1.5 text-sm">
-              {tripartite.dns.icon} {statusDot(tripartite.dns.status)} <span className="text-xs">{tripartite.dns.status}</span>
-            </span>
+            <SourceIndicator source="api" status={tripartite.api.status} fqdn={fqdn} />
+            <SourceIndicator source="nostr" status={tripartite.nostr.status} fqdn={fqdn} />
+            <SourceIndicator source="dns" status={tripartite.dns.status} fqdn={fqdn} />
           </>
         ) : (
           <span className="text-xs text-muted-foreground animate-pulse">Loading sources...</span>
@@ -696,13 +691,13 @@ function DomainDetailContent() {
             <div className="flex items-center justify-center gap-0.5">
               <span className="md:hidden text-xs text-muted-foreground mr-1">Sources:</span>
               {record.sources.includes("api") && (
-                <span className="text-[10px] px-1 py-0.5 rounded bg-secondary" title="API">🗄</span>
+                <SourceIndicator compact source="api" status="ok" fqdn={fqdn} />
               )}
               {record.sources.includes("nostr") && (
-                <span className="text-[10px] px-1 py-0.5 rounded bg-secondary" title="Nostr">🔐</span>
+                <SourceIndicator compact source="nostr" status="ok" fqdn={fqdn} />
               )}
               {record.sources.includes("dns") && (
-                <span className="text-[10px] px-1 py-0.5 rounded bg-secondary" title="DNS">🌐</span>
+                <SourceIndicator compact source="dns" status="ok" fqdn={fqdn} />
               )}
             </div>
 

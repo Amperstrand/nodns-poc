@@ -22,6 +22,7 @@ import {
   RefreshCwIcon,
   LayersIcon,
 } from "lucide-react";
+import { SourceIndicator } from "@/components/source-indicator";
 
 interface DomainInfo {
   name: string;
@@ -222,10 +223,10 @@ function DashboardContent() {
         <div className="flex items-center gap-2">
           <span className="text-xs text-muted-foreground">Sources</span>
           {tripartite ? (
-            <span className="text-xs font-mono">
-              {tripartite.api.icon} {statusDot(tripartite.api.status)}{" "}
-              {tripartite.nostr.icon} {statusDot(tripartite.nostr.status)}{" "}
-              {tripartite.dns.icon} {statusDot(tripartite.dns.status)}
+            <span className="flex items-center gap-1">
+              <SourceIndicator source="api" status={tripartite.api.status} fqdn={domains[0]?.fqdn ?? ""} />
+              <SourceIndicator source="nostr" status={tripartite.nostr.status} fqdn={domains[0]?.fqdn ?? ""} />
+              <SourceIndicator source="dns" status={tripartite.dns.status} fqdn={domains[0]?.fqdn ?? ""} />
             </span>
           ) : (
             <span className="text-xs text-muted-foreground animate-pulse">Loading...</span>
@@ -299,13 +300,13 @@ function DashboardContent() {
                 </Link>
                 <div className="flex items-center gap-0.5">
                   {domain.sources.includes("api") && (
-                    <span className="text-[10px] px-1 py-0.5 rounded bg-secondary text-muted-foreground" title="API confirmed">🗄</span>
+                    <SourceIndicator compact source="api" status="ok" fqdn={domain.fqdn} />
                   )}
                   {domain.sources.includes("nostr") && (
-                    <span className="text-[10px] px-1 py-0.5 rounded bg-secondary text-muted-foreground" title="Nostr confirmed">🔐</span>
+                    <SourceIndicator compact source="nostr" status="ok" fqdn={domain.fqdn} />
                   )}
                   {domain.sources.includes("dns") && (
-                    <span className="text-[10px] px-1 py-0.5 rounded bg-secondary text-muted-foreground" title="DNS confirmed">🌐</span>
+                    <SourceIndicator compact source="dns" status="ok" fqdn={domain.fqdn} />
                   )}
                 </div>
               </div>
