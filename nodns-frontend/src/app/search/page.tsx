@@ -149,9 +149,13 @@ function SearchContent() {
 
         {available === false && (
           <>
-            <div className="flex items-center gap-2 mb-4">
-              <span className="inline-block h-2.5 w-2.5 rounded-full bg-red-400" />
-              <span className="text-red-400 font-semibold text-lg">Already registered</span>
+            <div className="flex items-center gap-2.5 mb-4">
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-red-500/15">
+                <svg className="h-4 w-4 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </span>
+              <span className="text-red-400 font-bold text-xl">Already registered</span>
             </div>
             <p className="text-sm text-muted-foreground mb-5">
               This domain is taken. Try a different name or check out these alternatives:
