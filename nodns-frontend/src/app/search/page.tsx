@@ -167,8 +167,14 @@ function SearchContent() {
               </div>
             )}
             <Link
+              href={`/profile?domain=${encodeURIComponent(name)}`}
+              className="inline-flex items-center justify-center rounded-lg bg-primary px-6 py-2.5 text-sm font-semibold text-primary-foreground hover:bg-primary/80 transition-colors"
+            >
+              View domain profile →
+            </Link>
+            <Link
               href="/"
-              className="text-sm text-primary hover:underline"
+              className="block mt-3 text-sm text-muted-foreground hover:text-foreground transition-colors"
             >
               ← Search again
             </Link>
