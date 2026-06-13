@@ -25,6 +25,7 @@ pub struct Config {
     pub relays: Vec<String>,
     pub secret_key: Option<String>,
     pub zone: String,
+    #[allow(dead_code)]
     pub dns_server: String,
 }
 
