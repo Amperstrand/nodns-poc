@@ -560,17 +560,19 @@ function DomainDetailContent() {
               )}
             </p>
           </div>
-          <Button
-            size="sm"
-            onClick={() => {
-              setAddingRecord(true);
-              setAddError(null);
-            }}
-            disabled={addingRecord}
-          >
-            <PlusIcon className="size-3.5" />
-            Add Record
-          </Button>
+          {(records.length > 0 || addingRecord) && (
+            <Button
+              size="sm"
+              onClick={() => {
+                setAddingRecord(true);
+                setAddError(null);
+              }}
+              disabled={addingRecord}
+            >
+              <PlusIcon className="size-3.5" />
+              Add Record
+            </Button>
+          )}
         </div>
 
         {/* Table header (desktop) */}

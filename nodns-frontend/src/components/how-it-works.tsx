@@ -28,17 +28,23 @@ export function HowItWorks() {
         <h2 className="mb-6 text-[1.75rem] font-bold tracking-tight">
           How It Works
         </h2>
-        <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-6">
-          {steps.map((step) => (
-            <div
-              key={step.num}
-              className="rounded-xl border border-border bg-card p-6 text-center"
-            >
-              <div className="mx-auto mb-2 flex h-8 w-8 items-center justify-center rounded-full bg-primary text-sm font-bold text-primary-foreground">
-                {step.num}
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">
+          {steps.map((step, i) => (
+            <div key={step.num} className="relative">
+              {i < steps.length - 1 && (
+                <div className="hidden md:block absolute top-12 -right-2 z-10 text-primary/40">
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                    <path d="M2 8h10m0 0L8 4m4 4L8 12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </div>
+              )}
+              <div className="h-full rounded-xl border border-border bg-card p-6 text-center transition-colors hover:border-primary/30">
+                <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-base font-bold text-primary ring-1 ring-primary/20">
+                  {step.num}
+                </div>
+                <h3 className="mb-2 text-base font-semibold">{step.title}</h3>
+                <p className="text-sm text-muted-foreground leading-relaxed">{step.desc}</p>
               </div>
-              <h3 className="mb-3 text-lg font-semibold">{step.title}</h3>
-              <p className="text-muted-foreground">{step.desc}</p>
             </div>
           ))}
         </div>

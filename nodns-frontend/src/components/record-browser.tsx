@@ -458,7 +458,7 @@ export function RecordBrowser() {
                         key={r.id}
                         className="grid grid-cols-1 md:grid-cols-[1fr_80px_1fr_60px_70px] gap-2 md:gap-3 px-5 py-3 border-b border-border last:border-b-0 hover:bg-muted/30 transition-colors"
                       >
-                        <div className="font-mono text-xs truncate">
+                        <div className="font-mono text-xs font-medium truncate">
                           <span className="md:hidden text-xs text-muted-foreground mr-1">
                             FQDN:
                           </span>
