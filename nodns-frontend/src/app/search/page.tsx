@@ -121,18 +121,21 @@ function SearchContent() {
 
         {available === true && (
           <>
-            <div className="flex items-center gap-2 mb-4">
-              <span className="inline-block h-2.5 w-2.5 rounded-full bg-emerald-400" />
-              <span className="text-emerald-400 font-semibold text-lg">Available!</span>
+            <div className="flex items-center gap-2.5 mb-4">
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-500/15">
+                <svg className="h-4 w-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+              </span>
+              <span className="text-emerald-400 font-bold text-xl">Available!</span>
             </div>
-            <div className="flex items-baseline gap-2 mb-5">
+            <div className="flex items-baseline gap-2 mb-3">
               <span className="text-3xl font-bold text-foreground">{price}</span>
               <span className="text-sm text-muted-foreground">sats/year</span>
             </div>
             {pricing && (
               <p className="text-xs text-muted-foreground mb-5">
-                Base create price: {pricing.create_price} sats · Update: {pricing.update_price} sats ·
-                Mint: {new URL(pricing.mint_url).hostname}
+                Base create price: {pricing.create_price} sats · Update: {pricing.update_price} sats
               </p>
             )}
             <Link

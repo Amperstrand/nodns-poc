@@ -39,5 +39,11 @@ export default defineConfig({
       testDir: "./tests",
       testMatch: "registration-flow.spec.ts",
     },
+    {
+      name: "visual-qa",
+      testDir: "./tests",
+      testMatch: "visual-qa.spec.ts",
+      timeout: 90_000,
+    },
   ],
 });

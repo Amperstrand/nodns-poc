@@ -121,6 +121,15 @@ function RegisterContent() {
       {/* Order summary */}
       {step !== "success" && (
         <div className="rounded-xl border border-border bg-card p-6 mb-6">
+          {/* Progress indicator */}
+          <div className="mb-6 flex items-center gap-2 text-xs text-muted-foreground">
+            <span className={`flex h-6 w-6 items-center justify-center rounded-full ${step === "review" || step === "paying" ? "bg-primary text-primary-foreground" : "bg-secondary"}`}>1</span>
+            <span className={step === "review" || step === "paying" ? "text-foreground font-medium" : ""}>Review & Pay</span>
+            <span className="h-px flex-1 bg-border" />
+            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-secondary">2</span>
+            <span>Registered</span>
+          </div>
+
           <h1 className="text-lg font-semibold mb-5">Order Summary</h1>
 
           <div className="space-y-3 mb-6">
@@ -163,10 +172,16 @@ function RegisterContent() {
           {!sufficient && walletStatus === "ready" && (
             <div className="rounded-lg border border-red-800 bg-red-950/40 px-4 py-3 text-sm text-red-400 mb-4">
               Insufficient balance. You need {price} sats but have {balance} sats.
-              <Link href="/wallet" className="block mt-2 text-primary hover:underline">
-                Add funds →
-              </Link>
             </div>
+          )}
+
+          {!sufficient && walletStatus === "ready" && (
+            <Link
+              href="/wallet"
+              className="w-full flex items-center justify-center rounded-lg bg-primary py-3 text-sm font-semibold text-primary-foreground hover:bg-primary/80 transition-colors"
+            >
+              Add funds to wallet →
+            </Link>
           )}
 
           {sufficient && walletStatus === "ready" && (

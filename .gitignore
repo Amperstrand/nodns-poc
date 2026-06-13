@@ -46,6 +46,7 @@ Thumbs.db
 
 # Screenshots (generated during dev)
 *.png
+screenshots/
 
 # OpenCode plans
 .omo/

@@ -260,7 +260,7 @@ function WalletContent() {
   if (status === "loading") {
     return (
         <div className="mx-auto max-w-[640px] py-8 md:py-12">
-        <h1 className="text-2xl font-bold mb-6">Wallet</h1>
+        <h1 className="text-2xl font-bold mb-6 flex items-center gap-3">Wallet <span className="rounded-md border border-yellow-800 bg-yellow-950/60 px-2 py-0.5 text-xs font-mono font-medium text-yellow-400">TESTNET</span></h1>
         <div className="rounded-xl border border-border bg-card p-8 sm:p-12 text-center">
           <div className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-muted-foreground border-t-transparent" />
           <p className="text-sm text-muted-foreground mt-4">
@@ -274,7 +274,7 @@ function WalletContent() {
   if (status === "error") {
     return (
       <div className="mx-auto max-w-[640px] py-8 md:py-12">
-        <h1 className="text-2xl font-bold mb-6">Wallet</h1>
+        <h1 className="text-2xl font-bold mb-6 flex items-center gap-3">Wallet <span className="rounded-md border border-yellow-800 bg-yellow-950/60 px-2 py-0.5 text-xs font-mono font-medium text-yellow-400">TESTNET</span></h1>
         <div className="rounded-xl border border-red-800 bg-red-950/40 text-red-400 p-4 sm:p-6 text-center">
           <p className="text-sm mb-4">Wallet failed to initialize.</p>
           {walletError && (
@@ -300,7 +300,12 @@ function WalletContent() {
 
   return (
     <div className="mx-auto max-w-[640px] py-8 md:py-12">
-      <h1 className="text-2xl font-bold mb-6">Wallet</h1>
+      <h1 className="text-2xl font-bold mb-6 flex items-center gap-3">
+        Wallet
+        <span className="rounded-md border border-yellow-800 bg-yellow-950/60 px-2 py-0.5 text-xs font-mono font-medium text-yellow-400">
+          TESTNET
+        </span>
+      </h1>
 
       {/* ── Balance Card ──────────────────────────────── */}
       <div className="rounded-xl border border-border bg-card p-4 sm:p-6 mb-4">

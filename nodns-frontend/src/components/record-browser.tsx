@@ -280,6 +280,11 @@ export function RecordBrowser() {
           >
             <DatabaseIcon className="size-3.5 mr-1.5" />
             API + Nostr
+            {stats.total > 0 && (
+              <span className="ml-1.5 rounded-full bg-secondary px-1.5 py-0.5 text-xs font-mono text-muted-foreground">
+                {stats.total}
+              </span>
+            )}
           </TabsTrigger>
           <TabsTrigger
             value="dns"
@@ -294,6 +299,11 @@ export function RecordBrowser() {
           >
             <RadioIcon className="size-3.5 mr-1.5" />
             Nostr Events
+            {nostrEvents.length > 0 && (
+              <span className="ml-1.5 rounded-full bg-secondary px-1.5 py-0.5 text-xs font-mono text-muted-foreground">
+                {nostrEvents.length}
+              </span>
+            )}
           </TabsTrigger>
         </TabsList>
 
