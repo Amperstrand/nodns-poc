@@ -49,7 +49,7 @@ test.describe("Registration - UI Flow", () => {
   test("insufficient balance shows error and add funds link", async ({ page }) => {
     await page.goto("./register?name=verylongtestname");
     await expect(page.getByRole("heading", { name: "Order Summary" })).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByText(/Insufficient balance/i)).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText(/more sats/i)).toBeVisible({ timeout: 10_000 });
     await expect(page.getByRole("link", { name: /Add funds/i })).toBeVisible();
   });
 
