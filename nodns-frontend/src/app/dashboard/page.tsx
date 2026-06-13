@@ -348,10 +348,25 @@ function DashboardContent() {
             <GlobeIcon className="size-12 mx-auto text-muted-foreground" />
           </div>
           <h2 className="text-lg font-semibold mb-2">No domains yet</h2>
-          <p className="text-sm text-muted-foreground mb-6 max-w-[360px] mx-auto">
-            Register your first subdomain on {DEFAULT_ZONE} to start managing
-            DNS records via Nostr events.
+          <p className="text-sm text-muted-foreground mb-8 max-w-[420px] mx-auto">
+            Your decentralized subdomain is a few sats away. Register one to control DNS records via Nostr — no registrar, no middleman.
           </p>
+          <div className="mb-8 flex items-center justify-center gap-8 text-xs text-muted-foreground max-w-[480px] mx-auto">
+            <div className="flex flex-col items-center gap-1.5">
+              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-secondary font-mono font-semibold text-foreground">1</span>
+              <span>Search a name</span>
+            </div>
+            <span className="h-px w-8 bg-border" />
+            <div className="flex flex-col items-center gap-1.5">
+              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-secondary font-mono font-semibold text-foreground">2</span>
+              <span>Top up wallet</span>
+            </div>
+            <span className="h-px w-8 bg-border" />
+            <div className="flex flex-col items-center gap-1.5">
+              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-secondary font-mono font-semibold text-foreground">3</span>
+              <span>Register &amp; manage</span>
+            </div>
+          </div>
           <Link href="/">
             <Button>
               <PlusIcon className="size-4" />

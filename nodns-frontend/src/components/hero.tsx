@@ -75,6 +75,15 @@ export function Hero() {
             <span className="font-mono text-foreground">7+ chars</span> 4 sats
           </span>
         </div>
+
+        {/* Trust microcopy */}
+        <div className="mt-4 flex flex-wrap items-center justify-center gap-2 text-xs text-muted-foreground/60">
+          <span>No account needed</span>
+          <span className="text-border">·</span>
+          <span>No email</span>
+          <span className="text-border">·</span>
+          <span>Just sats</span>
+        </div>
       </div>
     </section>
   );
