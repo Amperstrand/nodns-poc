@@ -1,19 +1,41 @@
 #!/usr/bin/env bash
-# Block commits containing secrets detected by gitleaks.
-# To bypass in emergencies (NOT recommended): git commit --no-verify
 set -e
 
-if ! command -v gitleaks >/dev/null 2>&1; then
+STAGED=$(git diff --cached --name-only)
+
+# 1. Secret scan (gitleaks)
+if command -v gitleaks >/dev/null 2>&1; then
+    echo "[pre-commit] Scanning staged changes for secrets..."
+    if ! gitleaks git --staged --exit-code 1; then
+        echo ""
+        echo "[pre-commit] FAILED: secrets detected in staged changes."
+        echo "[pre-commit] Remove the secret and re-stage, or use --no-verify to bypass."
+        exit 1
+    fi
+    echo "[pre-commit] OK - no secrets detected."
+else
     echo "[pre-commit] gitleaks not installed; skipping secret scan."
     echo "[pre-commit] Install with: brew install gitleaks"
-    exit 0
 fi
 
-echo "[pre-commit] Scanning staged changes for secrets..."
-if ! gitleaks git --staged --exit-code 1; then
-    echo ""
-    echo "[pre-commit] FAILED: secrets detected in staged changes."
-    echo "[pre-commit] Remove the secret and re-stage, or use --no-verify to bypass."
-    exit 1
+# 2. Rust formatting + clippy (only when Rust files changed)
+if echo "$STAGED" | grep -q 'nodns-bot-rs/.*\.rs$'; then
+    cd "$(git rev-parse --show-toplevel)/nodns-bot-rs"
+
+    echo "[pre-commit] Checking formatting..."
+    cargo fmt --check
+    echo "[pre-commit] OK - formatting clean."
+
+    echo "[pre-commit] Running clippy..."
+    cargo clippy -- -D warnings
+    echo "[pre-commit] OK - clippy clean."
 fi
-echo "[pre-commit] OK - no secrets detected."
+
+# 3. Domain expiry check (when deploy config changes)
+if echo "$STAGED" | grep -q 'deploy/config-multi-zone.toml'; then
+    ROOT="$(git rev-parse --show-toplevel)"
+    echo "[pre-commit] Config changed — verifying domain expiry..."
+    bash "$ROOT/deploy/check-expiry.sh"
+fi
+
+echo "[pre-commit] All checks passed."

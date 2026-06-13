@@ -32,6 +32,14 @@ jobs:
           key: ${{ runner.os }}-cargo-bot-${{ hashFiles('nodns-bot-rs/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-bot-
 
+      - name: Check formatting
+        working-directory: nodns-bot-rs
+        run: cargo fmt --check
+
+      - name: Run clippy
+        working-directory: nodns-bot-rs
+        run: cargo clippy -- -D warnings
+
       - name: Build release binary
         working-directory: nodns-bot-rs
         run: cargo build --release
@@ -39,6 +47,11 @@ jobs:
       - name: Run tests
         working-directory: nodns-bot-rs
         run: cargo test
+
+      - name: Verify domain expiry config matches RDAP
+        run: |
+          chmod +x deploy/check-expiry.sh
+          ./deploy/check-expiry.sh
 
       - name: Upload binary
         uses: actions/upload-artifact@v4
