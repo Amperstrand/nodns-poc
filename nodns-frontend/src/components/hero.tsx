@@ -50,7 +50,7 @@ export function Hero() {
             />
             <button
               type="submit"
-              className="shrink-0 m-1.5 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground hover:bg-primary/80 transition-colors sm:px-6"
+              className="shrink-0 m-1.5 rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground hover:bg-primary/80 transition-colors sm:px-6 min-h-[44px]"
             >
               <span className="hidden sm:inline">Search</span>
               <span className="sm:hidden">Go</span>
