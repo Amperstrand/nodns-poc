@@ -25,7 +25,7 @@ test.describe("Learn Page", () => {
   test("renders roadmap section", async ({ page }) => {
     await page.goto("./learn");
     await expect(
-      page.getByText(/Roadmap/i)
+      page.getByRole("heading", { name: /Roadmap/i })
     ).toBeVisible();
   });
 
