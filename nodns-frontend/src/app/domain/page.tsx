@@ -500,11 +500,13 @@ function DomainDetailContent() {
             />
             Refresh
           </Button>
-          {/* Renew placeholder */}
-          <Button variant="outline" size="sm" disabled>
-            <ShieldIcon className="size-3.5" />
-            Renew
-          </Button>
+          {/* Renew placeholder - only show for active domains */}
+          {records.length > 0 && (
+            <Button variant="outline" size="sm" disabled>
+              <ShieldIcon className="size-3.5" />
+              Renew
+            </Button>
+          )}
         </div>
       </div>
 
