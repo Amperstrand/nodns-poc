@@ -76,7 +76,7 @@ function SearchContent() {
     return () => { cancelled = true; };
   }, [name]);
 
-  const price = name ? getPriceForName(name) : 0;
+  const price = name ? getPriceForName(name, pricing?.create_price ?? 2) : 0;
 
   const suggestions = useCallback(() => {
     if (available !== false || !name) return [];

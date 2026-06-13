@@ -4,11 +4,11 @@ import { DEFAULT_ZONE } from "./constants";
  * Price in sats based on subdomain label length.
  * Matches backend pricing tiers.
  */
-export function getPriceForName(name: string): number {
+export function getPriceForName(name: string, basePrice: number = 2): number {
   const len = name.length;
-  if (len <= 3) return 200;
-  if (len <= 6) return 20;
-  return 4;
+  if (len <= 3) return basePrice * 100;
+  if (len <= 6) return basePrice * 10;
+  return basePrice * 2;
 }
 
 /** Sanitize a subdomain label: lowercase, strip dots/spaces. */
