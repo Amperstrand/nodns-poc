@@ -356,12 +356,12 @@ function DashboardContent() {
               <span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/15 ring-1 ring-primary/30 font-mono font-bold text-primary">1</span>
               <span>Search a name</span>
             </div>
-            <ArrowRightIcon className="size-4 text-muted-foreground/50 rotate-90 sm:rotate-0" />
+            <ArrowRightIcon className="size-4 text-primary/40 rotate-90 sm:rotate-0" />
             <div className="flex flex-col items-center gap-1.5">
               <span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/15 ring-1 ring-primary/30 font-mono font-bold text-primary">2</span>
               <span>Top up wallet</span>
             </div>
-            <ArrowRightIcon className="size-4 text-muted-foreground/50 rotate-90 sm:rotate-0" />
+            <ArrowRightIcon className="size-4 text-primary/40 rotate-90 sm:rotate-0" />
             <div className="flex flex-col items-center gap-1.5">
               <span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/15 ring-1 ring-primary/30 font-mono font-bold text-primary">3</span>
               <span>Register &amp; manage</span>
