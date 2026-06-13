@@ -14,7 +14,7 @@ pub const DEFAULT_TTL: u32 = 3600;
 #[derive(Debug, Clone)]
 pub struct DeleteRequest {
     pub record_type: String,
-    pub name: String,  // "@" for root, or subdomain name
+    pub name: String, // "@" for root, or subdomain name
 }
 
 /// A parsed DNS record from a Nostr record tag.
@@ -30,28 +30,28 @@ pub struct DnsRecord {
 /// Format: ["delegation", DOMAIN, NPUB, VALID_FROM, VALID_UNTIL, RENEW_BY]
 #[derive(Debug, Clone)]
 pub struct Delegation {
-    pub domain: String,     // e.g., "alice.cv"
-    pub npub: String,       // npub receiving delegation
-    pub valid_from: i64,    // unix timestamp
-    pub valid_until: i64,   // unix timestamp
-    pub renew_by: i64,      // unix timestamp
+    pub domain: String,   // e.g., "alice.test.shop"
+    pub npub: String,     // npub receiving delegation
+    pub valid_from: i64,  // unix timestamp
+    pub valid_until: i64, // unix timestamp
+    pub renew_by: i64,    // unix timestamp
 }
 
 /// A parsed registrar key publication tag.
 /// Format: ["registrar", ZONE, PUBKEY_HEX]
 #[derive(Debug, Clone)]
 pub struct RegistrarKey {
-    pub zone: String,        // e.g., "cv", "nodns.shop"
-    pub pubkey_hex: String,  // nostr pubkey in hex
+    pub zone: String,       // e.g., "test.shop", "nodns.shop"
+    pub pubkey_hex: String, // nostr pubkey in hex
 }
 
 /// A parsed payment proof tag.
 #[derive(Debug, Clone)]
 pub struct Payment {
-    pub method: String,  // "cashu" or "zap"
-    pub token: String,   // cashu token or zap receipt event ID
+    pub method: String,   // "cashu" or "zap"
+    pub token: String,    // cashu token or zap receipt event ID
     pub mint_url: String, // cashu mint URL (empty for zap)
-    pub amount: i64,     // sats
+    pub amount: i64,      // sats
 }
 
 /// Result of parsing a kind 11111 event.
@@ -103,8 +103,8 @@ pub struct RenewalRequest {
 #[derive(Debug, Clone, PartialEq)]
 pub enum DelegationState {
     Active,
-    Grace,     // past valid_until but within grace period
-    Expired,   // past grace period
+    Grace,   // past valid_until but within grace period
+    Expired, // past grace period
 }
 
 impl DelegationState {
@@ -141,8 +141,8 @@ pub struct DelegationRecord {
     pub valid_until: i64,
     pub renew_by: i64,
     pub registrar_pubkey: String,
-    pub renewal_price: i64,  // locked price in sats (0 = free/not set)
-    pub status: String,       // "active", "grace", "expired"
+    pub renewal_price: i64, // locked price in sats (0 = free/not set)
+    pub status: String,     // "active", "grace", "expired"
     pub created_at: i64,
     pub processed_at: i64,
 }
@@ -224,7 +224,11 @@ pub fn record_type_to_u16(t: &str) -> u16 {
 
 impl fmt::Display for DnsRecord {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{} {} IN {} {}", self.name, self.ttl, self.record_type, self.rdata)
+        write!(
+            f,
+            "{} {} IN {} {}",
+            self.name, self.ttl, self.record_type, self.rdata
+        )
     }
 }
 
@@ -241,10 +245,22 @@ mod tests {
 
     #[test]
     fn delegation_state_from_str() {
-        assert_eq!(DelegationState::from_str("active").unwrap(), DelegationState::Active);
-        assert_eq!(DelegationState::from_str("grace").unwrap(), DelegationState::Grace);
-        assert_eq!(DelegationState::from_str("expired").unwrap(), DelegationState::Expired);
-        assert_eq!(DelegationState::from_str("unknown").unwrap(), DelegationState::Active);
+        assert_eq!(
+            DelegationState::from_str("active").unwrap(),
+            DelegationState::Active
+        );
+        assert_eq!(
+            DelegationState::from_str("grace").unwrap(),
+            DelegationState::Grace
+        );
+        assert_eq!(
+            DelegationState::from_str("expired").unwrap(),
+            DelegationState::Expired
+        );
+        assert_eq!(
+            DelegationState::from_str("unknown").unwrap(),
+            DelegationState::Active
+        );
     }
 
     #[test]

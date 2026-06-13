@@ -1,6 +1,6 @@
 use std::collections::HashMap;
-use std::sync::Arc;
 use std::sync::atomic::Ordering;
+use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use nostr_sdk::nips::nip19::ToBech32;
@@ -10,11 +10,14 @@ use tracing::{error, info, warn};
 use crate::auth;
 use crate::config::Config;
 use crate::dns::Updater;
+use crate::parser;
 use crate::payment;
 use crate::payment::Verifier;
-use crate::parser;
 use crate::store::Store;
-use crate::types::{ClaimRequest, Metrics, ParsedEvent, Delegation, RegistrarKey, RenewalRequest, build_fqdn, record_type_to_u16};
+use crate::types::{
+    build_fqdn, record_type_to_u16, ClaimRequest, Delegation, Metrics, ParsedEvent, RegistrarKey,
+    RenewalRequest,
+};
 
 // ---------------------------------------------------------------------------
 // FQDN resolution
@@ -36,6 +39,35 @@ pub(crate) fn resolve_fqdn(npub: &str, name: &str, zone: &str, store: &Arc<Store
         }
     }
     build_fqdn(npub, name, zone)
+}
+
+// ---------------------------------------------------------------------------
+// Operator lease expiry helper
+// ---------------------------------------------------------------------------
+
+/// Parse a date string "YYYY-MM-DD" into a Unix timestamp (start of day, UTC).
+/// Returns `None` if the field is unset or malformed.
+fn parse_operator_expiry(date_str: &Option<String>) -> Option<i64> {
+    let s = date_str.as_ref()?;
+    let parts: Vec<&str> = s.trim().split('-').collect();
+    if parts.len() != 3 {
+        return None;
+    }
+    let year: i64 = parts[0].parse().ok()?;
+    let month: i64 = parts[1].parse().ok()?;
+    let day: i64 = parts[2].parse().ok()?;
+    if !(1..=12).contains(&month) || !(1..=31).contains(&day) {
+        return None;
+    }
+    // Howard Hinnant's civil-from-days algorithm.
+    let y = if month <= 2 { year - 1 } else { year };
+    let era = if y >= 0 { y } else { y - 399 } / 400;
+    let yoe = y - era * 400; // [0, 399]
+    let m_adj = if month > 2 { month - 3 } else { month + 9 };
+    let doy = (153 * m_adj + 2) / 5 + day - 1; // [0, 365]
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy; // [0, 146096]
+    let days_since_epoch = era * 146097 + doe - 719468;
+    Some(days_since_epoch * 86400)
 }
 
 // ---------------------------------------------------------------------------
@@ -80,36 +112,91 @@ pub async fn process_nostr_event(
 
     if let Some(ref claim) = parsed.claim {
         process_claim(
-            claim, &parsed.payments, &event_id, &pubkey_hex, &npub, created_at,
-            cfg, store, authority, zone_verifiers, metrics,
-        ).await;
+            claim,
+            &parsed.payments,
+            &event_id,
+            &pubkey_hex,
+            &npub,
+            created_at,
+            cfg,
+            store,
+            authority,
+            zone_verifiers,
+            metrics,
+        )
+        .await;
     }
 
     if let Some(ref renewal) = parsed.renewal {
         process_renewal(
-            renewal, &parsed.payments, &event_id, &pubkey_hex, &npub, created_at,
-            cfg, store, zone_verifiers, metrics,
-        ).await;
+            renewal,
+            &parsed.payments,
+            &event_id,
+            &pubkey_hex,
+            &npub,
+            created_at,
+            cfg,
+            store,
+            zone_verifiers,
+            metrics,
+        )
+        .await;
     }
 
     if let Some(ref delegation) = parsed.delegation {
-        process_delegation(delegation, &event_id, &pubkey_hex, &npub, created_at, cfg, store, authority, metrics);
+        process_delegation(
+            delegation,
+            &event_id,
+            &pubkey_hex,
+            &npub,
+            created_at,
+            cfg,
+            store,
+            authority,
+            metrics,
+        );
     }
     if let Some(ref registrar) = parsed.registrar {
-        process_registrar(registrar, &event_id, &pubkey_hex, &npub, created_at, store, authority, metrics);
+        process_registrar(
+            registrar,
+            &event_id,
+            &pubkey_hex,
+            &npub,
+            created_at,
+            store,
+            authority,
+            metrics,
+        );
     }
     if !parsed.records.is_empty() {
         process_dns_update(
-            &parsed, &event_id, &pubkey_hex, &npub, created_at,
-            cfg, updaters, store, authority, zone_verifiers, metrics,
-        ).await;
+            &parsed,
+            &event_id,
+            &pubkey_hex,
+            &npub,
+            created_at,
+            cfg,
+            updaters,
+            store,
+            authority,
+            zone_verifiers,
+            metrics,
+        )
+        .await;
     }
 
     if !parsed.deletes.is_empty() {
         process_dns_deletes(
-            &parsed, &event_id, &pubkey_hex, &npub,
-            updaters, store, authority, metrics,
-        ).await;
+            &parsed,
+            &event_id,
+            &pubkey_hex,
+            &npub,
+            updaters,
+            store,
+            authority,
+            metrics,
+        )
+        .await;
     }
 
     if let Err(e) = store.set_last_seen(created_at) {
@@ -135,9 +222,9 @@ fn process_delegation(
     let zones: Vec<&str> = cfg.dns.zones.iter().map(|z| z.zone.as_str()).collect();
     let domain = delegation.domain.trim_end_matches('.');
 
-    let matched_zone = zones.iter().find(|z| {
-        domain.ends_with(&format!(".{z}")) || domain == **z
-    });
+    let matched_zone = zones
+        .iter()
+        .find(|z| domain.ends_with(&format!(".{z}")) || domain == **z);
 
     let Some(zone) = matched_zone else {
         warn!(domain = %delegation.domain, "delegation domain does not match any configured zone");
@@ -154,9 +241,14 @@ fn process_delegation(
     let domain_name = domain.trim_end_matches(&format!(".{zone}"));
 
     if let Err(e) = store.save_delegation(
-        event_id, domain_name, zone,
-        &delegation.npub, pubkey_hex,
-        delegation.valid_from, delegation.valid_until, delegation.renew_by,
+        event_id,
+        domain_name,
+        zone,
+        &delegation.npub,
+        pubkey_hex,
+        delegation.valid_from,
+        delegation.valid_until,
+        delegation.renew_by,
         pubkey_hex,
     ) {
         error!(event_id = %event_id, error = %e, "failed to save delegation");
@@ -196,7 +288,13 @@ fn process_registrar(
         return;
     }
 
-    if let Err(e) = store.save_registrar_key(&registrar.zone, &registrar.pubkey_hex, npub, "nostr", event_id) {
+    if let Err(e) = store.save_registrar_key(
+        &registrar.zone,
+        &registrar.pubkey_hex,
+        npub,
+        "nostr",
+        event_id,
+    ) {
         error!(event_id = %event_id, error = %e, "failed to save registrar key");
         metrics.events_rejected.fetch_add(1, Ordering::Relaxed);
         return;
@@ -261,8 +359,22 @@ async fn process_claim(
         return;
     }
 
+    if let Some(operator_expiry) = parse_operator_expiry(&zone_config.lease.operator_lease_expires)
+    {
+        if claim.valid_until > operator_expiry {
+            warn!(
+                event_id = %event_id,
+                valid_until = claim.valid_until,
+                operator_lease_expires = operator_expiry,
+                "claim valid_until exceeds operator's own domain lease expiry"
+            );
+            metrics.events_rejected.fetch_add(1, Ordering::Relaxed);
+            return;
+        }
+    }
+
     match store.is_name_available(&claim.name, zone_name) {
-        Ok(true) => {},
+        Ok(true) => {}
         Ok(false) => {
             warn!(event_id = %event_id, name = %claim.name, zone = %zone_name, "name is not available");
             metrics.events_rejected.fetch_add(1, Ordering::Relaxed);
@@ -280,7 +392,8 @@ async fn process_claim(
 
     if let Some(verifier) = zone_verifiers.get(zone_name) {
         if price > 0 {
-            let total_paid: i64 = payments.iter()
+            let total_paid: i64 = payments
+                .iter()
                 .filter(|p| p.method == "cashu")
                 .map(|p| p.amount)
                 .sum();
@@ -462,10 +575,25 @@ async fn process_renewal(
         return;
     }
 
+    if let Some(operator_expiry) = parse_operator_expiry(&zone_config.lease.operator_lease_expires)
+    {
+        if renewal.new_valid_until > operator_expiry {
+            warn!(
+                event_id = %event_id,
+                new_valid_until = renewal.new_valid_until,
+                operator_lease_expires = operator_expiry,
+                "renewal exceeds operator's own domain lease expiry"
+            );
+            metrics.events_rejected.fetch_add(1, Ordering::Relaxed);
+            return;
+        }
+    }
+
     let required_price = delegation.renewal_price;
     if required_price > 0 {
         if let Some(verifier) = zone_verifiers.get(zone_name) {
-            let total_paid: i64 = payments.iter()
+            let total_paid: i64 = payments
+                .iter()
                 .filter(|p| p.method == "cashu")
                 .map(|p| p.amount)
                 .sum();
@@ -554,16 +682,12 @@ fn build_compact_event_txt(
         .collect::<Vec<_>>()
         .join("|");
 
-    let full = format!(
-        "nostr:k=11111;i={event_id};p={pubkey_hex};s={sig};t={tags_compact}"
-    );
+    let full = format!("nostr:k=11111;i={event_id};p={pubkey_hex};s={sig};t={tags_compact}");
     if full.len() <= 255 {
         return Some(full);
     }
 
-    let without_sig = format!(
-        "nostr:k=11111;i={event_id};p={pubkey_hex};t={tags_compact}"
-    );
+    let without_sig = format!("nostr:k=11111;i={event_id};p={pubkey_hex};t={tags_compact}");
     if without_sig.len() <= 255 {
         return Some(without_sig);
     }
@@ -634,8 +758,15 @@ async fn process_dns_update(
         // but allow other zones to proceed independently.
         if let Some(v) = zone_verifiers.get(zone_name) {
             if let Err(e) = payment::check_event_payment(
-                &parsed.payments, npub, &parsed.records, zone_name, store, Some(v),
-            ).await {
+                &parsed.payments,
+                npub,
+                &parsed.records,
+                zone_name,
+                store,
+                Some(v),
+            )
+            .await
+            {
                 warn!(event_id = %event_id, zone = %zone_name, error = %e, "payment verification failed, skipping zone");
                 metrics.events_rejected.fetch_add(1, Ordering::Relaxed);
                 all_ok = false;
@@ -665,9 +796,9 @@ async fn process_dns_update(
 
             // Embed compact Nostr event as additional TXT record (DNS-as-relay-cache)
             if rt == 16 {
-                if let Some(compact) = build_compact_event_txt(
-                    event_id, pubkey_hex, &parsed.sig, &parsed.raw_tags,
-                ) {
+                if let Some(compact) =
+                    build_compact_event_txt(event_id, pubkey_hex, &parsed.sig, &parsed.raw_tags)
+                {
                     if let Err(e) = updater.append_record(&fqdn, rec.ttl, 16, &compact).await {
                         warn!(event_id = %event_id, fqdn = %fqdn, error = %e, "compact event TXT append failed (non-fatal)");
                     }
@@ -675,8 +806,15 @@ async fn process_dns_update(
             }
 
             if let Err(e) = store.save_event(
-                event_id, npub, pubkey_hex, &rec.name, &rec.record_type,
-                rec.ttl, &rec.rdata, zone_name, created_at,
+                event_id,
+                npub,
+                pubkey_hex,
+                &rec.name,
+                &rec.record_type,
+                rec.ttl,
+                &rec.rdata,
+                zone_name,
+                created_at,
             ) {
                 error!(event_id = %event_id, error = %e, "failed to save event");
             }
@@ -684,7 +822,8 @@ async fn process_dns_update(
     }
 
     if all_ok {
-    metrics.events_processed.fetch_add(1, Ordering::Relaxed);
+        metrics.events_processed.fetch_add(1, Ordering::Relaxed);
+    }
 }
 
 #[cfg(test)]
@@ -732,7 +871,36 @@ mod tests {
     fn test_registration_price_single_char() {
         assert_eq!(registration_price("a", 2), 200);
     }
-}
+
+    #[test]
+    fn parse_operator_expiry_none_when_unset() {
+        assert_eq!(parse_operator_expiry(&None), None);
+        assert_eq!(parse_operator_expiry(&Some(String::new())), None);
+    }
+
+    #[test]
+    fn parse_operator_expiry_epoch() {
+        assert_eq!(
+            parse_operator_expiry(&Some("1970-01-01".to_string())),
+            Some(0)
+        );
+    }
+
+    #[test]
+    fn parse_operator_expiry_known_date() {
+        assert_eq!(
+            parse_operator_expiry(&Some("2027-06-08".to_string())),
+            Some(1812412800)
+        );
+    }
+
+    #[test]
+    fn parse_operator_expiry_malformed() {
+        assert_eq!(parse_operator_expiry(&Some("not-a-date".to_string())), None);
+        assert_eq!(parse_operator_expiry(&Some("2027".to_string())), None);
+        assert_eq!(parse_operator_expiry(&Some("2027-13-01".to_string())), None);
+        assert_eq!(parse_operator_expiry(&Some("2027-06-32".to_string())), None);
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -769,7 +937,9 @@ async fn process_dns_deletes(
             info!(event_id = %event_id, fqdn = %fqdn, r#type = %del.record_type, "DDNS delete applied");
             metrics.ddns_successes.fetch_add(1, Ordering::Relaxed);
 
-            if let Err(e) = store.delete_records_by_key(npub, &del.record_type, &del.name, zone_name) {
+            if let Err(e) =
+                store.delete_records_by_key(npub, &del.record_type, &del.name, zone_name)
+            {
                 error!(event_id = %event_id, error = %e, "failed to mark records deleted");
             }
         }

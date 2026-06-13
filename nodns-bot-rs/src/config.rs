@@ -4,7 +4,6 @@
 
 use std::fmt;
 use std::path::Path;
-use std::time::Duration;
 
 use serde::Deserialize;
 use thiserror::Error;
@@ -96,35 +95,6 @@ impl Default for ServerConfig {
     }
 }
 
-/// Duration in seconds deserialized from TOML (Go uses `time.Duration` nanos,
-/// but the TOML representation is a human-readable string like `"1s"` or a
-/// bare integer of seconds). We accept both.
-#[derive(Debug, Clone, Copy, Deserialize)]
-#[serde(try_from = "toml::Value")]
-#[allow(dead_code)]
-pub struct HumaneDuration(pub Duration);
-
-impl TryFrom<toml::Value> for HumaneDuration {
-    type Error = String;
-
-    fn try_from(value: toml::Value) -> Result<Self, Self::Error> {
-        match value {
-            toml::Value::Integer(secs) => {
-                if secs <= 0 {
-                    return Err(format!(
-                        "duration must be a positive integer, got {secs}"
-                    ));
-                }
-                Ok(HumaneDuration(Duration::from_secs(secs as u64)))
-            }
-            toml::Value::String(s) => humantime::parse_duration(&s)
-                .map(HumaneDuration)
-                .map_err(|e| format!("invalid duration '{s}': {e}")),
-            other => Err(format!("expected integer or string for duration, got {other:?}")),
-        }
-    }
-}
-
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 #[derive(Default)]
@@ -136,7 +106,6 @@ pub struct NostrConfig {
     #[serde(default)]
     pub zone: String,
 }
-
 
 /// Per-zone payment configuration.
 ///
@@ -455,7 +424,11 @@ impl Config {
                     } else {
                         250
                     };
-                    z.payment.update_price = if self.payment.update_free { 0 } else { self.payment.required_sats as u64 };
+                    z.payment.update_price = if self.payment.update_free {
+                        0
+                    } else {
+                        self.payment.required_sats as u64
+                    };
                     z.payment.delete_price = 0;
                     z.payment.npub_names_free = true;
                     z.payment.mint_url = if self.payment.cashu_mint_url.is_empty() {
@@ -655,7 +628,7 @@ tsig_key_secret = "secret1"
 
 [[dns.zones]]
 knot_address = "127.0.0.1:5354"
-zone = "cv"
+zone = "test.shop"
 tsig_key_name = "key2."
 tsig_key_secret = "secret2"
 default_ttl = 7200
@@ -666,7 +639,7 @@ default_ttl = 7200
 
         assert_eq!(cfg.dns.zones.len(), 2);
         assert_eq!(cfg.dns.zones[0].zone, "nodns.shop");
-        assert_eq!(cfg.dns.zones[1].zone, "cv");
+        assert_eq!(cfg.dns.zones[1].zone, "test.shop");
         assert_eq!(cfg.dns.zones[1].default_ttl, 7200);
         // First zone should inherit default TTL
         assert_eq!(cfg.dns.zones[0].default_ttl, 3600);
@@ -682,43 +655,6 @@ zone = "nodns.shop"
         cfg.apply_defaults();
         let err = cfg.validate().unwrap_err();
         assert!(err.to_string().contains("relay"));
-    }
-
-    #[test]
-    fn duration_negative_integer_rejected() {
-        let val = toml::Value::Integer(-1);
-        let result = HumaneDuration::try_from(val);
-        assert!(result.is_err());
-        assert!(result.unwrap_err().contains("positive"));
-    }
-
-    #[test]
-    fn duration_zero_integer_rejected() {
-        let val = toml::Value::Integer(0);
-        let result = HumaneDuration::try_from(val);
-        assert!(result.is_err());
-        assert!(result.unwrap_err().contains("positive"));
-    }
-
-    #[test]
-    fn duration_positive_integer_accepted() {
-        let val = toml::Value::Integer(60);
-        let dur = HumaneDuration::try_from(val).unwrap();
-        assert_eq!(dur.0, Duration::from_secs(60));
-    }
-
-    #[test]
-    fn duration_negative_string_rejected() {
-        let val = toml::Value::String("-1s".to_string());
-        let result = HumaneDuration::try_from(val);
-        assert!(result.is_err(), "negative duration string should be rejected");
-    }
-
-    #[test]
-    fn duration_valid_string_accepted() {
-        let val = toml::Value::String("5m".to_string());
-        let dur = HumaneDuration::try_from(val).unwrap();
-        assert_eq!(dur.0, Duration::from_secs(300));
     }
 
     #[test]

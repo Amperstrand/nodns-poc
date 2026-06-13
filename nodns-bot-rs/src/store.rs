@@ -213,8 +213,7 @@ impl Store {
     /// types, constraints, and indexes.
     pub fn init(&self) -> Result<(), StoreError> {
         let conn = self.conn();
-        conn.execute_batch(SCHEMA)
-            .map_err(StoreError::Schema)?;
+        conn.execute_batch(SCHEMA).map_err(StoreError::Schema)?;
 
         // Migrations for existing databases that predate schema changes.
         // These are idempotent — ALTER TABLE ADD COLUMN is a no-op if the
@@ -575,8 +574,16 @@ impl Store {
         registrar_pubkey: &str,
     ) -> Result<(), StoreError> {
         self.save_delegation_with_price(
-            event_id, domain, zone, npub, pubkey,
-            valid_from, valid_until, renew_by, registrar_pubkey, 0,
+            event_id,
+            domain,
+            zone,
+            npub,
+            pubkey,
+            valid_from,
+            valid_until,
+            renew_by,
+            registrar_pubkey,
+            0,
         )
     }
 
@@ -638,7 +645,9 @@ impl Store {
         let result = stmt
             .query_row(params![domain, zone, now, now], scan_delegation_row)
             .optional()
-            .map_err(|e| StoreError::GetActiveDelegation(domain.to_string(), zone.to_string(), e))?;
+            .map_err(|e| {
+                StoreError::GetActiveDelegation(domain.to_string(), zone.to_string(), e)
+            })?;
 
         Ok(result)
     }
@@ -663,7 +672,9 @@ impl Store {
         let result = stmt
             .query_row(params![domain, zone], scan_delegation_row)
             .optional()
-            .map_err(|e| StoreError::GetActiveDelegation(domain.to_string(), zone.to_string(), e))?;
+            .map_err(|e| {
+                StoreError::GetActiveDelegation(domain.to_string(), zone.to_string(), e)
+            })?;
 
         Ok(result)
     }
@@ -747,9 +758,7 @@ impl Store {
     }
 
     /// Get all delegations that have passed their valid_until but are not yet expired.
-    pub fn get_delegations_past_valid_until(
-        &self,
-    ) -> Result<Vec<DelegationRecord>, StoreError> {
+    pub fn get_delegations_past_valid_until(&self) -> Result<Vec<DelegationRecord>, StoreError> {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
@@ -775,11 +784,7 @@ impl Store {
     }
 
     /// Set a delegation's status to 'grace'.
-    pub fn mark_delegation_grace(
-        &self,
-        domain: &str,
-        zone: &str,
-    ) -> Result<(), StoreError> {
+    pub fn mark_delegation_grace(&self, domain: &str, zone: &str) -> Result<(), StoreError> {
         let conn = self.conn();
         conn.execute(
             "UPDATE delegations SET status = 'grace' WHERE domain = ?1 AND zone = ?2 AND status = 'active'",
@@ -790,11 +795,7 @@ impl Store {
     }
 
     /// Set a delegation's status to 'expired'.
-    pub fn mark_delegation_expired(
-        &self,
-        domain: &str,
-        zone: &str,
-    ) -> Result<(), StoreError> {
+    pub fn mark_delegation_expired(&self, domain: &str, zone: &str) -> Result<(), StoreError> {
         let conn = self.conn();
         conn.execute(
             "UPDATE delegations SET status = 'expired' WHERE domain = ?1 AND zone = ?2 AND status IN ('active', 'grace')",
@@ -802,6 +803,24 @@ impl Store {
         )
         .map_err(|e| StoreError::SaveDelegation(domain.to_string(), zone.to_string(), e))?;
         Ok(())
+    }
+
+    /// Soft-delete all non-deleted DNS records for a given npub + zone.
+    /// Called when a delegation expires so its records stop being served.
+    /// Returns the number of rows affected.
+    pub fn soft_delete_records_by_npub_zone(
+        &self,
+        npub: &str,
+        zone: &str,
+    ) -> Result<usize, StoreError> {
+        let conn = self.conn();
+        let affected = conn
+            .execute(
+                "UPDATE events SET deleted = 1 WHERE npub = ?1 AND zone = ?2 AND deleted = 0",
+                params![npub, zone],
+            )
+            .map_err(|e| StoreError::MarkDeleted(format!("{}-{}", npub, zone), e))?;
+        Ok(affected)
     }
 
     /// Store the registrar pubkey for a zone (`INSERT OR REPLACE`).
@@ -898,7 +917,10 @@ impl Store {
     ) -> Result<(), StoreError> {
         let encrypted_key = match (private_key_pem, &self.acme_encryption_key) {
             (Some(pem), Some(key)) => Some(encrypt_aes_gcm(key, pem).map_err(|_| {
-                StoreError::UpdateAcmeOrder(id.to_string(), rusqlite::Error::InvalidParameterName("encryption failed".into()))
+                StoreError::UpdateAcmeOrder(
+                    id.to_string(),
+                    rusqlite::Error::InvalidParameterName("encryption failed".into()),
+                )
             })?),
             (Some(pem), None) => Some(pem.to_string()),
             (None, _) => None,
@@ -955,7 +977,10 @@ impl Store {
             .collect::<Result<Vec<_>, _>>()
             .map_err(StoreError::ScanAcmeOrder)?;
 
-        Ok(records.into_iter().map(|o| self.decrypt_private_key(o)).collect())
+        Ok(records
+            .into_iter()
+            .map(|o| self.decrypt_private_key(o))
+            .collect())
     }
 
     pub fn save_acme_order_log(
@@ -1064,11 +1089,7 @@ impl Store {
         Ok(result)
     }
 
-    pub fn update_acme_dns_txt(
-        &self,
-        subdomain: &str,
-        txt_value: &str,
-    ) -> Result<(), StoreError> {
+    pub fn update_acme_dns_txt(&self, subdomain: &str, txt_value: &str) -> Result<(), StoreError> {
         let conn = self.conn();
         conn.execute(
             "UPDATE acme_dns_registrations SET txt_value_prev = txt_value, txt_value = ?1, updated_at = unixepoch() WHERE subdomain = ?2",
@@ -1253,7 +1274,9 @@ fn scan_acme_order_log_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<AcmeOrde
     })
 }
 
-fn scan_acme_dns_registration_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<AcmeDnsRegistration> {
+fn scan_acme_dns_registration_row(
+    row: &rusqlite::Row<'_>,
+) -> rusqlite::Result<AcmeDnsRegistration> {
     Ok(AcmeDnsRegistration {
         subdomain: row.get(0)?,
         username: row.get(1)?,
@@ -1308,7 +1331,10 @@ mod tests {
         let plaintext = "same plaintext";
         let enc1 = encrypt_aes_gcm(&key, plaintext).unwrap();
         let enc2 = encrypt_aes_gcm(&key, plaintext).unwrap();
-        assert_ne!(enc1, enc2, "random nonce should produce different ciphertexts");
+        assert_ne!(
+            enc1, enc2,
+            "random nonce should produce different ciphertexts"
+        );
         assert_eq!(decrypt_aes_gcm(&key, &enc1).unwrap(), plaintext);
         assert_eq!(decrypt_aes_gcm(&key, &enc2).unwrap(), plaintext);
     }
@@ -1365,10 +1391,19 @@ mod tests {
         let store = Store::new(":memory:", None).unwrap();
         store.init().unwrap();
 
-        store.save_delegation(
-            "event1", "alice", "nodns.shop", "npub1abc", "pubkey1",
-            0, 9999999999, 9999999999, "registrar1",
-        ).unwrap();
+        store
+            .save_delegation(
+                "event1",
+                "alice",
+                "nodns.shop",
+                "npub1abc",
+                "pubkey1",
+                0,
+                9999999999,
+                9999999999,
+                "registrar1",
+            )
+            .unwrap();
 
         assert!(!store.is_name_available("alice", "nodns.shop").unwrap());
     }
@@ -1383,17 +1418,28 @@ mod tests {
             .unwrap_or_default()
             .as_secs() as i64;
 
-        store.save_delegation(
-            "event1", "alice", "nodns.shop", "npub1abc", "pubkey1",
-            now - 100, now + 9999, now + 9999, "registrar1",
-        ).unwrap();
+        store
+            .save_delegation(
+                "event1",
+                "alice",
+                "nodns.shop",
+                "npub1abc",
+                "pubkey1",
+                now - 100,
+                now + 9999,
+                now + 9999,
+                "registrar1",
+            )
+            .unwrap();
 
         assert!(!store.is_name_available("alice", "nodns.shop").unwrap());
 
         store.mark_delegation_grace("alice", "nodns.shop").unwrap();
         assert!(!store.is_name_available("alice", "nodns.shop").unwrap());
 
-        store.mark_delegation_expired("alice", "nodns.shop").unwrap();
+        store
+            .mark_delegation_expired("alice", "nodns.shop")
+            .unwrap();
         assert!(store.is_name_available("alice", "nodns.shop").unwrap());
     }
 
@@ -1402,10 +1448,19 @@ mod tests {
         let store = Store::new(":memory:", None).unwrap();
         store.init().unwrap();
 
-        store.save_delegation(
-            "event1", "alice", "nodns.shop", "npub1abc", "pubkey1",
-            0, 9999999999, 9999999999, "registrar1",
-        ).unwrap();
+        store
+            .save_delegation(
+                "event1",
+                "alice",
+                "nodns.shop",
+                "npub1abc",
+                "pubkey1",
+                0,
+                9999999999,
+                9999999999,
+                "registrar1",
+            )
+            .unwrap();
 
         assert!(store.is_name_available("alice", "other.shop").unwrap());
     }
@@ -1415,13 +1470,25 @@ mod tests {
         let store = Store::new(":memory:", None).unwrap();
         store.init().unwrap();
 
-        store.save_delegation_with_price(
-            "event1", "alice", "nodns.shop", "npub1abc", "pubkey1",
-            0, 9999999999, 9999999999, "registrar1", 250,
-        ).unwrap();
+        store
+            .save_delegation_with_price(
+                "event1",
+                "alice",
+                "nodns.shop",
+                "npub1abc",
+                "pubkey1",
+                0,
+                9999999999,
+                9999999999,
+                "registrar1",
+                250,
+            )
+            .unwrap();
 
-        let del = store.get_active_delegation("alice", "nodns.shop")
-            .unwrap().unwrap();
+        let del = store
+            .get_active_delegation("alice", "nodns.shop")
+            .unwrap()
+            .unwrap();
         assert_eq!(del.renewal_price, 250);
     }
 
@@ -1430,13 +1497,24 @@ mod tests {
         let store = Store::new(":memory:", None).unwrap();
         store.init().unwrap();
 
-        store.save_delegation(
-            "event1", "alice", "nodns.shop", "npub1abc", "pubkey1",
-            0, 9999999999, 9999999999, "registrar1",
-        ).unwrap();
+        store
+            .save_delegation(
+                "event1",
+                "alice",
+                "nodns.shop",
+                "npub1abc",
+                "pubkey1",
+                0,
+                9999999999,
+                9999999999,
+                "registrar1",
+            )
+            .unwrap();
 
-        let del = store.get_active_delegation("alice", "nodns.shop")
-            .unwrap().unwrap();
+        let del = store
+            .get_active_delegation("alice", "nodns.shop")
+            .unwrap()
+            .unwrap();
         assert_eq!(del.renewal_price, 0);
     }
 
@@ -1445,18 +1523,39 @@ mod tests {
         let store = Store::new(":memory:", None).unwrap();
         store.init().unwrap();
 
-        store.save_delegation(
-            "event1", "alice", "nodns.shop", "npub1abc", "pubkey1",
-            0, 9999999999, 9999999999, "registrar1",
-        ).unwrap();
+        store
+            .save_delegation(
+                "event1",
+                "alice",
+                "nodns.shop",
+                "npub1abc",
+                "pubkey1",
+                0,
+                9999999999,
+                9999999999,
+                "registrar1",
+            )
+            .unwrap();
 
-        store.save_delegation_with_price(
-            "event2", "alice", "nodns.shop", "npub1abc", "pubkey1",
-            0, 9999999999, 9999999999, "registrar1", 500,
-        ).unwrap();
+        store
+            .save_delegation_with_price(
+                "event2",
+                "alice",
+                "nodns.shop",
+                "npub1abc",
+                "pubkey1",
+                0,
+                9999999999,
+                9999999999,
+                "registrar1",
+                500,
+            )
+            .unwrap();
 
-        let del = store.get_active_delegation("alice", "nodns.shop")
-            .unwrap().unwrap();
+        let del = store
+            .get_active_delegation("alice", "nodns.shop")
+            .unwrap()
+            .unwrap();
         assert_eq!(del.event_id, "event2");
         assert_eq!(del.renewal_price, 500);
     }
@@ -1466,13 +1565,24 @@ mod tests {
         let store = Store::new(":memory:", None).unwrap();
         store.init().unwrap();
 
-        store.save_delegation(
-            "event1", "alice", "nodns.shop", "npub1abc", "pubkey1",
-            0, 9999999999, 9999999999, "registrar1",
-        ).unwrap();
+        store
+            .save_delegation(
+                "event1",
+                "alice",
+                "nodns.shop",
+                "npub1abc",
+                "pubkey1",
+                0,
+                9999999999,
+                9999999999,
+                "registrar1",
+            )
+            .unwrap();
 
-        let del = store.get_delegation("alice", "nodns.shop")
-            .unwrap().unwrap();
+        let del = store
+            .get_delegation("alice", "nodns.shop")
+            .unwrap()
+            .unwrap();
         assert_eq!(del.status, "active");
     }
 
@@ -1481,15 +1591,26 @@ mod tests {
         let store = Store::new(":memory:", None).unwrap();
         store.init().unwrap();
 
-        store.save_delegation(
-            "event1", "alice", "nodns.shop", "npub1abc", "pubkey1",
-            0, 1, 1, "registrar1",
-        ).unwrap();
+        store
+            .save_delegation(
+                "event1",
+                "alice",
+                "nodns.shop",
+                "npub1abc",
+                "pubkey1",
+                0,
+                1,
+                1,
+                "registrar1",
+            )
+            .unwrap();
 
         store.mark_delegation_grace("alice", "nodns.shop").unwrap();
 
-        let del = store.get_delegation("alice", "nodns.shop")
-            .unwrap().unwrap();
+        let del = store
+            .get_delegation("alice", "nodns.shop")
+            .unwrap()
+            .unwrap();
         assert_eq!(del.status, "grace");
     }
 
@@ -1498,16 +1619,29 @@ mod tests {
         let store = Store::new(":memory:", None).unwrap();
         store.init().unwrap();
 
-        store.save_delegation(
-            "event1", "alice", "nodns.shop", "npub1abc", "pubkey1",
-            0, 1, 1, "registrar1",
-        ).unwrap();
+        store
+            .save_delegation(
+                "event1",
+                "alice",
+                "nodns.shop",
+                "npub1abc",
+                "pubkey1",
+                0,
+                1,
+                1,
+                "registrar1",
+            )
+            .unwrap();
 
         store.mark_delegation_grace("alice", "nodns.shop").unwrap();
-        store.mark_delegation_expired("alice", "nodns.shop").unwrap();
+        store
+            .mark_delegation_expired("alice", "nodns.shop")
+            .unwrap();
 
-        let del = store.get_delegation("alice", "nodns.shop")
-            .unwrap().unwrap();
+        let del = store
+            .get_delegation("alice", "nodns.shop")
+            .unwrap()
+            .unwrap();
         assert_eq!(del.status, "expired");
     }
 
@@ -1516,10 +1650,19 @@ mod tests {
         let store = Store::new(":memory:", None).unwrap();
         store.init().unwrap();
 
-        store.save_delegation(
-            "event1", "alice", "nodns.shop", "npub1abc", "pubkey1",
-            0, 1, 1, "registrar1",
-        ).unwrap();
+        store
+            .save_delegation(
+                "event1",
+                "alice",
+                "nodns.shop",
+                "npub1abc",
+                "pubkey1",
+                0,
+                1,
+                1,
+                "registrar1",
+            )
+            .unwrap();
 
         store.mark_delegation_grace("alice", "nodns.shop").unwrap();
 
@@ -1531,13 +1674,24 @@ mod tests {
         let store = Store::new(":memory:", None).unwrap();
         store.init().unwrap();
 
-        store.save_delegation(
-            "event1", "alice", "nodns.shop", "npub1abc", "pubkey1",
-            0, 9999999999, 9999999999, "registrar1",
-        ).unwrap();
+        store
+            .save_delegation(
+                "event1",
+                "alice",
+                "nodns.shop",
+                "npub1abc",
+                "pubkey1",
+                0,
+                9999999999,
+                9999999999,
+                "registrar1",
+            )
+            .unwrap();
 
         store.mark_delegation_grace("alice", "nodns.shop").unwrap();
-        store.mark_delegation_expired("alice", "nodns.shop").unwrap();
+        store
+            .mark_delegation_expired("alice", "nodns.shop")
+            .unwrap();
 
         assert!(store.is_name_available("alice", "nodns.shop").unwrap());
     }
@@ -1547,14 +1701,26 @@ mod tests {
         let store = Store::new(":memory:", None).unwrap();
         store.init().unwrap();
 
-        store.save_delegation(
-            "event1", "alice", "nodns.shop", "npub1abc", "pubkey1",
-            0, 9999999999, 9999999999, "registrar1",
-        ).unwrap();
+        store
+            .save_delegation(
+                "event1",
+                "alice",
+                "nodns.shop",
+                "npub1abc",
+                "pubkey1",
+                0,
+                9999999999,
+                9999999999,
+                "registrar1",
+            )
+            .unwrap();
 
         store.mark_delegation_grace("alice", "nodns.shop").unwrap();
 
-        assert!(store.get_active_delegation("alice", "nodns.shop").unwrap().is_none());
+        assert!(store
+            .get_active_delegation("alice", "nodns.shop")
+            .unwrap()
+            .is_none());
     }
 
     #[test]
@@ -1562,14 +1728,26 @@ mod tests {
         let store = Store::new(":memory:", None).unwrap();
         store.init().unwrap();
 
-        store.save_delegation(
-            "event1", "alice", "nodns.shop", "npub1abc", "pubkey1",
-            0, 9999999999, 9999999999, "registrar1",
-        ).unwrap();
+        store
+            .save_delegation(
+                "event1",
+                "alice",
+                "nodns.shop",
+                "npub1abc",
+                "pubkey1",
+                0,
+                9999999999,
+                9999999999,
+                "registrar1",
+            )
+            .unwrap();
 
         store.mark_delegation_grace("alice", "nodns.shop").unwrap();
 
-        let del = store.get_delegation("alice", "nodns.shop").unwrap().unwrap();
+        let del = store
+            .get_delegation("alice", "nodns.shop")
+            .unwrap()
+            .unwrap();
         assert_eq!(del.status, "grace");
     }
 
@@ -1578,15 +1756,33 @@ mod tests {
         let store = Store::new(":memory:", None).unwrap();
         store.init().unwrap();
 
-        store.save_delegation(
-            "event1", "alice", "nodns.shop", "npub1abc", "pubkey1",
-            0, 1, 1, "registrar1",
-        ).unwrap();
+        store
+            .save_delegation(
+                "event1",
+                "alice",
+                "nodns.shop",
+                "npub1abc",
+                "pubkey1",
+                0,
+                1,
+                1,
+                "registrar1",
+            )
+            .unwrap();
 
-        store.save_delegation(
-            "event2", "bob", "nodns.shop", "npub1def", "pubkey2",
-            0, 9999999999, 9999999999, "registrar1",
-        ).unwrap();
+        store
+            .save_delegation(
+                "event2",
+                "bob",
+                "nodns.shop",
+                "npub1def",
+                "pubkey2",
+                0,
+                9999999999,
+                9999999999,
+                "registrar1",
+            )
+            .unwrap();
 
         let past = store.get_delegations_past_valid_until().unwrap();
         assert_eq!(past.len(), 1);
@@ -1598,13 +1794,24 @@ mod tests {
         let store = Store::new(":memory:", None).unwrap();
         store.init().unwrap();
 
-        store.save_delegation(
-            "event1", "alice", "nodns.shop", "npub1abc", "pubkey1",
-            0, 1, 1, "registrar1",
-        ).unwrap();
+        store
+            .save_delegation(
+                "event1",
+                "alice",
+                "nodns.shop",
+                "npub1abc",
+                "pubkey1",
+                0,
+                1,
+                1,
+                "registrar1",
+            )
+            .unwrap();
 
         store.mark_delegation_grace("alice", "nodns.shop").unwrap();
-        store.mark_delegation_expired("alice", "nodns.shop").unwrap();
+        store
+            .mark_delegation_expired("alice", "nodns.shop")
+            .unwrap();
 
         let past = store.get_delegations_past_valid_until().unwrap();
         assert!(past.is_empty());
@@ -1617,14 +1824,29 @@ mod tests {
         let store = Store::new(":memory:", None).unwrap();
         store.init().unwrap();
 
-        store.save_delegation_with_price(
-            "event1", "alice", "nodns.shop", "npub1abc", "pubkey1",
-            1000, 2000, 1700, "registrar1", 250,
-        ).unwrap();
+        store
+            .save_delegation_with_price(
+                "event1",
+                "alice",
+                "nodns.shop",
+                "npub1abc",
+                "pubkey1",
+                1000,
+                2000,
+                1700,
+                "registrar1",
+                250,
+            )
+            .unwrap();
 
-        store.renew_delegation("alice", "nodns.shop", 3000, 2700, "event2").unwrap();
+        store
+            .renew_delegation("alice", "nodns.shop", 3000, 2700, "event2")
+            .unwrap();
 
-        let del = store.get_delegation("alice", "nodns.shop").unwrap().unwrap();
+        let del = store
+            .get_delegation("alice", "nodns.shop")
+            .unwrap()
+            .unwrap();
         assert_eq!(del.valid_until, 3000);
         assert_eq!(del.renew_by, 2700);
         assert_eq!(del.event_id, "event2");
@@ -1637,18 +1859,36 @@ mod tests {
         let store = Store::new(":memory:", None).unwrap();
         store.init().unwrap();
 
-        store.save_delegation_with_price(
-            "event1", "alice", "nodns.shop", "npub1abc", "pubkey1",
-            1000, 2000, 1700, "registrar1", 250,
-        ).unwrap();
+        store
+            .save_delegation_with_price(
+                "event1",
+                "alice",
+                "nodns.shop",
+                "npub1abc",
+                "pubkey1",
+                1000,
+                2000,
+                1700,
+                "registrar1",
+                250,
+            )
+            .unwrap();
 
         store.mark_delegation_grace("alice", "nodns.shop").unwrap();
-        let del = store.get_delegation("alice", "nodns.shop").unwrap().unwrap();
+        let del = store
+            .get_delegation("alice", "nodns.shop")
+            .unwrap()
+            .unwrap();
         assert_eq!(del.status, "grace");
 
-        store.renew_delegation("alice", "nodns.shop", 3000, 2700, "event2").unwrap();
+        store
+            .renew_delegation("alice", "nodns.shop", 3000, 2700, "event2")
+            .unwrap();
 
-        let del = store.get_delegation("alice", "nodns.shop").unwrap().unwrap();
+        let del = store
+            .get_delegation("alice", "nodns.shop")
+            .unwrap()
+            .unwrap();
         assert_eq!(del.status, "active");
         assert_eq!(del.valid_until, 3000);
     }
@@ -1658,16 +1898,30 @@ mod tests {
         let store = Store::new(":memory:", None).unwrap();
         store.init().unwrap();
 
-        store.save_delegation_with_price(
-            "event1", "alice", "nodns.shop", "npub1abc", "pubkey1",
-            1000, 2000, 1700, "registrar1", 250,
-        ).unwrap();
+        store
+            .save_delegation_with_price(
+                "event1",
+                "alice",
+                "nodns.shop",
+                "npub1abc",
+                "pubkey1",
+                1000,
+                2000,
+                1700,
+                "registrar1",
+                250,
+            )
+            .unwrap();
 
-        store.renew_delegation("alice", "nodns.shop", 3000, 2700, "event2").unwrap();
+        store
+            .renew_delegation("alice", "nodns.shop", 3000, 2700, "event2")
+            .unwrap();
 
-        let del = store.get_delegation("alice", "nodns.shop").unwrap().unwrap();
+        let del = store
+            .get_delegation("alice", "nodns.shop")
+            .unwrap()
+            .unwrap();
         assert_eq!(del.npub, "npub1abc");
         assert_eq!(del.pubkey, "pubkey1");
     }
 }
-

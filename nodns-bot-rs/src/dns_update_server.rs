@@ -11,8 +11,8 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
+use base64::Engine;
 use hickory_client::proto::dnssec::rdata::tsig::TsigAlgorithm;
 use hickory_client::proto::dnssec::tsig::TSigner;
 use hickory_client::proto::op::{Message, MessageType, OpCode, ResponseCode};
@@ -68,10 +68,7 @@ fn success_response(query: &Message) -> Vec<u8> {
 /// `verify_message_byte` handles key name matching, algorithm verification,
 /// MAC comparison, and returns the acceptable time range for timestamp
 /// validation.
-fn verify_tsig(
-    raw: &[u8],
-    signer: &TSigner,
-) -> bool {
+fn verify_tsig(raw: &[u8], signer: &TSigner) -> bool {
     match signer.verify_message_byte(None, raw, true) {
         Ok((_hash, time_range, _signed_time)) => {
             // Verify that the current time falls within the acceptable window.
@@ -82,7 +79,12 @@ fn verify_tsig(
             if time_range.contains(&now) {
                 true
             } else {
-                warn!(now, start = time_range.start, end = time_range.end, "TSIG timestamp outside fudge window");
+                warn!(
+                    now,
+                    start = time_range.start,
+                    end = time_range.end,
+                    "TSIG timestamp outside fudge window"
+                );
                 false
             }
         }
@@ -170,8 +172,8 @@ impl DnsUpdateServer {
             format!("{tsig_key_name}.")
         };
 
-        let signer_name = Name::from_str(&key_name_fqdn)
-            .map_err(|e| format!("invalid TSIG key name: {e}"))?;
+        let signer_name =
+            Name::from_str(&key_name_fqdn).map_err(|e| format!("invalid TSIG key name: {e}"))?;
 
         let secret_bytes = BASE64_STANDARD
             .decode(tsig_key_secret.trim())
@@ -249,10 +251,7 @@ impl DnsUpdateServer {
     ///
     /// RFC 2136 §2 — the update section (name_servers in hickory) contains
     /// the actual add/delete operations.
-    async fn process_update(
-        &self,
-        msg: &Message,
-    ) -> Result<(), ResponseCode> {
+    async fn process_update(&self, msg: &Message) -> Result<(), ResponseCode> {
         // Validate the zone section: it must match one of our managed zones.
         let zone_query = msg.queries().first();
         let zone_name = zone_query
@@ -545,10 +544,7 @@ mod tests {
     #[test]
     fn find_zone_no_match() {
         let zones = vec!["nodns.shop".to_string()];
-        assert_eq!(
-            find_zone_for_domain("foo.example.com", &zones),
-            None
-        );
+        assert_eq!(find_zone_for_domain("foo.example.com", &zones), None);
     }
 
     #[test]
@@ -582,10 +578,7 @@ mod tests {
 
     #[test]
     fn record_type_unknown_falls_back() {
-        assert_eq!(
-            record_type_to_string(RecordType::Unknown(999)),
-            "UNKNOWN"
-        );
+        assert_eq!(record_type_to_string(RecordType::Unknown(999)), "UNKNOWN");
     }
 
     // =======================================================================
@@ -634,10 +627,7 @@ mod tests {
 
     #[test]
     fn rdata_txt_multiple_parts_concatenated() {
-        let rdata = RData::TXT(TXT::new(vec![
-            "hel".to_string(),
-            "lo".to_string(),
-        ]));
+        let rdata = RData::TXT(TXT::new(vec!["hel".to_string(), "lo".to_string()]));
         assert_eq!(rdata_to_string(&rdata, RecordType::TXT), "hello");
     }
 

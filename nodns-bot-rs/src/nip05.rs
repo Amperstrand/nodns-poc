@@ -63,7 +63,11 @@ pub async fn nip05_handler(
     Query(params): Query<Nip05Query>,
 ) -> Response {
     let nip05 = &state.nip05;
-    let name = params.name.as_deref().map(|s| s.trim()).filter(|s| !s.is_empty());
+    let name = params
+        .name
+        .as_deref()
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty());
 
     // No name provided → return registrar key
     let Some(name) = name else {
@@ -173,7 +177,10 @@ fn build_match(relays: &[String], hex_pubkey: &str) -> Response {
         relay_map.insert(hex_pubkey.to_string(), relays.to_vec());
     }
 
-    let body = Nip05Response { names, relays: relay_map };
+    let body = Nip05Response {
+        names,
+        relays: relay_map,
+    };
     cors_json(&body)
 }
 

@@ -55,8 +55,7 @@ impl DnssecKey {
 // ---------------------------------------------------------------------------
 
 pub fn derive_dnssec_key(seed: &[u8]) -> Result<DnssecKey, DerivationError> {
-    let mut mac = HmacSha512::new_from_slice(b"Nist256p1 seed")
-        .expect("HMAC key length is valid");
+    let mut mac = HmacSha512::new_from_slice(b"Nist256p1 seed").expect("HMAC key length is valid");
     mac.update(seed);
     let result = mac.finalize().into_bytes();
 
@@ -96,10 +95,7 @@ mod tests {
 
         let dnssec_key = derive_dnssec_key(&seed).unwrap();
 
-        assert_eq!(
-            bytes_to_hex(dnssec_key.private_key_bytes()),
-            expected_key
-        );
+        assert_eq!(bytes_to_hex(dnssec_key.private_key_bytes()), expected_key);
     }
 
     #[test]

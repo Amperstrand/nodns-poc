@@ -18,14 +18,12 @@ pub mod types;
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::str::FromStr;
-use std::sync::Arc;
 use std::sync::atomic::Ordering;
+use std::sync::Arc;
 use std::time::Instant;
 
 use tower_governor::{
-    governor::GovernorConfigBuilder,
-    key_extractor::SmartIpKeyExtractor,
-    GovernorLayer,
+    governor::GovernorConfigBuilder, key_extractor::SmartIpKeyExtractor, GovernorLayer,
 };
 
 use axum::http::{HeaderName, HeaderValue};
@@ -46,7 +44,10 @@ use types::{DelegationState, Metrics};
 // ---------------------------------------------------------------------------
 
 #[derive(Parser)]
-#[command(name = "nodns-bot", about = "NoDNS bot — resolves DNS records from Nostr events")]
+#[command(
+    name = "nodns-bot",
+    about = "NoDNS bot — resolves DNS records from Nostr events"
+)]
 struct Cli {
     #[arg(short, long, default_value = "config.toml")]
     config: std::path::PathBuf,
@@ -74,6 +75,7 @@ pub struct AppState {
 async fn lease_expiry_task(
     store: Arc<Store>,
     zone_configs: Vec<ZoneConfig>,
+    updaters: Arc<HashMap<String, Updater>>,
 ) {
     let mut interval = tokio::time::interval(std::time::Duration::from_secs(3600));
     loop {
@@ -103,6 +105,41 @@ async fn lease_expiry_task(
 
             if now >= grace_deadline {
                 if state != DelegationState::Expired {
+                    if let Some(updater) = updaters.get(&del.zone) {
+                        let records = store
+                            .get_records_by_npub_exact(&del.npub)
+                            .unwrap_or_default()
+                            .into_iter()
+                            .filter(|r| r.zone == del.zone)
+                            .collect::<Vec<_>>();
+
+                        let mut sent_fqdns: std::collections::HashSet<(String, u16)> =
+                            Default::default();
+                        for rec in &records {
+                            let fqdn = if rec.name == "@" || rec.name.is_empty() {
+                                format!("{}.{}.", del.domain, del.zone)
+                            } else {
+                                format!("{}.{}.{}.", rec.name, del.domain, del.zone)
+                            };
+                            let rt = crate::types::record_type_to_u16(&rec.record_type);
+                            if sent_fqdns.insert((fqdn.clone(), rt)) {
+                                if let Err(e) = updater.delete_record(&fqdn, rt).await {
+                                    tracing::warn!(
+                                        fqdn = %fqdn, error = %e,
+                                        "lease expiry task: DDNS delete failed (continuing)"
+                                    );
+                                }
+                            }
+                        }
+                    }
+
+                    if let Err(e) = store.soft_delete_records_by_npub_zone(&del.npub, &del.zone) {
+                        tracing::error!(
+                            domain = %del.domain, zone = %del.zone, error = %e,
+                            "lease expiry task: failed to soft-delete DNS records"
+                        );
+                    }
+
                     if let Err(e) = store.mark_delegation_expired(&del.domain, &del.zone) {
                         tracing::error!(
                             domain = %del.domain, zone = %del.zone, error = %e,
@@ -164,18 +201,19 @@ async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
         "nodns-bot starting"
     );
 
-     // ── Registrar identity + DNSSEC derivation + Nostr attestation ──
+    // ── Registrar identity + DNSSEC derivation + Nostr attestation ──
     if !cfg.registrar.nsec_hex.is_empty() && cfg.dnssec_derivation.enabled {
-        let nsec_bytes = hex::decode(&cfg.registrar.nsec_hex)
-            .expect("registrar.nsec_hex must be valid hex");
+        let nsec_bytes =
+            hex::decode(&cfg.registrar.nsec_hex).expect("registrar.nsec_hex must be valid hex");
         assert_eq!(nsec_bytes.len(), 32, "registrar.nsec_hex must be 32 bytes");
 
         match dnssec_derivation::derive_dnssec_key(&nsec_bytes) {
             Ok(dnssec_key) => {
                 let pem = dnssec_key.to_pkcs8_pem().expect("PKCS#8 export");
 
-                let secret = p256::SecretKey::from_bytes((&dnssec_key.private_key_bytes().clone()).into())
-                    .expect("valid P-256 key");
+                let secret =
+                    p256::SecretKey::from_bytes((&dnssec_key.private_key_bytes().clone()).into())
+                        .expect("valid P-256 key");
                 let pub_key = secret.public_key();
                 let pub_hex = hex::encode(pub_key.to_sec1_bytes());
 
@@ -192,25 +230,29 @@ async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
                 let key_tag = compute_key_tag_13(&dnskey_b64);
 
                 let mut tags: Vec<nostr_sdk::Tag> = vec![
-                    nostr_sdk::Tag::custom(nostr_sdk::TagKind::custom("dnskey"), [
-                        zone.clone(),
-                        key_tag.to_string(),
-                        "13".to_string(),
-                        dnskey_b64,
-                    ]),
-                    nostr_sdk::Tag::custom(nostr_sdk::TagKind::custom("dnskey-derivation"), [
-                        "slip10".to_string(),
-                        "Nist256p1 seed".to_string(),
-                    ]),
+                    nostr_sdk::Tag::custom(
+                        nostr_sdk::TagKind::custom("dnskey"),
+                        [
+                            zone.clone(),
+                            key_tag.to_string(),
+                            "13".to_string(),
+                            dnskey_b64,
+                        ],
+                    ),
+                    nostr_sdk::Tag::custom(
+                        nostr_sdk::TagKind::custom("dnskey-derivation"),
+                        ["slip10".to_string(), "Nist256p1 seed".to_string()],
+                    ),
                 ];
                 for relay in &cfg.nostr.relays {
-                    tags.push(nostr_sdk::Tag::custom(nostr_sdk::TagKind::custom("relay"), [relay.clone()]));
+                    tags.push(nostr_sdk::Tag::custom(
+                        nostr_sdk::TagKind::custom("relay"),
+                        [relay.clone()],
+                    ));
                 }
 
-                let builder = nostr_sdk::EventBuilder::new(
-                    nostr_sdk::Kind::from(11111u16),
-                    "",
-                ).tags(tags);
+                let builder =
+                    nostr_sdk::EventBuilder::new(nostr_sdk::Kind::from(11111u16), "").tags(tags);
 
                 let client = nostr_sdk::Client::new(registrar_keys.clone());
                 for relay in &cfg.nostr.relays {
@@ -223,7 +265,11 @@ async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
                 match client.send_event_builder(builder).await {
                     Ok(output) => {
                         info!("DNSKEY attestation event: {}", output.id().to_hex());
-                        info!("sent to {} relay(s), failed: {:?}", output.success.len(), output.failed);
+                        info!(
+                            "sent to {} relay(s), failed: {:?}",
+                            output.success.len(),
+                            output.failed
+                        );
                     }
                     Err(e) => warn!("failed to publish DNSKEY attestation: {}", e),
                 }
@@ -286,9 +332,16 @@ async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
 
     // ── RFC 2136 DNS UPDATE server ──
     if cfg.dns_update.enabled {
-        let listen_addr: SocketAddr = cfg.dns_update.listen.parse().map_err(|e: std::net::AddrParseError| {
-            format!("invalid dns_update.listen address '{}': {}", cfg.dns_update.listen, e)
-        })?;
+        let listen_addr: SocketAddr =
+            cfg.dns_update
+                .listen
+                .parse()
+                .map_err(|e: std::net::AddrParseError| {
+                    format!(
+                        "invalid dns_update.listen address '{}': {}",
+                        cfg.dns_update.listen, e
+                    )
+                })?;
         let zones = cfg.dns.zones.iter().map(|z| z.zone.clone()).collect();
         match dns_update_server::DnsUpdateServer::new(
             listen_addr,
@@ -350,24 +403,60 @@ async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
         );
 
         let acme_routes = axum::Router::new()
-            .route("/api/acme/order", axum::routing::post(handlers::acme_order_handler))
-            .route("/api/acme/order/{id}", axum::routing::get(handlers::acme_cert_handler))
+            .route(
+                "/api/acme/order",
+                axum::routing::post(handlers::acme_order_handler),
+            )
+            .route(
+                "/api/acme/order/{id}",
+                axum::routing::get(handlers::acme_cert_handler),
+            )
             .layer(GovernorLayer::new(acme_limit))
             .with_state(http_state.clone());
 
         let api_routes = axum::Router::new()
-            .route("/.well-known/nostr.json", axum::routing::get(nip05::nip05_handler))
+            .route(
+                "/.well-known/nostr.json",
+                axum::routing::get(nip05::nip05_handler),
+            )
             .route("/health", axum::routing::get(handlers::health_handler))
-.route("/api/records", axum::routing::get(handlers::records_handler))
-.route("/api/records/by-npub/{npub}", axum::routing::get(handlers::records_by_npub_handler))
-.route("/api/records/by-prefix/{prefix}", axum::routing::get(handlers::records_by_prefix_handler))
-.route("/api/check", axum::routing::get(handlers::check_handler))
-            .route("/api/tls-check", axum::routing::get(handlers::tls_check_handler))
-.route("/api/zones/{zone}/pricing", axum::routing::get(handlers::zone_pricing_handler))
-            .route("/nic/update", axum::routing::get(handlers::dyndns_update_handler))
-            .route("/nic/update", axum::routing::post(handlers::dyndns_update_handler))
-            .route("/register", axum::routing::post(handlers::acmedns_register_handler))
-            .route("/update", axum::routing::post(handlers::acmedns_update_handler))
+            .route(
+                "/api/records",
+                axum::routing::get(handlers::records_handler),
+            )
+            .route(
+                "/api/records/by-npub/{npub}",
+                axum::routing::get(handlers::records_by_npub_handler),
+            )
+            .route(
+                "/api/records/by-prefix/{prefix}",
+                axum::routing::get(handlers::records_by_prefix_handler),
+            )
+            .route("/api/check", axum::routing::get(handlers::check_handler))
+            .route(
+                "/api/tls-check",
+                axum::routing::get(handlers::tls_check_handler),
+            )
+            .route(
+                "/api/zones/{zone}/pricing",
+                axum::routing::get(handlers::zone_pricing_handler),
+            )
+            .route(
+                "/nic/update",
+                axum::routing::get(handlers::dyndns_update_handler),
+            )
+            .route(
+                "/nic/update",
+                axum::routing::post(handlers::dyndns_update_handler),
+            )
+            .route(
+                "/register",
+                axum::routing::post(handlers::acmedns_register_handler),
+            )
+            .route(
+                "/update",
+                axum::routing::post(handlers::acmedns_update_handler),
+            )
             .layer(GovernorLayer::new(api_limit))
             .with_state(http_state);
 
@@ -391,9 +480,22 @@ async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
                 HeaderValue::from_static("camera=(), microphone=(), geolocation=()"),
             ));
 
-        let listener = tokio::net::TcpListener::bind(&bind).await.unwrap();
+        let listener = match tokio::net::TcpListener::bind(&bind).await {
+            Ok(l) => l,
+            Err(e) => {
+                tracing::error!(bind = %bind, error = %e, "failed to bind health server");
+                return;
+            }
+        };
         info!(bind = %bind, "health server listening");
-        axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>()).await.unwrap();
+        if let Err(e) = axum::serve(
+            listener,
+            app.into_make_service_with_connect_info::<SocketAddr>(),
+        )
+        .await
+        {
+            tracing::error!(error = %e, "health server stopped with error");
+        }
     });
 
     // ── Nostr subscriber ──
@@ -404,8 +506,9 @@ async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
     {
         let lease_store = store.clone();
         let lease_zones = cfg.dns.zones.clone();
+        let lease_updaters = updaters.clone();
         tokio::spawn(async move {
-            lease_expiry_task(lease_store, lease_zones).await;
+            lease_expiry_task(lease_store, lease_zones, lease_updaters).await;
         });
     }
 
@@ -422,9 +525,15 @@ async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
             match event_rx.recv().await {
                 Some(evt) => {
                     event_processor::process_nostr_event(
-                        &evt, &ev_cfg, &ev_updaters, &ev_store,
-                        &ev_auth, &ev_zone_verifiers, &ev_metrics.metrics,
-                    ).await;
+                        &evt,
+                        &ev_cfg,
+                        &ev_updaters,
+                        &ev_store,
+                        &ev_auth,
+                        &ev_zone_verifiers,
+                        &ev_metrics.metrics,
+                    )
+                    .await;
                 }
                 None => {
                     info!("event channel closed");
@@ -460,13 +569,18 @@ fn base64_dnskey(pub_hex: &str) -> String {
 
 fn compute_key_tag_13(dnskey_b64: &str) -> u16 {
     use base64::Engine;
-    let dnskey = base64::engine::general_purpose::STANDARD.decode(dnskey_b64).expect("valid base64");
-    let sum: u32 = dnskey.chunks(2).map(|chunk| {
-        if chunk.len() == 2 {
-            u32::from(u16::from_be_bytes([chunk[0], chunk[1]]))
-        } else {
-            u32::from(chunk[0])
-        }
-    }).sum();
+    let dnskey = base64::engine::general_purpose::STANDARD
+        .decode(dnskey_b64)
+        .expect("valid base64");
+    let sum: u32 = dnskey
+        .chunks(2)
+        .map(|chunk| {
+            if chunk.len() == 2 {
+                u32::from(u16::from_be_bytes([chunk[0], chunk[1]]))
+            } else {
+                u32::from(chunk[0])
+            }
+        })
+        .sum();
     ((sum + (sum >> 16)) & 0xFFFF) as u16
 }

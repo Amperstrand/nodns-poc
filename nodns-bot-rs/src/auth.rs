@@ -85,9 +85,8 @@ impl AuthorityChecker {
         let fqdn = fqdn.trim_end_matches('.');
 
         // Convert pubkey hex to npub using nostr_sdk's built-in bech32 encoding
-        let public_key = PublicKey::from_hex(pubkey_hex).map_err(|e| {
-            AuthError::NpubEncoding(format!("invalid pubkey hex: {}", e))
-        })?;
+        let public_key = PublicKey::from_hex(pubkey_hex)
+            .map_err(|e| AuthError::NpubEncoding(format!("invalid pubkey hex: {}", e)))?;
         let npub = public_key
             .to_bech32()
             .map_err(|e| AuthError::NpubEncoding(format!("bech32 encoding: {}", e)))?;
@@ -145,14 +144,14 @@ impl AuthorityChecker {
 
         debug!(domain = %domain, zone = %zone, "looking up delegation for custom name");
 
-        let delegation = self
-            .store
-            .get_delegation(&domain, zone)
-            .map_err(|e| AuthError::DelegationCheck {
-                domain: domain.clone(),
-                zone: zone.to_string(),
-                source: e,
-            })?;
+        let delegation =
+            self.store
+                .get_delegation(&domain, zone)
+                .map_err(|e| AuthError::DelegationCheck {
+                    domain: domain.clone(),
+                    zone: zone.to_string(),
+                    source: e,
+                })?;
 
         match delegation {
             None => {
@@ -163,7 +162,8 @@ impl AuthorityChecker {
                 })
             }
             Some(del) => {
-                let state = DelegationState::from_str(&del.status).unwrap_or(DelegationState::Active);
+                let state =
+                    DelegationState::from_str(&del.status).unwrap_or(DelegationState::Active);
                 if state == DelegationState::Expired {
                     warn!(domain = %domain, zone = %zone, "delegation expired");
                     return Err(AuthError::NoActiveDelegation {
@@ -206,13 +206,13 @@ impl AuthorityChecker {
         debug!(zone = %zone, pubkey = %pubkey_hex, "checking registrar status");
 
         // Check DB first
-        let db_key = self
-            .store
-            .get_registrar_key(zone)
-            .map_err(|e| AuthError::RegistrarKeyGet {
-                zone: zone.to_string(),
-                source: e,
-            })?;
+        let db_key =
+            self.store
+                .get_registrar_key(zone)
+                .map_err(|e| AuthError::RegistrarKeyGet {
+                    zone: zone.to_string(),
+                    source: e,
+                })?;
 
         if !db_key.is_empty() {
             let matches = db_key == pubkey_hex;
@@ -333,7 +333,7 @@ mod tests {
         DelegationRecord {
             event_id: "test_event".to_string(),
             domain: "alice".to_string(),
-            zone: "cv".to_string(),
+            zone: "test.shop".to_string(),
             npub: npub.to_string(),
             pubkey: make_pubkey_hex().to_string(),
             valid_from: 0,
@@ -359,8 +359,8 @@ mod tests {
         let npub = make_npub();
         let checker = AuthorityChecker::new(store, HashMap::new());
 
-        let fqdn = format!("{}.cv.", npub);
-        let result = checker.check_authority(&fqdn, "cv", make_pubkey_hex());
+        let fqdn = format!("{}.test.shop.", npub);
+        let result = checker.check_authority(&fqdn, "test.shop", make_pubkey_hex());
         assert!(result.is_ok());
     }
 
@@ -369,8 +369,8 @@ mod tests {
         let store = setup_store();
         let checker = AuthorityChecker::new(store, HashMap::new());
 
-        let fqdn = "npub1wrongkey.cv.";
-        let result = checker.check_authority(fqdn, "cv", make_pubkey_hex());
+        let fqdn = "npub1wrongkey.test.shop.";
+        let result = checker.check_authority(fqdn, "test.shop", make_pubkey_hex());
         assert!(result.is_err());
         let err = result.unwrap_err().to_string();
         assert!(err.contains("does not match signer npub"));
@@ -396,7 +396,7 @@ mod tests {
             .unwrap();
 
         let checker = AuthorityChecker::new(store, HashMap::new());
-        let result = checker.check_authority("alice.cv.", "cv", make_pubkey_hex());
+        let result = checker.check_authority("alice.test.shop.", "test.shop", make_pubkey_hex());
         assert!(result.is_ok());
     }
 
@@ -405,7 +405,7 @@ mod tests {
         let store = setup_store();
 
         let checker = AuthorityChecker::new(store, HashMap::new());
-        let result = checker.check_authority("alice.cv.", "cv", make_pubkey_hex());
+        let result = checker.check_authority("alice.test.shop.", "test.shop", make_pubkey_hex());
         assert!(result.is_err());
         let err = result.unwrap_err().to_string();
         assert!(err.contains("no active delegation"));
@@ -433,7 +433,7 @@ mod tests {
             .unwrap();
 
         let checker = AuthorityChecker::new(store, HashMap::new());
-        let result = checker.check_authority("alice.cv.", "cv", make_pubkey_hex());
+        let result = checker.check_authority("alice.test.shop.", "test.shop", make_pubkey_hex());
         assert!(result.is_err());
         let err = result.unwrap_err().to_string();
         assert!(err.contains("assigned to"));
@@ -444,13 +444,18 @@ mod tests {
         let store = setup_store();
         let npub = make_npub();
         store
-            .save_registrar_key("cv", make_pubkey_hex(), &npub, "test", "event1")
+            .save_registrar_key("test.shop", make_pubkey_hex(), &npub, "test", "event1")
             .unwrap();
 
         let checker = AuthorityChecker::new(store, HashMap::new());
-        assert!(checker.is_registrar("cv", make_pubkey_hex()).unwrap());
+        assert!(checker
+            .is_registrar("test.shop", make_pubkey_hex())
+            .unwrap());
         assert!(!checker
-            .is_registrar("cv", "0000000000000000000000000000000000000000000000000000000000000001")
+            .is_registrar(
+                "test.shop",
+                "0000000000000000000000000000000000000000000000000000000000000001"
+            )
             .unwrap());
     }
 
@@ -458,17 +463,21 @@ mod tests {
     fn test_is_registrar_from_config() {
         let store = setup_store();
         let mut config = HashMap::new();
-        config.insert("cv".to_string(), make_pubkey_hex().to_string());
+        config.insert("test.shop".to_string(), make_pubkey_hex().to_string());
 
         let checker = AuthorityChecker::new(store, config);
-        assert!(checker.is_registrar("cv", make_pubkey_hex()).unwrap());
+        assert!(checker
+            .is_registrar("test.shop", make_pubkey_hex())
+            .unwrap());
     }
 
     #[test]
     fn test_is_registrar_not_found() {
         let store = setup_store();
         let checker = AuthorityChecker::new(store, HashMap::new());
-        assert!(!checker.is_registrar("cv", make_pubkey_hex()).unwrap());
+        assert!(!checker
+            .is_registrar("test.shop", make_pubkey_hex())
+            .unwrap());
     }
 
     #[test]
@@ -476,18 +485,18 @@ mod tests {
         let store = setup_store();
         let npub = make_npub();
         store
-            .save_registrar_key("cv", make_pubkey_hex(), &npub, "test", "event1")
+            .save_registrar_key("test.shop", make_pubkey_hex(), &npub, "test", "event1")
             .unwrap();
 
         let checker = AuthorityChecker::new(store, HashMap::new());
         let delegation = Delegation {
-            domain: "alice.cv".to_string(),
+            domain: "alice.test.shop".to_string(),
             npub,
             valid_from: 0,
             valid_until: 9999999999,
             renew_by: 9999999999,
         };
-        let result = checker.validate_delegation(&delegation, "cv", make_pubkey_hex());
+        let result = checker.validate_delegation(&delegation, "test.shop", make_pubkey_hex());
         assert!(result.is_ok());
     }
 
@@ -496,18 +505,18 @@ mod tests {
         let store = setup_store();
         let npub = make_npub();
         store
-            .save_registrar_key("cv", make_pubkey_hex(), &npub, "test", "event1")
+            .save_registrar_key("test.shop", make_pubkey_hex(), &npub, "test", "event1")
             .unwrap();
 
         let checker = AuthorityChecker::new(store, HashMap::new());
         let delegation = Delegation {
-            domain: "alice.cv".to_string(),
+            domain: "alice.test.shop".to_string(),
             npub,
             valid_from: 0,
             valid_until: 1,
             renew_by: 1,
         };
-        let result = checker.validate_delegation(&delegation, "cv", make_pubkey_hex());
+        let result = checker.validate_delegation(&delegation, "test.shop", make_pubkey_hex());
         assert!(result.is_err());
         let err = result.unwrap_err().to_string();
         assert!(err.contains("expired"));
@@ -518,18 +527,18 @@ mod tests {
         let store = setup_store();
         let npub = make_npub();
         store
-            .save_registrar_key("cv", make_pubkey_hex(), &npub, "test", "event1")
+            .save_registrar_key("test.shop", make_pubkey_hex(), &npub, "test", "event1")
             .unwrap();
 
         let checker = AuthorityChecker::new(store, HashMap::new());
         let delegation = Delegation {
-            domain: "alice.cv".to_string(),
+            domain: "alice.test.shop".to_string(),
             npub,
             valid_from: 99999999999,
             valid_until: 999999999999,
             renew_by: 99999999999,
         };
-        let result = checker.validate_delegation(&delegation, "cv", make_pubkey_hex());
+        let result = checker.validate_delegation(&delegation, "test.shop", make_pubkey_hex());
         assert!(result.is_err());
         let err = result.unwrap_err().to_string();
         assert!(err.contains("future"));
@@ -540,7 +549,7 @@ mod tests {
         let store = setup_store();
         let npub = make_npub();
         store
-            .save_registrar_key("cv", make_pubkey_hex(), &npub, "test", "event1")
+            .save_registrar_key("test.shop", make_pubkey_hex(), &npub, "test", "event1")
             .unwrap();
 
         let checker = AuthorityChecker::new(store, HashMap::new());
@@ -551,7 +560,7 @@ mod tests {
             valid_until: 9999999999,
             renew_by: 9999999999,
         };
-        let result = checker.validate_delegation(&delegation, "cv", make_pubkey_hex());
+        let result = checker.validate_delegation(&delegation, "test.shop", make_pubkey_hex());
         assert!(result.is_err());
         let err = result.unwrap_err().to_string();
         assert!(err.contains("not within zone"));
@@ -563,7 +572,7 @@ mod tests {
 
         let checker = AuthorityChecker::new(store, HashMap::new());
         let delegation = Delegation {
-            domain: "alice.cv".to_string(),
+            domain: "alice.test.shop".to_string(),
             npub: make_npub(),
             valid_from: 0,
             valid_until: 9999999999,
@@ -571,7 +580,7 @@ mod tests {
         };
         let result = checker.validate_delegation(
             &delegation,
-            "cv",
+            "test.shop",
             "0000000000000000000000000000000000000000000000000000000000000001",
         );
         assert!(result.is_err());
@@ -584,18 +593,18 @@ mod tests {
         let store = setup_store();
         let npub = make_npub();
         store
-            .save_registrar_key("cv", make_pubkey_hex(), &npub, "test", "event1")
+            .save_registrar_key("test.shop", make_pubkey_hex(), &npub, "test", "event1")
             .unwrap();
 
         let checker = AuthorityChecker::new(store, HashMap::new());
         let delegation = Delegation {
-            domain: "cv".to_string(),
+            domain: "test.shop".to_string(),
             npub,
             valid_from: 0,
             valid_until: 9999999999,
             renew_by: 9999999999,
         };
-        let result = checker.validate_delegation(&delegation, "cv", make_pubkey_hex());
+        let result = checker.validate_delegation(&delegation, "test.shop", make_pubkey_hex());
         assert!(result.is_ok());
     }
 
@@ -605,14 +614,21 @@ mod tests {
         let npub = make_npub();
         store
             .save_delegation(
-                "event1", "alice", "cv", &npub, make_pubkey_hex(),
-                0, 9999999999, 9999999999, make_pubkey_hex(),
+                "event1",
+                "alice",
+                "test.shop",
+                &npub,
+                make_pubkey_hex(),
+                0,
+                9999999999,
+                9999999999,
+                make_pubkey_hex(),
             )
             .unwrap();
-        store.mark_delegation_grace("alice", "cv").unwrap();
+        store.mark_delegation_grace("alice", "test.shop").unwrap();
 
         let checker = AuthorityChecker::new(store, HashMap::new());
-        let result = checker.check_authority("alice.cv.", "cv", make_pubkey_hex());
+        let result = checker.check_authority("alice.test.shop.", "test.shop", make_pubkey_hex());
         assert!(result.is_err());
         let err = result.unwrap_err().to_string();
         assert!(err.contains("grace period"));
@@ -624,15 +640,22 @@ mod tests {
         let npub = make_npub();
         store
             .save_delegation(
-                "event1", "alice", "cv", &npub, make_pubkey_hex(),
-                0, 9999999999, 9999999999, make_pubkey_hex(),
+                "event1",
+                "alice",
+                "test.shop",
+                &npub,
+                make_pubkey_hex(),
+                0,
+                9999999999,
+                9999999999,
+                make_pubkey_hex(),
             )
             .unwrap();
-        store.mark_delegation_grace("alice", "cv").unwrap();
-        store.mark_delegation_expired("alice", "cv").unwrap();
+        store.mark_delegation_grace("alice", "test.shop").unwrap();
+        store.mark_delegation_expired("alice", "test.shop").unwrap();
 
         let checker = AuthorityChecker::new(store, HashMap::new());
-        let result = checker.check_authority("alice.cv.", "cv", make_pubkey_hex());
+        let result = checker.check_authority("alice.test.shop.", "test.shop", make_pubkey_hex());
         assert!(result.is_err());
         let err = result.unwrap_err().to_string();
         assert!(err.contains("no active delegation"));
@@ -644,9 +667,12 @@ mod tests {
         let npub = make_npub();
         let checker = AuthorityChecker::new(store, HashMap::new());
 
-        let fqdn = format!("_acme-challenge.{}.cv.", npub);
-        let result = checker.check_authority(&fqdn, "cv", make_pubkey_hex());
-        assert!(result.is_ok(), "subdomain of npub name should grant authority");
+        let fqdn = format!("_acme-challenge.{}.test.shop.", npub);
+        let result = checker.check_authority(&fqdn, "test.shop", make_pubkey_hex());
+        assert!(
+            result.is_ok(),
+            "subdomain of npub name should grant authority"
+        );
     }
 
     #[test]
@@ -654,8 +680,8 @@ mod tests {
         let store = setup_store();
         let checker = AuthorityChecker::new(store, HashMap::new());
 
-        let fqdn = "_acme-challenge.npub1wrongkey.cv.";
-        let result = checker.check_authority(fqdn, "cv", make_pubkey_hex());
+        let fqdn = "_acme-challenge.npub1wrongkey.test.shop.";
+        let result = checker.check_authority(fqdn, "test.shop", make_pubkey_hex());
         assert!(result.is_err());
         let err = result.unwrap_err().to_string();
         assert!(err.contains("does not match signer npub"));
@@ -668,7 +694,7 @@ mod tests {
         let checker = AuthorityChecker::new(store, HashMap::new());
 
         let fqdn = format!("_acme-challenge.{}.com.", npub);
-        let result = checker.check_authority(&fqdn, "cv", make_pubkey_hex());
+        let result = checker.check_authority(&fqdn, "test.shop", make_pubkey_hex());
         assert!(result.is_err(), "wrong zone should reject");
     }
 
@@ -679,8 +705,11 @@ mod tests {
         let checker = AuthorityChecker::new(store, HashMap::new());
 
         // sub.sub.npub1xxx.zone — rfind('.') extracts npub label at any depth
-        let fqdn = format!("a.b.{}.cv.", npub);
-        let result = checker.check_authority(&fqdn, "cv", make_pubkey_hex());
-        assert!(result.is_ok(), "deep subdomain of npub name should grant authority");
+        let fqdn = format!("a.b.{}.test.shop.", npub);
+        let result = checker.check_authority(&fqdn, "test.shop", make_pubkey_hex());
+        assert!(
+            result.is_ok(),
+            "deep subdomain of npub name should grant authority"
+        );
     }
 }

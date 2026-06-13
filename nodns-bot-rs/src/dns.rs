@@ -10,8 +10,8 @@ use std::net::SocketAddr;
 use std::str::FromStr;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
+use base64::Engine;
 use hickory_client::proto::dnssec::rdata::tsig::TsigAlgorithm;
 use hickory_client::proto::dnssec::tsig::TSigner;
 use hickory_client::proto::op::{Message, MessageType, OpCode, Query, ResponseCode};
@@ -132,22 +132,24 @@ fn parse_rdata(record_type: u16, rdata: &str) -> Result<RData> {
     match record_type {
         // A
         1 => {
-            let addr: std::net::Ipv4Addr = rdata
-                .parse()
-                .map_err(|e: std::net::AddrParseError| DnsError::ParseRR {
-                    rr_line: rdata.to_string(),
-                    error: e.to_string(),
-                })?;
+            let addr: std::net::Ipv4Addr =
+                rdata
+                    .parse()
+                    .map_err(|e: std::net::AddrParseError| DnsError::ParseRR {
+                        rr_line: rdata.to_string(),
+                        error: e.to_string(),
+                    })?;
             Ok(RData::A(A::from(addr)))
         }
         // AAAA
         28 => {
-            let addr: std::net::Ipv6Addr = rdata
-                .parse()
-                .map_err(|e: std::net::AddrParseError| DnsError::ParseRR {
-                    rr_line: rdata.to_string(),
-                    error: e.to_string(),
-                })?;
+            let addr: std::net::Ipv6Addr =
+                rdata
+                    .parse()
+                    .map_err(|e: std::net::AddrParseError| DnsError::ParseRR {
+                        rr_line: rdata.to_string(),
+                        error: e.to_string(),
+                    })?;
             Ok(RData::AAAA(AAAA::from(addr)))
         }
         // TXT
@@ -163,18 +165,17 @@ fn parse_rdata(record_type: u16, rdata: &str) -> Result<RData> {
         }
         // MX  — rdata = "10 mail.example.com."
         15 => {
-            let (priority, exchange) = rdata
-                .split_once(' ')
-                .ok_or_else(|| DnsError::ParseRR {
-                    rr_line: rdata.to_string(),
-                    error: "MX requires 'priority target'".into(),
-                })?;
-            let pref: u16 = priority
-                .parse()
-                .map_err(|e: std::num::ParseIntError| DnsError::ParseRR {
-                    rr_line: rdata.to_string(),
-                    error: e.to_string(),
-                })?;
+            let (priority, exchange) = rdata.split_once(' ').ok_or_else(|| DnsError::ParseRR {
+                rr_line: rdata.to_string(),
+                error: "MX requires 'priority target'".into(),
+            })?;
+            let pref: u16 =
+                priority
+                    .parse()
+                    .map_err(|e: std::num::ParseIntError| DnsError::ParseRR {
+                        rr_line: rdata.to_string(),
+                        error: e.to_string(),
+                    })?;
             let target = ensure_fqdn(exchange);
             let exchange_name = Name::from_str(&target).map_err(|e| DnsError::ParseRR {
                 rr_line: rdata.to_string(),
@@ -191,24 +192,27 @@ fn parse_rdata(record_type: u16, rdata: &str) -> Result<RData> {
                     error: "SRV requires 'priority weight port target'".into(),
                 });
             }
-            let priority: u16 = parts[0]
-                .parse()
-                .map_err(|e: std::num::ParseIntError| DnsError::ParseRR {
-                    rr_line: rdata.to_string(),
-                    error: e.to_string(),
-                })?;
-            let weight: u16 = parts[1]
-                .parse()
-                .map_err(|e: std::num::ParseIntError| DnsError::ParseRR {
-                    rr_line: rdata.to_string(),
-                    error: e.to_string(),
-                })?;
-            let port: u16 = parts[2]
-                .parse()
-                .map_err(|e: std::num::ParseIntError| DnsError::ParseRR {
-                    rr_line: rdata.to_string(),
-                    error: e.to_string(),
-                })?;
+            let priority: u16 =
+                parts[0]
+                    .parse()
+                    .map_err(|e: std::num::ParseIntError| DnsError::ParseRR {
+                        rr_line: rdata.to_string(),
+                        error: e.to_string(),
+                    })?;
+            let weight: u16 =
+                parts[1]
+                    .parse()
+                    .map_err(|e: std::num::ParseIntError| DnsError::ParseRR {
+                        rr_line: rdata.to_string(),
+                        error: e.to_string(),
+                    })?;
+            let port: u16 =
+                parts[2]
+                    .parse()
+                    .map_err(|e: std::num::ParseIntError| DnsError::ParseRR {
+                        rr_line: rdata.to_string(),
+                        error: e.to_string(),
+                    })?;
             let target = ensure_fqdn(parts[3]);
             let target_name = Name::from_str(&target).map_err(|e| DnsError::ParseRR {
                 rr_line: rdata.to_string(),
@@ -420,12 +424,13 @@ impl Updater {
             "sending DDNS update",
         );
 
-        let resp = self.send_tcp(&mut msg, true).await.map_err(|e| {
-            DnsError::UpdateFailed {
+        let resp = self
+            .send_tcp(&mut msg, true)
+            .await
+            .map_err(|e| DnsError::UpdateFailed {
                 fqdn: fqdn.clone(),
                 error: e.to_string(),
-            }
-        })?;
+            })?;
 
         if resp.response_code() != ResponseCode::NoError {
             return Err(DnsError::UpdateFailed {
@@ -474,12 +479,13 @@ impl Updater {
             "sending DDNS append",
         );
 
-        let resp = self.send_tcp(&mut msg, true).await.map_err(|e| {
-            DnsError::UpdateFailed {
+        let resp = self
+            .send_tcp(&mut msg, true)
+            .await
+            .map_err(|e| DnsError::UpdateFailed {
                 fqdn: fqdn.clone(),
                 error: e.to_string(),
-            }
-        })?;
+            })?;
 
         if resp.response_code() != ResponseCode::NoError {
             return Err(DnsError::UpdateFailed {
@@ -511,12 +517,13 @@ impl Updater {
         let mut msg = self.build_update_message();
         msg.add_name_server(remove_rr);
 
-        let resp = self.send_tcp(&mut msg, true).await.map_err(|e| {
-            DnsError::DeleteFailed {
+        let resp = self
+            .send_tcp(&mut msg, true)
+            .await
+            .map_err(|e| DnsError::DeleteFailed {
                 fqdn: fqdn.clone(),
                 error: e.to_string(),
-            }
-        })?;
+            })?;
 
         if resp.response_code() != ResponseCode::NoError {
             return Err(DnsError::DeleteFailed {
@@ -546,12 +553,12 @@ impl Updater {
             .set_query_type(RecordType::SOA);
         msg.add_query(query);
 
-        let resp = self
-            .send_tcp(&mut msg, false)
-            .await
-            .map_err(|e| DnsError::ConnectionTestFailed {
-                error: e.to_string(),
-            })?;
+        let resp =
+            self.send_tcp(&mut msg, false)
+                .await
+                .map_err(|e| DnsError::ConnectionTestFailed {
+                    error: e.to_string(),
+                })?;
 
         if resp.response_code() != ResponseCode::NoError {
             return Err(DnsError::ConnectionTestFailed {
@@ -578,11 +585,19 @@ pub struct DnsRecord {
 pub async fn query_txt_records(nameserver: SocketAddr, fqdn: &str) -> DnsQueryResult {
     let name = match Name::from_str(fqdn) {
         Ok(n) => n,
-        Err(_) => return DnsQueryResult { registered: false, records: vec![] },
+        Err(_) => {
+            return DnsQueryResult {
+                registered: false,
+                records: vec![],
+            }
+        }
     };
 
     let mut query = Query::new();
-    query.set_name(name).set_query_class(DNSClass::IN).set_query_type(RecordType::TXT);
+    query
+        .set_name(name)
+        .set_query_class(DNSClass::IN)
+        .set_query_type(RecordType::TXT);
 
     let mut msg = Message::new();
     msg.set_id(generate_id())
@@ -594,13 +609,23 @@ pub async fn query_txt_records(nameserver: SocketAddr, fqdn: &str) -> DnsQueryRe
 
     let stream = match tokio::time::timeout(timeout, TokioTcpStream::connect(nameserver)).await {
         Ok(Ok(s)) => s,
-        _ => return DnsQueryResult { registered: false, records: vec![] },
+        _ => {
+            return DnsQueryResult {
+                registered: false,
+                records: vec![],
+            }
+        }
     };
     let mut stream = stream;
 
     let bytes = match msg.to_bytes() {
         Ok(b) => b,
-        Err(_) => return DnsQueryResult { registered: false, records: vec![] },
+        Err(_) => {
+            return DnsQueryResult {
+                registered: false,
+                records: vec![],
+            }
+        }
     };
 
     let len = bytes.len() as u16;
@@ -608,10 +633,14 @@ pub async fn query_txt_records(nameserver: SocketAddr, fqdn: &str) -> DnsQueryRe
         use tokio::io::AsyncWriteExt;
         stream.write_all(&len.to_be_bytes()).await?;
         stream.write_all(&bytes).await
-    }).await;
+    })
+    .await;
 
     if write_result.is_err() || write_result.unwrap().is_err() {
-        return DnsQueryResult { registered: false, records: vec![] };
+        return DnsQueryResult {
+            registered: false,
+            records: vec![],
+        };
     }
 
     let read_result = tokio::time::timeout(timeout, async {
@@ -622,27 +651,44 @@ pub async fn query_txt_records(nameserver: SocketAddr, fqdn: &str) -> DnsQueryRe
         let mut resp_buf = vec![0u8; resp_len];
         stream.read_exact(&mut resp_buf).await?;
         Ok::<_, std::io::Error>(resp_buf)
-    }).await;
+    })
+    .await;
 
     let buf = match read_result {
         Ok(Ok(b)) => b,
-        _ => return DnsQueryResult { registered: false, records: vec![] },
+        _ => {
+            return DnsQueryResult {
+                registered: false,
+                records: vec![],
+            }
+        }
     };
 
     let resp = match Message::from_vec(&buf) {
         Ok(m) => m,
-        Err(_) => return DnsQueryResult { registered: false, records: vec![] },
+        Err(_) => {
+            return DnsQueryResult {
+                registered: false,
+                records: vec![],
+            }
+        }
     };
 
     if resp.response_code() == ResponseCode::NXDomain
         || resp.response_code() != ResponseCode::NoError
     {
-        return DnsQueryResult { registered: false, records: vec![] };
+        return DnsQueryResult {
+            registered: false,
+            records: vec![],
+        };
     }
 
     let answers = resp.answers();
     if answers.is_empty() {
-        return DnsQueryResult { registered: false, records: vec![] };
+        return DnsQueryResult {
+            registered: false,
+            records: vec![],
+        };
     }
 
     let mut records = Vec::new();
@@ -663,5 +709,8 @@ pub async fn query_txt_records(nameserver: SocketAddr, fqdn: &str) -> DnsQueryRe
     }
 
     let registered = !records.is_empty();
-    DnsQueryResult { registered, records }
+    DnsQueryResult {
+        registered,
+        records,
+    }
 }

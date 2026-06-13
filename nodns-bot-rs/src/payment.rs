@@ -14,9 +14,9 @@ use cdk::nuts::{CheckStateRequest, CheckStateResponse, State, Token};
 use thiserror::Error;
 use tracing::{error, info, warn};
 
+use crate::config::ZonePaymentConfig;
 use crate::store::Store;
 use crate::types::{DnsRecord, Payment};
-use crate::config::ZonePaymentConfig;
 
 // ---------------------------------------------------------------------------
 // Error type
@@ -85,7 +85,6 @@ pub struct Verifier {
     mint_filter: Option<String>,
 }
 
-#[allow(dead_code)]
 impl Verifier {
     #[allow(dead_code)]
     pub fn new(mint_url: &str, required_sats: i64, update_free: bool) -> Self {
@@ -126,6 +125,7 @@ impl Verifier {
         self.update_price
     }
 
+    #[allow(dead_code)]
     pub fn delete_price(&self) -> u64 {
         self.delete_price
     }
@@ -160,8 +160,8 @@ impl Verifier {
         required_amount: i64,
     ) -> Result<u64, PaymentError> {
         // 1. Decode token
-        let token = Token::from_str(token_string)
-            .map_err(|e| PaymentError::TokenDecode(e.to_string()))?;
+        let token =
+            Token::from_str(token_string).map_err(|e| PaymentError::TokenDecode(e.to_string()))?;
 
         // 2. Check mint URL matches
         let token_mint = token
@@ -228,9 +228,7 @@ impl Verifier {
             })?
             .json()
             .await
-            .map_err(|e| {
-                PaymentError::MintCheckFailed(format!("deserializing checkstate: {e}"))
-            })?;
+            .map_err(|e| PaymentError::MintCheckFailed(format!("deserializing checkstate: {e}")))?;
 
         // 6. Verify all proofs are unspent
         for proof_state in &response.states {

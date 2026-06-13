@@ -8,9 +8,7 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
-use nostr_sdk::{
-    Client, Event, Filter, Kind, RelayMessage, RelayPoolNotification, Timestamp,
-};
+use nostr_sdk::{Client, Event, Filter, Kind, RelayMessage, RelayPoolNotification, Timestamp};
 use thiserror::Error;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
@@ -173,10 +171,14 @@ impl Subscriber {
         tracing::info!("stopping subscriber");
         self.stopped.store(true, Ordering::SeqCst);
 
-        if let Some(handle) = self.handle.lock().unwrap_or_else(|e| {
-            tracing::error!("Handle mutex poisoned, recovering: {}", e);
-            e.into_inner()
-        }).take()
+        if let Some(handle) = self
+            .handle
+            .lock()
+            .unwrap_or_else(|e| {
+                tracing::error!("Handle mutex poisoned, recovering: {}", e);
+                e.into_inner()
+            })
+            .take()
         {
             handle.abort();
         }

@@ -12,7 +12,8 @@ use nostr_sdk::prelude::*;
 use thiserror::Error;
 
 use crate::types::{
-    ClaimRequest, Delegation, DeleteRequest, DnsRecord, Payment, ParsedEvent, RegistrarKey, RenewalRequest, DEFAULT_TTL, KIND_DNS_RECORD,
+    ClaimRequest, Delegation, DeleteRequest, DnsRecord, ParsedEvent, Payment, RegistrarKey,
+    RenewalRequest, DEFAULT_TTL, KIND_DNS_RECORD,
 };
 
 #[derive(Error, Debug)]
@@ -88,9 +89,9 @@ pub fn classify_event(
             "record" => {
                 let rec = parse_record_tag(slice, allowed_types, block_private_ip, max_txt_length)
                     .map_err(|e| ParserError::TagError {
-                    index: i,
-                    message: e.to_string(),
-                })?;
+                        index: i,
+                        message: e.to_string(),
+                    })?;
                 result.records.push(rec);
             }
             "delegation" => {
@@ -372,9 +373,9 @@ pub fn parse_renewal_tag(tag: &[String]) -> Result<RenewalRequest, ParserError> 
             "renewal zone cannot be empty".to_string(),
         ));
     }
-    let new_valid_until: i64 = tag[3]
-        .parse()
-        .map_err(|e| ParserError::Validation(format!("invalid new_valid_until {:?}: {}", tag[3], e)))?;
+    let new_valid_until: i64 = tag[3].parse().map_err(|e| {
+        ParserError::Validation(format!("invalid new_valid_until {:?}: {}", tag[3], e))
+    })?;
 
     Ok(RenewalRequest {
         name: name.clone(),
@@ -399,9 +400,9 @@ pub fn parse_payment_tags(tags: &Tags) -> Result<Vec<Payment>, ParserError> {
                         slice.len()
                     )));
                 }
-                let amount: i64 = slice[3]
-                    .parse()
-                    .map_err(|e| ParserError::Validation(format!("invalid cashu amount {:?}: {}", slice[3], e)))?;
+                let amount: i64 = slice[3].parse().map_err(|e| {
+                    ParserError::Validation(format!("invalid cashu amount {:?}: {}", slice[3], e))
+                })?;
                 payments.push(Payment {
                     method: "cashu".to_string(),
                     token: slice[1].clone(),
@@ -416,9 +417,9 @@ pub fn parse_payment_tags(tags: &Tags) -> Result<Vec<Payment>, ParserError> {
                         slice.len()
                     )));
                 }
-                let amount: i64 = slice[2]
-                    .parse()
-                    .map_err(|e| ParserError::Validation(format!("invalid zap amount {:?}: {}", slice[2], e)))?;
+                let amount: i64 = slice[2].parse().map_err(|e| {
+                    ParserError::Validation(format!("invalid zap amount {:?}: {}", slice[2], e))
+                })?;
                 payments.push(Payment {
                     method: "zap".to_string(),
                     token: slice[1].clone(),
@@ -540,7 +541,10 @@ fn parse_legacy_format(
     validate_dns_label(&name)?;
 
     // Reconstruct rdata from positions 3-9 (indices 3..=9) by joining non-empty values
-    let rdata_parts: Vec<&str> = (3..=9).filter(|&i| !tag[i].is_empty()).map(|i| tag[i].as_str()).collect();
+    let rdata_parts: Vec<&str> = (3..=9)
+        .filter(|&i| !tag[i].is_empty())
+        .map(|i| tag[i].as_str())
+        .collect();
     let rdata = rdata_parts.join(" ");
 
     // TTL from position 10 (index 10)
@@ -635,12 +639,9 @@ fn validate_record(
 
     match rec.record_type.as_str() {
         "A" => {
-            let a: hickory_proto::rr::rdata::A = rec
-                .rdata
-                .parse()
-                .map_err(|_| {
-                    ParserError::Validation(format!("invalid IPv4 address: {}", rec.rdata))
-                })?;
+            let a: hickory_proto::rr::rdata::A = rec.rdata.parse().map_err(|_| {
+                ParserError::Validation(format!("invalid IPv4 address: {}", rec.rdata))
+            })?;
             if block_private_ip && is_private_ip(IpAddr::from(*a)) {
                 return Err(ParserError::Validation(format!(
                     "private IP address blocked: {}",
@@ -649,12 +650,9 @@ fn validate_record(
             }
         }
         "AAAA" => {
-            let aaaa: hickory_proto::rr::rdata::AAAA = rec
-                .rdata
-                .parse()
-                .map_err(|_| {
-                    ParserError::Validation(format!("invalid IPv6 address: {}", rec.rdata))
-                })?;
+            let aaaa: hickory_proto::rr::rdata::AAAA = rec.rdata.parse().map_err(|_| {
+                ParserError::Validation(format!("invalid IPv6 address: {}", rec.rdata))
+            })?;
             if block_private_ip && is_private_ip(IpAddr::from(*aaaa)) {
                 return Err(ParserError::Validation(format!(
                     "private IP address blocked: {}",
@@ -710,10 +708,7 @@ fn validate_record(
             fields[1]
                 .parse::<hickory_proto::rr::domain::Name>()
                 .map_err(|_| {
-                    ParserError::Validation(format!(
-                        "invalid MX exchange domain: {}",
-                        fields[1]
-                    ))
+                    ParserError::Validation(format!("invalid MX exchange domain: {}", fields[1]))
                 })?;
         }
         "SRV" => {
@@ -724,19 +719,13 @@ fn validate_record(
             }
             for (i, field_name) in ["priority", "weight", "port"].iter().enumerate() {
                 let _: u16 = fields[i].parse().map_err(|_| {
-                    ParserError::Validation(format!(
-                        "invalid SRV {}: {}",
-                        field_name, fields[i]
-                    ))
+                    ParserError::Validation(format!("invalid SRV {}: {}", field_name, fields[i]))
                 })?;
             }
             fields[3]
                 .parse::<hickory_proto::rr::domain::Name>()
                 .map_err(|_| {
-                    ParserError::Validation(format!(
-                        "invalid SRV target domain: {}",
-                        fields[3]
-                    ))
+                    ParserError::Validation(format!("invalid SRV target domain: {}", fields[3]))
                 })?;
         }
         _ => {
@@ -779,14 +768,14 @@ mod tests {
     fn test_parse_delegation_tag_valid() {
         let tag: Vec<String> = vec![
             "delegation".to_string(),
-            "alice.cv".to_string(),
+            "alice.test.shop".to_string(),
             "npub1abc".to_string(),
             "1000".to_string(),
             "2000".to_string(),
             "1500".to_string(),
         ];
         let d = parse_delegation_tag(&tag).unwrap();
-        assert_eq!(d.domain, "alice.cv");
+        assert_eq!(d.domain, "alice.test.shop");
         assert_eq!(d.npub, "npub1abc");
         assert_eq!(d.valid_from, 1000);
         assert_eq!(d.valid_until, 2000);
@@ -795,10 +784,7 @@ mod tests {
 
     #[test]
     fn test_parse_delegation_tag_too_short() {
-        let tag: Vec<String> = vec![
-            "delegation".to_string(),
-            "alice.cv".to_string(),
-        ];
+        let tag: Vec<String> = vec!["delegation".to_string(), "alice.test.shop".to_string()];
         let err = parse_delegation_tag(&tag).unwrap_err();
         assert!(err.to_string().contains("must have 6 elements"));
     }
@@ -807,11 +793,11 @@ mod tests {
     fn test_parse_registrar_tag_valid() {
         let tag: Vec<String> = vec![
             "registrar".to_string(),
-            "cv".to_string(),
+            "test.shop".to_string(),
             "abcdef123456".to_string(),
         ];
         let r = parse_registrar_tag(&tag).unwrap();
-        assert_eq!(r.zone, "cv");
+        assert_eq!(r.zone, "test.shop");
         assert_eq!(r.pubkey_hex, "abcdef123456");
     }
 
@@ -991,11 +977,7 @@ mod tests {
 
     #[test]
     fn test_parse_delete_tag_valid() {
-        let tag: Vec<String> = vec![
-            "delete".to_string(),
-            "A".to_string(),
-            "".to_string(),
-        ];
+        let tag: Vec<String> = vec!["delete".to_string(), "A".to_string(), "".to_string()];
         let del = parse_delete_tag(&tag).unwrap();
         assert_eq!(del.record_type, "A");
         assert_eq!(del.name, "@");
@@ -1003,11 +985,7 @@ mod tests {
 
     #[test]
     fn test_parse_delete_tag_with_subdomain() {
-        let tag: Vec<String> = vec![
-            "delete".to_string(),
-            "TXT".to_string(),
-            "www".to_string(),
-        ];
+        let tag: Vec<String> = vec!["delete".to_string(), "TXT".to_string(), "www".to_string()];
         let del = parse_delete_tag(&tag).unwrap();
         assert_eq!(del.record_type, "TXT");
         assert_eq!(del.name, "www");
@@ -1015,21 +993,14 @@ mod tests {
 
     #[test]
     fn test_parse_delete_tag_too_short() {
-        let tag: Vec<String> = vec![
-            "delete".to_string(),
-            "A".to_string(),
-        ];
+        let tag: Vec<String> = vec!["delete".to_string(), "A".to_string()];
         let err = parse_delete_tag(&tag).unwrap_err();
         assert!(err.to_string().contains("must have 3 elements"));
     }
 
     #[test]
     fn test_parse_delete_tag_unknown_type() {
-        let tag: Vec<String> = vec![
-            "delete".to_string(),
-            "UNKNOWN".to_string(),
-            "".to_string(),
-        ];
+        let tag: Vec<String> = vec!["delete".to_string(), "UNKNOWN".to_string(), "".to_string()];
         let err = parse_delete_tag(&tag).unwrap_err();
         assert!(err.to_string().contains("unsupported delete type"));
     }
@@ -1279,9 +1250,14 @@ mod tests {
     fn test_cname_only_single_record_ok() {
         let keys = Keys::generate();
         let event = EventBuilder::new(Kind::Custom(11111), "")
-            .tags(vec![
-                Tag::parse(["record", "CNAME", "@", "3600", "target.example.com"]).unwrap(),
+            .tags(vec![Tag::parse([
+                "record",
+                "CNAME",
+                "@",
+                "3600",
+                "target.example.com",
             ])
+            .unwrap()])
             .sign_with_keys(&keys)
             .unwrap();
         let result = classify_event(&event, &[], false, 0).unwrap();
@@ -1416,9 +1392,13 @@ mod tests {
     fn test_classify_event_with_claim_tag() {
         let keys = Keys::generate();
         let event = EventBuilder::new(Kind::Custom(11111), "")
-            .tags(vec![
-                Tag::parse(["claim", "alice", "nodns.shop", "1780704000"]).unwrap(),
+            .tags(vec![Tag::parse([
+                "claim",
+                "alice",
+                "nodns.shop",
+                "1780704000",
             ])
+            .unwrap()])
             .sign_with_keys(&keys)
             .unwrap();
         let result = classify_event(&event, &[], false, 0).unwrap();
@@ -1549,9 +1529,13 @@ mod tests {
     fn test_classify_event_with_renewal_tag() {
         let keys = Keys::generate();
         let event = EventBuilder::new(Kind::Custom(11111), "")
-            .tags(vec![
-                Tag::parse(["renewal", "alice", "nodns.shop", "1780704000"]).unwrap(),
+            .tags(vec![Tag::parse([
+                "renewal",
+                "alice",
+                "nodns.shop",
+                "1780704000",
             ])
+            .unwrap()])
             .sign_with_keys(&keys)
             .unwrap();
         let result = classify_event(&event, &[], false, 0).unwrap();
