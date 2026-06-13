@@ -84,6 +84,30 @@ ThomasV (Electrum creator) built a notary service that converts Lightning zaps i
 
 **Decision**: Deferred to future research. Cashu is simpler and already wired up.
 
+### NIP-13 Proof of Work (Future — Anti-Spam Only)
+
+NIP-13 defines a `nonce` tag for Nostr events that allows clients to mine computational difficulty before publishing. The event ID must have a configurable number of leading zero bits.
+
+```json
+{
+  "tags": [["nonce", "776797", "20"]],
+  "content": "..."
+}
+```
+
+**Properties**:
+- No payments, no infrastructure, no third parties
+- CPU cost deters spam (difficulty 20 = ~1M hashes per event)
+- Verifiable by anyone (count leading zeros in event ID)
+- Complementary to Cashu — could require PoW for free-tier, Cashu for paid tier
+
+**Limitations**:
+- Not a payment mechanism — no value transferred
+- ASIC/GPU miners have advantage over browser-based miners
+- Difficulty arms race (what's expensive for a spammer today?)
+
+**Decision**: Deferred. Cashu antispam is the primary mechanism for v1. PoW could complement it as a free-tier filter in a future iteration where we want frictionless onboarding (no wallet needed, just CPU work).
+
 ## How Payment Proofs Work
 
 1. User publishes a Nostr event with a `["cashu", TOKEN, MINT_URL, AMOUNT]` tag
