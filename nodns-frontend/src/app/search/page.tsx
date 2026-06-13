@@ -51,8 +51,7 @@ function SearchContent() {
           setTripartite(results);
           const anyRecords =
             results.api.records.length > 0 ||
-            results.nostr.records.length > 0 ||
-            results.dns.records.length > 0;
+            results.nostr.records.length > 0;
           setAvailable(!anyRecords);
         }
 
