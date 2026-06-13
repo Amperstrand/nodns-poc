@@ -34,5 +34,10 @@ export default defineConfig({
       testDir: "./tests",
       testMatch: "content.spec.ts",
     },
+    {
+      name: "registration",
+      testDir: "./tests",
+      testMatch: "registration-flow.spec.ts",
+    },
   ],
 });
