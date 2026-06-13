@@ -45,7 +45,7 @@ export function Hero() {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Find your .nodns.shop domain"
-              className="flex-1 bg-transparent px-5 py-4 text-lg text-foreground placeholder:text-muted-foreground outline-none"
+              className="flex-1 min-w-0 bg-transparent px-4 py-3.5 text-base sm:px-5 sm:py-4 sm:text-lg text-foreground placeholder:text-muted-foreground outline-none"
               autoFocus
             />
             <button

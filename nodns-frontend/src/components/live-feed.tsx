@@ -79,11 +79,11 @@ export function LiveFeed() {
               return (
                 <div
                   key={ev.id}
-                  className="border-b border-border px-4 py-2.5 text-sm last:border-b-0"
+                  className="flex items-center gap-1.5 sm:gap-2 border-b border-border px-3 sm:px-4 py-2 text-xs sm:text-sm last:border-b-0"
                 >
-                  <span className="mr-2 text-muted-foreground">{time}</span>
-                  <span className="font-mono font-medium">{shortPk}</span>{" "}
-                  <span className="text-muted-foreground">{getRecordSummary(ev)}</span>
+                  <span className="shrink-0 text-muted-foreground">{time}</span>
+                  <span className="shrink-0 font-mono font-medium">{shortPk}</span>
+                  <span className="min-w-0 truncate text-muted-foreground">{getRecordSummary(ev)}</span>
                 </div>
               );
             })
