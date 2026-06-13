@@ -58,13 +58,13 @@ relays = [
     "wss://relay.nostr.band",
     "wss://nostr.wine",
 ]
-zone = "nostr.cv"
+zone = "nodns.shop"
 reconnect_min = "1s"
 reconnect_max = "60s"
 
 [dns]
 knot_address = "127.0.0.1:53"
-zone = "nostr.cv"
+zone = "nodns.shop"
 tsig_key_name = "nodns-bot"
 tsig_key_secret = "base64-encoded-secret"
 tsig_algorithm = "hmac-sha256"
@@ -111,7 +111,7 @@ The bot establishes persistent WebSocket connections to all configured relays an
 ```json
 {
   "kinds": [11111],
-  "#x": ["nostr.cv"],
+  "#x": ["nodns.shop"],
   "since": 1749000000
 }
 ```
@@ -135,7 +135,7 @@ Event arrives from relay
   ├─ Extract npub from event.PubKey
   │
   ├─ Compute FQDN: {name}.npub{short}.{zone}
-  │   Example: www.npub1b3e4f7a1.nostr.cv.
+  │   Example: www.npub1b3e4f7a1.nodns.shop.
   │
   ├─ POLICY CHECK:
   │   ├─ Rate limit: max {rate_limit} events/minute for this npub?
@@ -204,7 +204,7 @@ Tag element:  [0]      [1]     [2]    [3]   [4]    [5]        [6-9]  [10]
   "kind": 11111,
   "pubkey": "b3e4...f7a1",
   "tags": [
-    ["record", "www", "A", "IN", "3600", "203.0.113.42", "", "", "", "", "nostr.cv"]
+    ["record", "www", "A", "IN", "3600", "203.0.113.42", "", "", "", "", "nodns.shop"]
   ],
   "content": "",
   "created_at": 1749000000
@@ -214,8 +214,8 @@ Tag element:  [0]      [1]     [2]    [3]   [4]    [5]        [6-9]  [10]
 Produces:
 ```
 DDNS UPDATE:
-  DELETE www.npub1b3e4f7a1.nostr.cv. A
-  ADD    www.npub1b3e4f7a1.nostr.cv. 3600 A 203.0.113.42
+  DELETE www.npub1b3e4f7a1.nodns.shop. A
+  ADD    www.npub1b3e4f7a1.nodns.shop. 3600 A 203.0.113.42
 ```
 
 ### Example: AAAA Record
@@ -225,7 +225,7 @@ DDNS UPDATE:
   "kind": 11111,
   "pubkey": "b3e4...f7a1",
   "tags": [
-    ["record", "", "AAAA", "IN", "3600", "2001:db8::1", "", "", "", "", "nostr.cv"]
+    ["record", "", "AAAA", "IN", "3600", "2001:db8::1", "", "", "", "", "nodns.shop"]
   ]
 }
 ```
@@ -233,8 +233,8 @@ DDNS UPDATE:
 Produces:
 ```
 DDNS UPDATE:
-  DELETE npub1b3e4f7a1.nostr.cv. AAAA
-  ADD    npub1b3e4f7a1.nostr.cv. 3600 AAAA 2001:db8::1
+  DELETE npub1b3e4f7a1.nodns.shop. AAAA
+  ADD    npub1b3e4f7a1.nodns.shop. 3600 AAAA 2001:db8::1
 ```
 
 ### Example: CNAME Record
@@ -244,7 +244,7 @@ DDNS UPDATE:
   "kind": 11111,
   "pubkey": "b3e4...f7a1",
   "tags": [
-    ["record", "blog", "CNAME", "IN", "3600", "myblog.github.io.", "", "", "", "", "nostr.cv"]
+    ["record", "blog", "CNAME", "IN", "3600", "myblog.github.io.", "", "", "", "", "nodns.shop"]
   ]
 }
 ```
@@ -259,9 +259,9 @@ The bot constructs FQDNs as:
 Where `{name}` is the subdomain requested by the user (element [1]). If empty, the apex of the npub subdomain is used.
 
 Examples:
-- `""` + npub `b3e4...f7a1` → `npub1b3e4f7a1.nostr.cv`
-- `"www"` + npub `b3e4...f7a1` → `www.npub1b3e4f7a1.nostr.cv`
-- `"blog"` + npub `b3e4...f7a1` → `blog.npub1b3e4f7a1.nostr.cv`
+- `""` + npub `b3e4...f7a1` → `npub1b3e4f7a1.nodns.shop`
+- `"www"` + npub `b3e4...f7a1` → `www.npub1b3e4f7a1.nodns.shop`
+- `"blog"` + npub `b3e4...f7a1` → `blog.npub1b3e4f7a1.nodns.shop`
 
 The truncated npub (first 8 hex chars) is used for human readability in zone files and logs. The full npub is stored in SQLite for validation.
 

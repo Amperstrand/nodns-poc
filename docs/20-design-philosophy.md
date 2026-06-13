@@ -95,7 +95,7 @@ NoDNS is primarily a research project and experiment. The goal is not to build a
 - What consensus rules make sense for DNS ownership
 - How Bitcoin micropayments (Cashu, Lightning) can replace traditional billing
 - Whether reputation-based enforcement is sufficient for honest operator behavior
-- How TLD operators (e.g., `.cv`) could adopt Bitcoin-native domain payments
+- How TLD operators could adopt Bitcoin-native domain payments
 
 If a TLD operator wants to use these ideas, great. If not, nodns.shop serves as the playground.
 

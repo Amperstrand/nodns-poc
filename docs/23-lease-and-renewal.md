@@ -124,9 +124,44 @@ Verification rules:
 2. **Deterministic renewal**: Operator's bot auto-accepts valid renewals. No human in the loop.
 3. **`created_at` is the timestamp**: Renewal validity is based on when the event was published, not when processed.
 4. **Price locked at registration**: Renewal price can't change after registration.
-5. **Operator's own lease as upper bound**: Can't promise beyond your own domain expiry.
+5. **Operator's own lease as upper bound**: Can't promise beyond your own domain expiry. Enforced via `operator_lease_expires` config field.
 6. **Grace period**: Records still resolve during grace, only renewals allowed.
 7. **Reputation enforcement**: Operator loses reputation if they reject valid renewals.
+8. **DNS cleanup on expiry**: When a delegation expires, DNS records are removed from Knot via DDNS delete-rrset and soft-deleted in the SQLite store.
+9. **Background expiry task**: Hourly task transitions Active → Grace (past `valid_until`) and Grace → Expired (past grace deadline).
+
+## Implementation
+
+### Configuration (`config.rs`)
+
+```toml
+[dns.zones.'nodns.shop'.lease]
+grace_period_days = 30       # records still resolve, only renewals accepted
+max_lease_days = 365         # max extension per renewal
+operator_lease_expires = "2027-06-08"  # absolute ceiling on all leases
+```
+
+### Data Model (`types.rs`, `store.rs`)
+
+- `DelegationState` enum: `Active`, `Grace`, `Expired`
+- `DelegationRecord` stores: `valid_from`, `valid_until`, `renew_by`, `renewal_price`, `status`
+- Store methods: `save_delegation_with_price`, `get_active_delegation`, `renew_delegation`, `mark_delegation_grace`, `mark_delegation_expired`, `get_delegations_past_valid_until`, `soft_delete_records_by_npub_zone`
+
+### Event Processing (`event_processor.rs`)
+
+- **Claim** (`["claim", NAME, ZONE, VALID_UNTIL]`): validates name availability, payment, `valid_until > now`, `valid_until <= operator_lease_expires`
+- **Renewal** (`["renewal", NAME, ZONE, NEW_VALID_UNTIL]`): validates ownership, grace deadline, payment at locked price, extension limits, `new_valid_until <= operator_lease_expires`
+
+### Background Expiry Task (`main.rs`)
+
+Runs hourly. For each delegation past `valid_until`:
+1. If past grace deadline → remove DNS records via DDNS, soft-delete in DB, mark expired
+2. If still within grace and status is Active → mark grace
+
+### Auth Enforcement (`auth.rs`)
+
+- Expired delegations: DNS update requests rejected
+- Grace delegations: only renewal events accepted, no DNS record changes
 
 ## Alternatives Considered
 
@@ -140,7 +175,9 @@ Verification rules:
 
 ## Still Open
 
-- Exact length of grace period (30 days? 90 days?)
-- Whether operator cosigning is part of v1 or optional
-- How to handle renewals when operator's bot is down for extended period
-- Whether renewal events need a separate kind or stay as kind 11111 tags
+- ~~Whether operator cosigning is part of v1 or optional~~ → Deferred (not in v1)
+- ~~How to handle renewals when operator's bot is down for extended period~~ → Resolved: `created_at` on the renewal event is authoritative; bot processes backlog on recovery
+- ~~Whether renewal events need a separate kind or stay as kind 11111 tags~~ → Resolved: kind 11111 with `["renewal", ...]` tag
+- Exact length of grace period — currently configurable per zone (default 30 days); needs real-world testing to tune
+- OpenTimestamps integration for cryptographic proof of renewal timing — deferred
+- On-chain (smart contract) enforcement — future option if demand warrants

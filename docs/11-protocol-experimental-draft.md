@@ -166,31 +166,31 @@ A registrar (or anyone with authority over a zone) delegates a domain name to a 
 ```
 
 - Position 0: literal string `"delegation"`
-- Position 1: Domain being delegated (e.g., `"alice.cv"`, `"mystore.nodns.shop"`)
+- Position 1: Domain being delegated (e.g., `"alice.nodns.shop"`, `"mystore.nodns.shop"`)
 - Position 2: Nostr pubkey (npub) receiving the delegation
 - Position 3: Unix timestamp (string) — delegation starts
 - Position 4: Unix timestamp (string) — delegation expires
 - Position 5: Unix timestamp (string) — renewal deadline (must renew before this to keep priority)
 
-**Example — registrar delegates `alice.cv`:**
+**Example — registrar delegates `alice.nodns.shop`:**
 
 ```json
 {
   "kind": 11111,
   "pubkey": "<registrar-nostr-pubkey-hex>",
-  "content": "Domain delegation: alice.cv → npub1ykal2...pa3dl",
+  "content": "Domain delegation: alice.nodns.shop → npub1ykal2...pa3dl",
   "tags": [
-    ["delegation", "alice.cv", "npub1ykal28...pa3dl", "1749168000", "1780704000", "1778025600"]
+    ["delegation", "alice.nodns.shop", "npub1ykal28...pa3dl", "1749168000", "1780704000", "1778025600"]
   ]
 }
 ```
 
-This says: "I, the .cv registrar, delegate `alice.cv` to `npub1ykal28...pa3dl` from 2025-06-06 to 2026-06-06. Renewal deadline: 2026-05-31."
+This says: "I, the nodns.shop operator, delegate `alice.nodns.shop` to `npub1ykal28...pa3dl` from 2025-06-06 to 2026-06-06. Renewal deadline: 2026-05-31."
 
 **Authority chain:**
 1. Zone operator publishes their Nostr pubkey via DNS TXT record: `nodns-authority._zone.nodns.shop TXT "nostr:npub1xxx..."` (or via config)
 2. Only that pubkey can sign delegation events for that zone
-3. The delegated pubkey can then publish DNS records (Type 1) for `alice.cv`
+3. The delegated pubkey can then publish DNS records (Type 1) for `alice.nodns.shop`
 4. Even if the zone operator removes the DNS records, the Nostr event remains valid — any NoDNS-compliant resolver honors it
 
 **Delegation validation rules:**
@@ -211,7 +211,7 @@ A zone operator publishes the Nostr pubkey that has authority to sign delegation
 ```
 
 - Position 0: literal string `"registrar"`
-- Position 1: Zone name (e.g., `"cv"`, `"nodns.shop"`)
+- Position 1: Zone name (e.g., `"nodns.shop"`)
 - Position 2: Nostr pubkey (hex) authorized to sign delegations
 
 **Example:**
@@ -291,7 +291,7 @@ Reference a zap receipt as proof of payment.
 | Update existing record | 0 sats | Overwrite existing name+type, no fee |
 | Delete record | 0 sats | Removing records is free |
 
-### Custom names (alice.cv)
+### Custom names (alice.nodns.shop)
 
 | Action | Fee | Notes |
 |--------|-----|-------|
@@ -339,7 +339,7 @@ Reference a zap receipt as proof of payment.
 
 ### Irrevocability
 
-The core consensus rule: **a signed delegation event cannot be revoked**. Once a registrar signs `alice.cv → npub1xxx` for a time period, it stands. If the registrar removes the DNS records from their server, NoDNS resolvers continue to honor the Nostr event.
+The core consensus rule: **a signed delegation event cannot be revoked**. Once a registrar signs `alice.nodns.shop → npub1xxx` for a time period, it stands. If the registrar removes the DNS records from their server, NoDNS resolvers continue to honor the Nostr event.
 
 This means:
 - Zone operators should only sign delegations they intend to honor
@@ -362,8 +362,8 @@ This means:
 ## DNS Resolver Behavior (Future)
 
 A NoDNS-compliant resolver:
-1. Receives a query for `alice.cv`
-2. Checks for active delegation events for `alice.cv`
+1. Receives a query for `alice.nodns.shop`
+2. Checks for active delegation events for `alice.nodns.shop`
 3. Checks for DNS record events from the delegated npub
 4. Returns the DNS records from Nostr, regardless of what the traditional DNS hierarchy says
 5. Falls back to traditional DNS if no Nostr events exist

@@ -56,7 +56,7 @@
   "tags": [
     ["record", "A", "", "193.99.144.80", "", "", "", "", "", "", "3600"],
     ["record", "TXT", "", "v=spf1 include:_spf.google.com ~all", "", "", "", "", "", "", "3600"],
-    ["delegation", "alice.cv", "npub1...", "1749168000", "1780704000", "1778025600"],
+    ["delegation", "alice.nodns.shop", "npub1...", "1749168000", "1780704000", "1778025600"],
     ["cashu", "cashuA...", "https://mint.example.com", "250"]
   ]
 }
@@ -166,7 +166,7 @@ Example: alice.nodns.shop
 {
   "kind": 11111,
   "pubkey": "<registrar>",
-  "tags": [["delegation", "alice.cv", "npub1...", "1749168000", "1780704000", "1778025600"]]
+  "tags": [["delegation", "alice.nodns.shop", "npub1...", "1749168000", "1780704000", "1778025600"]]
 }
 ```
 
@@ -394,9 +394,9 @@ If not found: Falls back to traditional DNS
 {
   "kind": 11111,
   "pubkey": "<registrar>",
-  "content": "Domain delegation: alice.cv → npub1...",
+  "content": "Domain delegation: alice.nodns.shop → npub1...",
   "tags": [
-    ["delegation", "alice.cv", "npub1...", "1749168000", "1780704000", "1778025600"]
+    ["delegation", "alice.nodns.shop", "npub1...", "1749168000", "1780704000", "1778025600"]
   ]
 }
 ```
@@ -523,7 +523,7 @@ NoDNS provides:
 
 NIP-97 has no delegation mechanism.
 
-**Impact**: NoDNS can support traditional domain-like usage (e.g., `alice.cv` managed by registrar). NIP-97 cannot.
+**Impact**: NoDNS can support traditional domain-like usage (e.g., `alice.nodns.shop` managed by registrar). NIP-97 cannot.
 
 ### 5. DNSSEC Integration
 

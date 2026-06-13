@@ -42,7 +42,6 @@ Knot DNS uses RCU-based lock-free zone updates and automatic DNSSEC re-signing a
 
 ## Future
 
-- `.cv` integration remains aspirational — see [10-cv-integration.md](10-cv-integration.md)
 - Custom name registration with Cashu payments — see [09-custom-names.md](09-custom-names.md)
 - SLIP-10 nsec→DNSSEC key derivation — see [15-nsec-to-dnssec-analysis.md](15-nsec-to-dnssec-analysis.md)
 

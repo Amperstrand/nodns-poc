@@ -72,12 +72,9 @@ These docs are the authoritative source for reasoning. `content/consensus.json` 
 
 | Doc | Status | Description |
 |---|---|---|
-| [05-arme-delegation.md](05-arme-delegation.md) | ARCHIVED | ARME delegation instructions for nostr.cv (superseded by nodns.shop) |
-| [06-rollout-phases.md](06-rollout-phases.md) | ARCHIVED | Original rollout phases — dates and scope are historical |
 | [07-abuse-philosophy.md](07-abuse-philosophy.md) | ACTIVE | DNS-as-mirror principle, abuse handling, accountability |
 | [08-implementation-plan.md](08-implementation-plan.md) | SUPERSEDED by [27](27-implementation-plan.md) | Earlier implementation plan |
 | [09-custom-names.md](09-custom-names.md) | DRAFT | Custom name registration research |
-| [10-cv-integration.md](10-cv-integration.md) | DRAFT | `.cv` TLD integration aspirations |
 | [14-demo-recipes.md](14-demo-recipes.md) | ACTIVE | 7 demo scripts with exact commands |
 
 ### Competitive

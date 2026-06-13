@@ -13,7 +13,7 @@ Domain pricing needs to balance several concerns:
 
 ## Per-Operator Pricing Policies
 
-NoDNS is designed so that **each zone operator sets their own pricing**. The operator for `nodns.shop` can run a cheap PoC with test tokens, while a TLD operator like `.cv` could charge real Bitcoin for domain leases.
+NoDNS is designed so that **each zone operator sets their own pricing**. The operator for `nodns.shop` can run a cheap PoC with test tokens, while a TLD operator could charge real Bitcoin for domain leases.
 
 ### What's Configurable Per Zone
 

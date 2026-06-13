@@ -16,7 +16,7 @@ NoDNS records are DNS data — IP addresses, hostnames, text strings. They are n
 - File hosting
 - Communication channels
 
-The actual content lives on the servers at the IP addresses in the records. Those servers are outside the DNS infrastructure and outside ARME's responsibility. This is the same model as every domain registrar — the registrar delegates, the registrant runs their server.
+The actual content lives on the servers at the IP addresses in the records. Those servers are outside the DNS infrastructure and outside the operator's responsibility. This is the same model as every domain registrar — the registrar delegates, the registrant runs their server.
 
 ## Built-in Accountability via npub
 
@@ -68,20 +68,20 @@ If a user publishes an A record pointing to a server hosting illegal content:
 
 This is identical to traditional DNS: if `example.com` points to a server hosting illegal content, the solution is to address the server, not remove the DNS record. Law enforcement goes after the server, not the DNS.
 
-### What ARME Can Do (if they choose)
+### What the Operator Can Do (if they choose)
 
-If ARME receives a complaint about a `nostr.cv` domain:
+If the operator receives a complaint about a `nodns.shop` domain:
 
 1. **Look up the npub**: The domain name contains the npub (or can be looked up in the bot's SQLite database)
 2. **Find the Nostr event**: The event ID is stored in SQLite, the event is on public relays
 3. **Contact the publisher**: Via Nostr (they have the npub) or via the IP address's hosting provider
-4. **Remove the record**: If ARME has policy justification, they can ask us to remove the record from the zone, or remove the delegation entirely (kills all `nostr.cv` domains instantly)
+4. **Remove the record**: If the operator has policy justification, they can remove the record from the zone directly, or shut down the DNS server entirely (kills all `nodns.shop` domains instantly)
 
 ### The Nuclear Option
 
-ARME can revoke the `nostr.cv` delegation at any time by removing the two NS records from the `.cv` zone. This immediately stops all `nostr.cv` domains from resolving globally. No coordination with us needed — it's a standard DNS operation entirely within ARME's control.
+The operator can stop serving all `nodns.shop` domains at any time by shutting down the DNS server or removing the zone configuration. This immediately stops all `nodns.shop` domains from resolving globally. No external coordination needed — it's entirely within the operator's control.
 
-This is a stronger kill switch than traditional domain takedowns, which often require cooperation from registrars, hosting providers, and courts. With delegation, ARME has direct, immediate control.
+This is a stronger kill switch than traditional domain takedowns, which often require cooperation from registrars, hosting providers, and courts. The operator has direct, immediate control.
 
 ## Comparison with Traditional DNS
 
@@ -99,4 +99,4 @@ This is a stronger kill switch than traditional domain takedowns, which often re
 
 NoDNS DNS records are mirrors of public Nostr events. The DNS layer provides resolution, not content. The npub provides accountability. The bot's policy engine prevents technical abuse (rebinding, flooding). Content concerns belong at the content layer (the server), not the DNS layer.
 
-For ARME, the risk profile is lower than traditional domain registration: every record is cryptographically attributable, the delegation can be revoked instantly, and no personal data is collected or stored.
+For the operator, the risk profile is lower than traditional domain registration: every record is cryptographically attributable, the zone can be shut down instantly, and no personal data is collected or stored.

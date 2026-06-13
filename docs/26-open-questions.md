@@ -187,7 +187,7 @@ The same namespace (e.g., `nodns.shop`) could be served by multiple operators. U
 
 ### The Idea
 
-Make it easy for existing TLD operators (like `.cv`) to adopt NoDNS patterns:
+Make it easy for existing TLD operators to adopt NoDNS patterns:
 - Accept Bitcoin payments for domain registrations
 - Publish delegation events on Nostr
 - Allow NoDNS resolvers to verify their DNS records
@@ -195,7 +195,7 @@ Make it easy for existing TLD operators (like `.cv`) to adopt NoDNS patterns:
 ### Why It's Interesting
 
 - The real goal of NoDNS is adoption by TLD operators
-- `.cv` and similar ccTLDs could benefit from Bitcoin-native payments
+- ccTLD operators could benefit from Bitcoin-native payments
 - Bypasses traditional registrar infrastructure and fees
 
 ### What to Research
