@@ -2,7 +2,7 @@
 
 > **A thought experiment in decentralized naming.** Nothing here is production. The protocol is an experimental draft.
 
-**Live demo**: [nodns.shop](https://nodns.shop) · **Beta**: [beta.nodns.shop](https://beta.nodns.shop) · **GitHub Pages**: [nodns-poc pages](https://amperstrand.github.io/nodns-poc/)
+**Live demo**: [nodns.shop](https://nodns.shop) · **GitHub Pages**: [nodns-poc pages](https://amperstrand.github.io/nodns-poc/)
 
 The [GitHub Pages site](https://amperstrand.github.io/nodns-poc/) explains the thought experiment, consensus rules, and design philosophy. What follows here is purely technical — how to build, configure, and run the software.
 
@@ -15,7 +15,7 @@ The [GitHub Pages site](https://amperstrand.github.io/nodns-poc/) explains the t
 | **nodns-bot** | Rust (nostr-sdk, hickory, axum) | Subscribes to Nostr relays, validates events, pushes DDNS updates |
 | **Knot DNS** | 3.3.4 | Authoritative nameserver with DNSSEC signing (ECDSAP256SHA256) |
 | **Frontend** | Next.js (static export) | Key generation, record publishing, live feed |
-| **Caddy** | Reverse proxy | Serves frontend at nodns.shop, proxies `/api/*` to bot |
+| **Caddy** | Reverse proxy | Proxies `/api/*` to bot, redirects `*.nodns.shop` to GitHub Pages |
 
 ```
 User publishes kind 11111 event to Nostr relay
@@ -25,7 +25,7 @@ User publishes kind 11111 event to Nostr relay
         │
         ├─ Validates event signature
         ├─ Checks authority (npub owns the subdomain)
-        ├─ Verifies Cashu payment (anti-spam, 250 sats/record)
+        ├─ Verifies Cashu payment (anti-spam, dynamic pricing by name length)
         │
         ▼
   DDNS UPDATE to Knot DNS (TSIG-signed)
@@ -75,7 +75,7 @@ All operations use **kind 11111** events. The event type is determined by tags:
 | `["record", TYPE, NAME, RDATA, ...]` | DNS record update | `["record", "A", "", "1.2.3.4", ...]` |
 | `["delegation", DOMAIN, NPUB, FROM, UNTIL, RENEW]` | Custom name delegation | `["delegation", "alice.nodns.shop", "npub1...", ...]` |
 | `["registrar", ZONE, PUBKEY]` | Registrar key publication | `["registrar", "nodns.shop", "abc..."]` |
-| `["cashu", TOKEN, MINT, AMOUNT]` | Cashu payment proof | `["cashu", "cashuA...", "https://mint.example.com", "250"]` |
+| `["cashu", TOKEN, MINT, AMOUNT]` | Cashu payment proof | `["cashu", "cashuA...", "https://testnut.cashu.space", "2"]` |
 
 Full spec: [docs/11-protocol-experimental-draft.md](docs/11-protocol-experimental-draft.md)
 
@@ -85,36 +85,55 @@ Full spec: [docs/11-protocol-experimental-draft.md](docs/11-protocol-experimenta
 nodns-poc/
 ├── content/                # Compiled JSON for websites (derived from docs/)
 │   └── consensus.json      # Curated public summary of consensus rules
+├── deploy/                 # Bot deployment scripts
+│   ├── deploy.sh           # Cross-compile (cargo zigbuild), scp, swap, restart
+│   └── check-expiry.sh     # RDAP domain expiry verification
 ├── docs/                   # Single source of truth — see docs/README.md
 │   ├── README.md           # Doc index with status badges (ACTIVE/DRAFT/ARCHIVED)
 │   ├── 11-protocol-experimental-draft.md  # Protocol specification
 │   ├── 20-26               # Design philosophy series (consensus, naming, payments...)
 │   ├── 27-30               # Implementation plans
 │   └── competitive/        # Competitive analysis (ENS, Handshake, etc.)
-├── gh-pages/               # GitHub Pages static site
-│   ├── index.html          # Vanilla HTML/CSS/JS rendering consensus.json
-│   └── consensus.json      # Symlink → ../content/consensus.json
 ├── nodns-bot-rs/           # Rust bot
 │   └── src/
 │       ├── main.rs         # Entry point, event loop
 │       ├── auth.rs         # Authority/delegation checking
-│       ├── config.rs       # TOML config with multi-zone support
+│       ├── acme.rs         # ACME (Let's Encrypt) certificate management
+│       ├── config.rs       # TOML config with multi-zone, per-zone payment
 │       ├── dns.rs          # DDNS updater (RFC 2136 + TSIG)
+│       ├── dns_update_server.rs  # RFC 2136 dynamic update listener
+│       ├── dnssec_derivation.rs  # DNSSEC key derivation
+│       ├── event_processor.rs    # Event validation pipeline
+│       ├── handlers/       # HTTP handlers (split from monolithic handlers.rs)
+│       │   ├── mod.rs      # Module exports
+│       │   ├── api.rs      # REST API: records, pricing, availability
+│       │   ├── acme_dns.rs # ACME DNS-01 challenge handler
+│       │   ├── acme_order.rs    # ACME certificate ordering
+│       │   ├── dyndns.rs   # DDNS update endpoints
+│       │   ├── health.rs   # Health check endpoint
+│       │   └── tls_check.rs# TLS certificate verification
+│       ├── nip05.rs        # NIP-05 verification
 │       ├── parser.rs       # Nostr event parsing & validation
-│       ├── payment.rs      # Cashu token verification (CDK)
+│       ├── payment.rs      # Cashu token verification (CDK), npub_names_free
 │       ├── store.rs        # SQLite persistence
 │       ├── subscriber.rs   # Nostr relay subscription
+│       ├── tls_derivation.rs    # TLS key derivation
 │       └── types.rs        # Shared types
-├── nodns-frontend/         # Next.js frontend
+├── nodns-cli/              # Rust CLI tool
+│   └── src/
+│       ├── main.rs         # Entry point, clap command parsing
+│       ├── commands/       # Subcommands (key, add, resolve)
+│       └── config.rs       # CLI config from env/file
+├── nodns-frontend/         # Next.js frontend (static export to GitHub Pages)
 ├── tests/                  # Playwright E2E tests
-└── .githooks/              # Pre-commit hooks (gitleaks)
+└── .githooks/              # Pre-commit hooks (gitleaks, fmt, clippy)
 ```
 
 ## Development
 
 ### Prerequisites
 
-- Rust 1.75+ (for nodns-bot-rs)
+- Rust 1.95+ (for nodns-bot-rs and nodns-cli)
 - Node.js 18+ (for frontend and Playwright tests)
 
 ### Build the bot
@@ -143,15 +162,19 @@ cd nodns-bot-rs && cargo test
 npx playwright test
 ```
 
-### Deploy to VPS
+### Deploy
+
+**Frontend** — automatically deployed to GitHub Pages via CI on push to `main`. No manual steps needed.
+
+**Bot** — cross-compile and deploy to VPS:
 
 ```bash
-cd nodns-frontend
-npm run build
-scp -r out/* root@46.22.104.104:/var/www/nodns-beta/
+deploy/deploy.sh --push
 ```
 
-See [docs/29-beta-deployment.md](docs/29-beta-deployment.md) for full deployment instructions.
+This runs `cargo zigbuild --release --target x86_64-unknown-linux-gnu`, scp's the binary to the VPS, and restarts the bot service.
+
+See [docs/29-beta-deployment.md](docs/29-beta-deployment.md) for full deployment details.
 
 ### Configuration
 
@@ -183,11 +206,19 @@ max_txt_length = 512
 [store]
 path = "records.db"
 
-# [payment]  # Payment is disabled by default
+# [payment]  # Per-zone payment via [[zones.payment]]
 # enabled = true
-# required_sats = 250
-# update_free = true
-# cashu_mint_url = "https://testnut.cashu.space"
+# create_price = 2
+# npub_names_free = true
+# mint_url = "https://testnut.cashu.space"
+#
+# [[zones]]
+# name = "nodns.shop"
+# npub_names_free = true
+# [zones.payment]
+# enabled = true
+# create_price = 2
+# mint_url = "https://testnut.cashu.space"
 ```
 
 ## Security
