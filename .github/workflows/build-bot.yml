@@ -93,8 +93,8 @@ jobs:
         working-directory: nodns-cli
         run: |
           OUTPUT=$(./target/release/nodns key generate)
-          NSEC=$(echo "$OUTPUT" | grep '^nsec1' | head -1)
-          NPUB=$(echo "$OUTPUT" | grep '^npub1' | head -1)
+          NSEC=$(echo "$OUTPUT" | grep -o 'nsec1[a-z0-9]*' | head -1)
+          NPUB=$(echo "$OUTPUT" | grep -o 'npub1[a-z0-9]*' | head -1)
           DERIVED=$(./target/release/nodns key derive "$NSEC")
           [ "$NPUB" = "$DERIVED" ]
 
