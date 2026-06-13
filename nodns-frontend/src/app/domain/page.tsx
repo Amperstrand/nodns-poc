@@ -475,7 +475,7 @@ function DomainDetailContent() {
             <GlobeIcon className="size-5 text-primary" />
           </div>
           <div>
-            <h1 className="text-xl md:text-2xl font-bold font-mono">
+            <h1 className="text-xl md:text-2xl font-bold font-mono break-all">
               {fqdn}
             </h1>
             <div className="flex items-center gap-3 mt-1">

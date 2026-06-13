@@ -105,7 +105,7 @@ function SearchContent() {
       {/* Domain result */}
       <div className="rounded-xl border border-border bg-card p-6 mb-6">
         <div className="flex items-center justify-between mb-4">
-          <h1 className="text-xl font-bold font-mono">
+          <h1 className="text-xl font-bold font-mono break-all">
             {name}.<span className="text-primary">{DEFAULT_ZONE}</span>
           </h1>
           {loading && (
