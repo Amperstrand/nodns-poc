@@ -7,9 +7,29 @@ import { Consensus } from "@/components/consensus";
 import { ProtocolSpec } from "@/components/protocol-spec";
 import { Roadmap } from "@/components/roadmap";
 
+const SECTIONS = [
+  { id: "architecture", label: "Architecture" },
+  { id: "consensus", label: "Consensus" },
+  { id: "protocol", label: "Protocol" },
+  { id: "roadmap", label: "Roadmap" },
+];
+
 function LearnContent() {
   return (
     <div className="mx-auto max-w-[960px] py-8 md:py-12">
+      <nav className="sticky top-16 z-30 -mx-6 mb-4 border-b border-border bg-background/95 px-6 py-2.5 backdrop-blur">
+        <div className="flex items-center gap-1 overflow-x-auto">
+          {SECTIONS.map((s) => (
+            <a
+              key={s.id}
+              href={`#${s.id}`}
+              className="shrink-0 rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
+            >
+              {s.label}
+            </a>
+          ))}
+        </div>
+      </nav>
       <Architecture />
       <Consensus />
       <ProtocolSpec />
