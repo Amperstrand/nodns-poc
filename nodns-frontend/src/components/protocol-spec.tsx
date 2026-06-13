@@ -90,8 +90,8 @@ export function ProtocolSpec() {
                   [&quot;cashu&quot;, TOKEN, MINT_URL, AMOUNT]
                 </td>
                 <td className="px-3 py-2.5 text-muted-foreground">
-                  Anti-spam payment via Cashu ecash tokens (250 sats per new
-                  record).
+                  Anti-spam payment via Cashu ecash tokens (from 4 sats per
+                  new record).
                 </td>
               </tr>
               <tr className="border-b border-border">

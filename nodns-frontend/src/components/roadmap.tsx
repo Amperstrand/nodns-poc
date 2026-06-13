@@ -39,7 +39,7 @@ const ROADMAP_ITEMS: RoadmapEntry[] = [
   {
     title: "Cashu anti-spam payments",
     description:
-      "250 sats per new record via Cashu ecash tokens",
+      "From 4 sats per new record via Cashu ecash tokens",
     status: "wip",
   },
   {

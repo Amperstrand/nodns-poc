@@ -1139,7 +1139,7 @@ dig +trace npub190queyng2pmx0jfw5rkx4fjjl3u0zxz6nlyaja53p2n0ydupr6jsdnqt8q.nodns
         <tr><td>record</td><td>["record", TYPE, NAME, RDATA, "", "", "", "", "", "", TTL]</td><td>DNS record entry. 11-element fixed array for forward compatibility.</td></tr>
         <tr><td>delegation</td><td>["delegation", DOMAIN, NPUB, VALID_FROM, VALID_UNTIL, RENEW_BY]</td><td>Grants a pubkey control over a human-readable name within a zone.</td></tr>
         <tr><td>registrar</td><td>["registrar", ZONE, PUBKEY_HEX]</td><td>Identifies the registrar authority for a zone. Only this key can issue delegations.</td></tr>
-        <tr><td>cashu</td><td>["cashu", TOKEN, MINT_URL, AMOUNT]</td><td>Anti-spam payment via Cashu ecash tokens (250 sats per new record).</td></tr>
+        <tr><td>cashu</td><td>["cashu", TOKEN, MINT_URL, AMOUNT]</td><td>Anti-spam payment via Cashu ecash tokens (from 4 sats per new record).</td></tr>
         <tr><td>zap</td><td>["zap", ZAP_RECEIPT_EVENT_ID, AMOUNT]</td><td>Payment proof via NIP-57 zap receipts.</td></tr>
       </tbody>
     </table>
@@ -1280,7 +1280,7 @@ Delegated names:
       </div>
       <div class="roadmap-item">
         <div class="status"><span class="badge wip">WIP</span></div>
-        <div><strong>Cashu anti-spam payments</strong> — 250 sats per new record via Cashu ecash tokens</div>
+        <div><strong>Cashu anti-spam payments</strong> — from 4 sats per new record via Cashu ecash tokens</div>
       </div>
       <div class="roadmap-item">
         <div class="status"><span class="badge wip">WIP</span></div>
