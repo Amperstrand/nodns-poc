@@ -23,7 +23,7 @@ export function RecordBrowserTeaser() {
   }, []);
 
   return (
-    <section className="px-6 py-16">
+    <section className="border-t border-border/40 px-6 py-16">
       <div className="mx-auto max-w-[960px]">
         <div className="rounded-xl bg-card ring-1 ring-foreground/10 p-8 md:p-10">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">

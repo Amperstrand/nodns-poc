@@ -23,7 +23,7 @@ export function FAQ() {
   ];
 
   return (
-    <section className="px-6 py-16">
+    <section className="border-t border-border/40 px-6 py-16">
       <div className="mx-auto max-w-[960px]">
         <h2 className="mb-6 text-[1.75rem] font-bold tracking-tight">
           FAQ
