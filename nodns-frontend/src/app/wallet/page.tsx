@@ -321,8 +321,13 @@ function WalletContent() {
           </div>
           <StatusBadge status={mintOnline ? status : "degraded"} />
         </div>
-        <div className="text-xs font-mono text-muted-foreground">
-          {MINT_URL.replace("https://", "")}
+        <div className="flex items-center justify-between">
+          <div className="text-xs font-mono text-muted-foreground">
+            {MINT_URL.replace("https://", "")}
+          </div>
+          <div className="text-[11px] text-muted-foreground/60">
+            1 sat = 0.00000001 BTC
+          </div>
         </div>
       </div>
 
