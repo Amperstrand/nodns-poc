@@ -80,7 +80,6 @@ pub struct Verifier {
     update_price: u64,
     #[allow(dead_code)]
     delete_price: u64,
-    #[allow(dead_code)]
     npub_names_free: bool,
     mint_filter: Option<String>,
 }
@@ -278,6 +277,9 @@ pub async fn check_event_payment(
 
     let mut total_required: u64 = 0;
     for rec in records {
+        if (rec.name.is_empty() || rec.name == "@") && verifier.npub_names_free {
+            continue;
+        }
         let exists = store
             .has_record(npub, &rec.record_type, &rec.name, zone)
             .map_err(|e| PaymentError::StoreError(e.to_string()))?;
