@@ -13,7 +13,11 @@ export function getPriceForName(name: string, basePrice: number = 2): number {
 
 /** Sanitize a subdomain label: lowercase, strip dots/spaces. */
 export function sanitizeName(input: string): string {
-  return input.trim().toLowerCase().replace(/[^a-z0-9-]/g, "").replace(/\.nodns\.shop$/i, "");
+  return input
+    .trim()
+    .toLowerCase()
+    .replace(/\.nodns\.shop\.?$/i, "")
+    .replace(/[^a-z0-9-]/g, "");
 }
 
 /** Build the full FQDN. */
