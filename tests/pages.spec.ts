@@ -1,6 +1,7 @@
 import { test, expect } from "@playwright/test";
 
 test.beforeEach(async ({ page }) => {
+  await page.goto("./");
   await page.evaluate(() => {
     localStorage.clear();
     indexedDB.deleteDatabase("coco-cashu");
@@ -9,14 +10,14 @@ test.beforeEach(async ({ page }) => {
 
 test.describe("Landing Page", () => {
   test("renders hero section with search", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("./");
     await expect(
       page.getByRole("heading", { name: /domain.*no registrar/i })
     ).toBeVisible();
   });
 
   test("record browser teaser shows stats and link", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("./");
     await expect(
       page.getByRole("heading", { name: "DNS Record Browser" })
     ).toBeVisible();
@@ -26,7 +27,7 @@ test.describe("Landing Page", () => {
   });
 
   test("footer has GitHub link", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("./");
     const footer = page.locator("footer");
     await expect(footer).toBeVisible();
     await expect(
@@ -37,7 +38,7 @@ test.describe("Landing Page", () => {
 
 test.describe("Navigation", () => {
   test("header has all nav links", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("./");
     const nav = page.locator("nav").first();
     await expect(nav.getByText("Home")).toBeVisible();
     await expect(nav.getByText("Records")).toBeVisible();
@@ -46,7 +47,7 @@ test.describe("Navigation", () => {
   });
 
   test("home → records → dashboard → wallet round trip", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("./");
 
     await page.getByRole("link", { name: "Records" }).first().click();
     await expect(page).toHaveURL(/\/records/, { timeout: 5000 });
@@ -59,7 +60,7 @@ test.describe("Navigation", () => {
   });
 
   test("logo links back to home", async ({ page }) => {
-    await page.goto("/dashboard");
+    await page.goto("./dashboard");
     await page.locator("header").getByRole("link", { name: /NoDNS/i }).click();
     await expect(page).toHaveURL(/\/nodns-poc\/$/, { timeout: 5000 });
   });
@@ -67,42 +68,47 @@ test.describe("Navigation", () => {
 
 test.describe("Records Page", () => {
   test("renders heading and tab navigation", async ({ page }) => {
-    await page.goto("/records");
+    await page.goto("./records");
     await expect(
       page.getByRole("heading", { name: "DNS Record Browser" })
     ).toBeVisible();
-    await expect(page.getByText("API + Nostr")).toBeVisible();
-    await expect(page.getByText("DNS Resolver")).toBeVisible();
-    await expect(page.getByText("Nostr Events")).toBeVisible();
+    await expect(page.getByRole("tab", { name: "API + Nostr" })).toBeVisible();
+    await expect(page.getByRole("tab", { name: "DNS Resolver" })).toBeVisible();
+    await expect(page.getByRole("tab", { name: "Nostr Events" })).toBeVisible();
   });
 
   test("loads and displays merged records from API + Nostr", async ({
     page,
   }) => {
-    await page.goto("/records");
+    await page.goto("./records");
     const total = page.getByTestId("stat-total");
     await expect(total).toBeVisible({ timeout: 15_000 });
+    await expect(total).toHaveText(/\d+/, { timeout: 15_000 });
     const value = await total.textContent();
-    expect(Number(value)).toBeGreaterThanOrEqual(1);
+    expect(parseInt(value ?? "0", 10)).toBeGreaterThanOrEqual(1);
   });
 
   test("record groups are collapsible", async ({ page }) => {
-    await page.goto("/records");
+    await page.goto("./records");
     const firstHeader = page.getByTestId("npub-group-header").first();
     await expect(firstHeader).toBeVisible({ timeout: 15_000 });
 
-    const firstBody = page.getByTestId("npub-group-records").first();
-    await expect(firstBody).toBeVisible();
+    const allBodies = page.getByTestId("npub-group-records");
+    await expect(allBodies.first()).toBeVisible();
+    const initialCount = await allBodies.count();
+    expect(initialCount).toBeGreaterThanOrEqual(1);
+
+    await page.waitForTimeout(3_000);
 
     await firstHeader.click();
-    await expect(firstBody).not.toBeVisible();
+    await expect(allBodies).toHaveCount(initialCount - 1, { timeout: 5_000 });
 
     await firstHeader.click();
-    await expect(firstBody).toBeVisible();
+    await expect(allBodies).toHaveCount(initialCount, { timeout: 5_000 });
   });
 
   test("DNS resolver tab accepts queries", async ({ page }) => {
-    await page.goto("/records");
+    await page.goto("./records");
     await page.getByText("DNS Resolver").click();
 
     const input = page.locator('input[placeholder="Enter FQDN to query"]');
@@ -119,21 +125,21 @@ test.describe("Dashboard Page", () => {
   test("renders heading and empty state for new identity", async ({
     page,
   }) => {
-    await page.goto("/dashboard");
+    await page.goto("./dashboard");
     await expect(
       page.getByRole("heading", { name: "My Domains" })
     ).toBeVisible();
   });
 
   test("shows identity npub in header", async ({ page }) => {
-    await page.goto("/dashboard");
+    await page.goto("./dashboard");
     await page.waitForTimeout(1000);
     const header = page.locator("header");
     await expect(header.getByText(/npub1/)).toBeVisible({ timeout: 5000 });
   });
 
   test("shows wallet balance in status bar", async ({ page }) => {
-    await page.goto("/dashboard");
+    await page.goto("./dashboard");
     await page.waitForTimeout(1000);
     await expect(page.getByText(/sats/).first()).toBeVisible({
       timeout: 5000,
@@ -143,7 +149,7 @@ test.describe("Dashboard Page", () => {
 
 test.describe("Domain Page", () => {
   test("shows no-domain state without query param", async ({ page }) => {
-    await page.goto("/domain");
+    await page.goto("./domain");
     await expect(
       page.getByRole("heading", { name: "No domain selected" })
     ).toBeVisible();
@@ -155,7 +161,7 @@ test.describe("Domain Page", () => {
   test("renders domain detail with records when name provided", async ({
     page,
   }) => {
-    await page.goto("/domain?name=npub190queyng2pmx0jfw5rkx4fjjl3u0zxz6nlyaja53p2n0ydupr6jsdnqt8q");
+    await page.goto("./domain?name=npub190queyng2pmx0jfw5rkx4fjjl3u0zxz6nlyaja53p2n0ydupr6jsdnqt8q");
     await expect(
       page.getByRole("heading", { name: /nodns\.shop/ }).first()
     ).toBeVisible({ timeout: 10_000 });
@@ -164,29 +170,29 @@ test.describe("Domain Page", () => {
 
 test.describe("Wallet Page", () => {
   test("initializes and shows heading", async ({ page }) => {
-    await page.goto("/wallet");
+    await page.goto("./wallet");
     await expect(
       page.getByRole("heading", { name: "Wallet" })
     ).toBeVisible({ timeout: 10_000 });
   });
 
   test("shows balance section", async ({ page }) => {
-    await page.goto("/wallet");
+    await page.goto("./wallet");
     await page.waitForTimeout(6000);
     await expect(page.getByText(/Balance/)).toBeVisible();
-    await expect(page.getByText(/\d+ sats/)).toBeVisible();
+    await expect(page.locator("main").getByText(/\d+ sats/)).toBeVisible();
   });
 
   test("shows identity key info", async ({ page }) => {
-    await page.goto("/wallet");
+    await page.goto("./wallet");
     await page.waitForTimeout(6000);
-    await expect(page.getByText(/npub/)).toBeVisible();
+    await expect(page.getByText(/npub/).first()).toBeVisible();
   });
 });
 
 test.describe("Search Page", () => {
   test("renders search prompt without query param", async ({ page }) => {
-    await page.goto("/search");
+    await page.goto("./search");
     await expect(
       page.getByRole("heading", { name: /domain/i })
     ).toBeVisible();
@@ -195,7 +201,7 @@ test.describe("Search Page", () => {
 
 test.describe("Register Page", () => {
   test("renders no-domain state without query param", async ({ page }) => {
-    await page.goto("/register");
+    await page.goto("./register");
     await expect(
       page.getByRole("heading", { name: /No domain selected/i })
     ).toBeVisible();
@@ -204,7 +210,7 @@ test.describe("Register Page", () => {
 
 test.describe("Identity Persistence", () => {
   test("same identity across wallet and dashboard pages", async ({ page }) => {
-    await page.goto("/wallet");
+    await page.goto("./wallet");
     await page.waitForTimeout(6000);
 
     const npubOnWallet = await page
@@ -213,7 +219,7 @@ test.describe("Identity Persistence", () => {
       .first()
       .textContent();
 
-    await page.goto("/dashboard");
+    await page.goto("./dashboard");
     await page.waitForTimeout(2000);
 
     const npubOnDashboard = await page
@@ -250,13 +256,13 @@ test.describe("No Critical JS Errors", () => {
       }
     });
 
-    await page.goto("/");
+    await page.goto("./");
     await page.waitForTimeout(2000);
-    await page.goto("/records");
+    await page.goto("./records");
     await page.waitForTimeout(5000);
-    await page.goto("/dashboard");
+    await page.goto("./dashboard");
     await page.waitForTimeout(2000);
-    await page.goto("/wallet");
+    await page.goto("./wallet");
     await page.waitForTimeout(6000);
 
     if (errors.length > 0) {

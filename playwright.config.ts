@@ -5,7 +5,7 @@ export default defineConfig({
   timeout: 60_000,
   retries: 2,
   use: {
-    baseURL: "https://amperstrand.github.io/nodns-poc",
+    baseURL: "https://amperstrand.github.io/nodns-poc/",
     headless: true,
   },
   projects: [
@@ -18,6 +18,21 @@ export default defineConfig({
       name: "api",
       testDir: "./tests",
       testMatch: "api.spec.ts",
+    },
+    {
+      name: "search",
+      testDir: "./tests",
+      testMatch: "search.spec.ts",
+    },
+    {
+      name: "profile",
+      testDir: "./tests",
+      testMatch: "profile.spec.ts",
+    },
+    {
+      name: "content",
+      testDir: "./tests",
+      testMatch: "content.spec.ts",
     },
   ],
 });
