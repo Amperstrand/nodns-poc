@@ -27,6 +27,8 @@ export interface TripartiteRecords {
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "";
 
+const WILDCARD_REDIRECT_IPS = new Set(["46.224.104.12"]);
+
 export async function fetchApiRecords(
   params: { pubkey?: string; domain?: string },
 ): Promise<SourceResult<DnsRecord>> {
@@ -110,9 +112,14 @@ export async function fetchDnsRecords(
         const resp = await queryDoh(fqdn, type);
         if (resp.Answer) {
           for (const a of resp.Answer) {
+            const typeNum = String(a.type);
+            const isWildcardA =
+              (typeNum === "1" || typeNum === "A") &&
+              WILDCARD_REDIRECT_IPS.has(a.data.replace(/"/g, "").trim());
+            if (isWildcardA) continue;
             allAnswers.push({
               name: a.name,
-              type: String(a.type),
+              type: typeNum,
               ttl: a.TTL,
               data: a.data,
             });
