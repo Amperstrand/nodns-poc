@@ -1,0 +1,33 @@
+name: CI — Register TXT Record
+
+on:
+  schedule:
+    - cron: "0 */6 * * *"  # Every 6 hours
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "ci/**"
+      - ".github/workflows/ci-register.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  register-txt:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        working-directory: ci
+        run: npm install
+
+      - name: Register TXT record with ephemeral nsec
+        working-directory: ci
+        run: node register-txt.mjs
