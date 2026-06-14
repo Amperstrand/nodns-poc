@@ -33,7 +33,7 @@ export function CollapsibleSection({
     <div id={id} className="scroll-mt-32 border-b border-border">
       <button
         onClick={() => setOpen(!open)}
-        className="flex w-full items-center justify-between px-6 py-4 text-left hover:bg-muted/20 transition-colors"
+        className="flex w-full cursor-pointer items-center justify-between px-6 py-4 text-left transition-colors hover:bg-muted/30"
         aria-expanded={open}
       >
         <h2 className="text-[1.75rem] font-bold tracking-tight">{title}</h2>
