@@ -285,7 +285,8 @@ test.describe("Visual QA - Registered Domain States", () => {
     });
     await page.goto("./search?q=e2elivetest");
     await page.waitForLoadState("networkidle");
-    await page.waitForTimeout(2_000);
+    await page.waitForSelector("text=/Already registered|Available/", { timeout: 15_000 });
+    await page.waitForTimeout(500);
     await page.screenshot({ path: shot("24-search-unavailable-desktop"), fullPage: true });
   });
 
