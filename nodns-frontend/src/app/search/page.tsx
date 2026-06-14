@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
@@ -25,6 +25,7 @@ function statusDot(status: string) {
 
 function SearchContent() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const q = searchParams.get("q") || "";
 
   const [available, setAvailable] = useState<boolean | null>(null);
@@ -32,6 +33,7 @@ function SearchContent() {
   const [pricing, setPricing] = useState<ZonePricing | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tripartite, setTripartite] = useState<TripartiteRecords | null>(null);
+  const [searchInput, setSearchInput] = useState("");
 
   const name = useMemo(() => sanitizeName(q), [q]);
 
@@ -87,15 +89,52 @@ function SearchContent() {
 
   if (!q) {
     return (
-      <div className="mx-auto max-w-[640px] py-20 text-center">
-        <h1 className="text-2xl font-bold mb-3">Search for a domain</h1>
-        <p className="text-muted-foreground">
-          Use the search bar above or{" "}
-          <Link href="/" className="text-primary hover:underline">
-            go home
-          </Link>{" "}
-          to find your .nodns.shop domain.
+      <div className="mx-auto max-w-[640px] py-12">
+        <h1 className="text-2xl font-bold mb-3 text-center">Search for a domain</h1>
+        <p className="text-sm text-muted-foreground mb-8 text-center">
+          Find your .nodns.shop subdomain. No account needed.
         </p>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            const cleaned = sanitizeName(searchInput);
+            if (cleaned) router.push(`./search?q=${encodeURIComponent(cleaned)}`);
+          }}
+          className="flex items-center rounded-xl border border-border bg-card overflow-hidden shadow-lg shadow-black/30 focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/20 transition-all mb-8"
+        >
+          <input
+            type="text"
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            placeholder="Find your .nodns.shop domain"
+            className="flex-1 min-w-0 bg-transparent px-4 py-3.5 text-base sm:px-5 sm:py-4 sm:text-lg text-foreground placeholder:text-muted-foreground outline-none"
+            autoFocus
+          />
+          <button
+            type="submit"
+            className="shrink-0 m-1.5 rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground hover:bg-primary/80 transition-colors sm:px-6 min-h-[44px]"
+          >
+            <span className="hidden sm:inline">Search</span>
+            <span className="sm:hidden">Go</span>
+          </button>
+        </form>
+        <div className="grid grid-cols-3 gap-4">
+          <div className="rounded-lg border border-border bg-card p-3 text-center">
+            <div className="text-xs text-muted-foreground mb-1">1-3 chars</div>
+            <div className="text-xl font-bold">200</div>
+            <div className="text-xs text-muted-foreground">sats</div>
+          </div>
+          <div className="rounded-lg border border-border bg-card p-3 text-center">
+            <div className="text-xs text-muted-foreground mb-1">4-6 chars</div>
+            <div className="text-xl font-bold">20</div>
+            <div className="text-xs text-muted-foreground">sats</div>
+          </div>
+          <div className="rounded-lg border border-primary bg-primary/10 p-3 text-center">
+            <div className="text-xs text-muted-foreground mb-1">7+ chars</div>
+            <div className="text-xl font-bold text-primary">4</div>
+            <div className="text-xs text-muted-foreground">sats</div>
+          </div>
+        </div>
       </div>
     );
   }
