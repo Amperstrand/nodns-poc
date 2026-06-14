@@ -132,6 +132,11 @@ function SearchContent() {
             <div className="flex items-baseline gap-2 mb-3">
               <span className="text-3xl font-bold text-foreground">{price}</span>
               <span className="text-sm text-muted-foreground">sats/year</span>
+              {name && (
+                <span className="ml-1 rounded-md bg-secondary px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                  {name.length <= 3 ? "1-3 chars" : name.length <= 6 ? "4-6 chars" : "7+ chars"}
+                </span>
+              )}
             </div>
             {pricing && (
               <p className="text-xs text-muted-foreground mb-5">
