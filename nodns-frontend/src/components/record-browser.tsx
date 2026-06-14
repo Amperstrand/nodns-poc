@@ -493,18 +493,21 @@ export function RecordBrowser() {
                     {recs.map((r, idx) => (
                       <div key={r.id} className="border-b border-border last:border-b-0">
                         {/* Mobile card layout */}
-                        <div className="md:hidden px-4 py-3.5">
-                          <div className="flex items-center justify-between mb-2">
+                        <div className="md:hidden px-4 py-4">
+                          <div className="flex items-center justify-between mb-2.5">
                             <span className="inline-flex items-center rounded-md bg-primary/10 ring-1 ring-primary/20 px-2 py-1 text-xs font-mono font-medium text-primary">
                               {r.type}
                             </span>
-                            <div className="flex items-center gap-1">
-                              {r.sources.map((s) => (
-                                <span key={s}>{sourceBadge(s)}</span>
-                              ))}
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground/70 font-mono">
+                              <span>TTL {r.ttl}s</span>
+                              <div className="flex items-center gap-1">
+                                {r.sources.map((s) => (
+                                  <span key={s}>{sourceBadge(s)}</span>
+                                ))}
+                              </div>
                             </div>
                           </div>
-                          <div className="font-mono text-xs font-medium text-foreground mb-1 break-all leading-relaxed">
+                          <div className="font-mono text-xs font-medium text-foreground mb-1.5 break-all leading-relaxed">
                             {r.fqdn}
                           </div>
                           <div className={`font-mono text-xs text-muted-foreground break-all leading-relaxed ${expandedRecords.has(r.id) ? "" : "line-clamp-2"}`}>
@@ -513,14 +516,11 @@ export function RecordBrowser() {
                           {r.value.length > 60 && (
                             <button
                               onClick={() => toggleRecord(r.id)}
-                              className="mt-1 text-xs font-medium text-primary hover:text-primary/80 transition-colors"
+                              className="mt-1.5 text-xs font-medium text-primary hover:text-primary/80 transition-colors"
                             >
                               {expandedRecords.has(r.id) ? "Show less" : "Show more"}
                             </button>
                           )}
-                          <div className="text-xs text-muted-foreground/80 mt-1.5 font-mono">
-                            TTL {r.ttl}s
-                          </div>
                         </div>
                         {/* Desktop grid layout */}
                         <div className={`hidden md:grid grid-cols-[1fr_80px_1fr_60px_70px] gap-3 px-5 py-4 hover:bg-muted/30 transition-colors ${idx % 2 === 1 ? 'bg-muted/10' : ''}`}>
