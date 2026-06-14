@@ -350,7 +350,7 @@ function WalletContent() {
       {/* ── Top Up Section ─────────────────────────────── */}
       {mintOnline && (
         <div className="rounded-xl border border-border bg-card p-4 sm:p-6 mb-4">
-          <h2 className="text-xs font-semibold mb-1 text-muted-foreground uppercase tracking-wider">
+          <h2 className="text-xs font-semibold mb-1 text-foreground/70 uppercase tracking-wider">
             Top Up via Lightning
           </h2>
           <p className="text-xs text-muted-foreground mb-4">
@@ -428,7 +428,7 @@ function WalletContent() {
 
       {/* ── Receive Section ───────────────────────────── */}
       <div className="rounded-xl border border-border bg-card p-4 sm:p-6 mb-4">
-        <h2 className="text-xs font-semibold mb-1 text-muted-foreground uppercase tracking-wider">
+        <h2 className="text-xs font-semibold mb-1 text-foreground/70 uppercase tracking-wider">
           Receive Tokens
         </h2>
         <p className="text-xs text-muted-foreground mb-4">
@@ -463,7 +463,7 @@ function WalletContent() {
 
       {/* ── Send Section ──────────────────────────────── */}
       <div className="rounded-xl border border-border bg-card p-4 sm:p-6 mb-4">
-        <h2 className="text-xs font-semibold mb-1 text-muted-foreground uppercase tracking-wider">
+        <h2 className="text-xs font-semibold mb-1 text-foreground/70 uppercase tracking-wider">
           Send Tokens
         </h2>
         <p className="text-xs text-muted-foreground mb-4">
@@ -529,7 +529,7 @@ function WalletContent() {
 
       {/* ── Transaction History ───────────────────────── */}
       <div className="rounded-xl border border-border bg-card p-4 sm:p-6 mb-4">
-        <h2 className="text-xs font-semibold mb-4 text-muted-foreground uppercase tracking-wider">
+        <h2 className="text-xs font-semibold mb-4 text-foreground/70 uppercase tracking-wider">
           History
         </h2>
 
@@ -594,7 +594,7 @@ function WalletContent() {
       {/* ── Identity Section ──────────────────────────── */}
       {initialized && (
         <div className="rounded-xl border border-border bg-card p-4 sm:p-6 mb-4">
-          <h2 className="text-xs font-semibold mb-4 text-muted-foreground uppercase tracking-wider">
+          <h2 className="text-xs font-semibold mb-4 text-foreground/70 uppercase tracking-wider">
             Identity
           </h2>
 

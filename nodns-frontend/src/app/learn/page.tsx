@@ -16,7 +16,7 @@ const SECTIONS = [
 
 function LearnContent() {
   return (
-    <div className="mx-auto max-w-[960px] py-8 md:py-12">
+    <div id="top" className="mx-auto max-w-[960px] py-8 md:py-12">
       <nav className="sticky top-16 z-30 -mx-6 mb-4 border-b border-border bg-background/95 px-6 py-2.5 backdrop-blur">
         <div className="flex items-center gap-1 overflow-x-auto">
           {SECTIONS.map((s) => (
@@ -34,6 +34,17 @@ function LearnContent() {
       <Consensus />
       <ProtocolSpec />
       <Roadmap />
+      <div className="mt-12 flex justify-center">
+        <a
+          href="#top"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-4 py-2.5 text-sm text-muted-foreground hover:text-foreground hover:border-primary/30 transition-colors min-h-[44px]"
+        >
+          <svg className="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="m18 15-6-6-6 6" />
+          </svg>
+          Back to top
+        </a>
+      </div>
     </div>
   );
 }

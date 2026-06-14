@@ -453,7 +453,7 @@ export function RecordBrowser() {
                       <span className="text-center">TTL</span>
                       <span className="text-center">Src</span>
                     </div>
-                    {recs.map((r) => (
+                    {recs.map((r, idx) => (
                       <div key={r.id} className="border-b border-border last:border-b-0">
                         {/* Mobile card layout */}
                         <div className="md:hidden px-4 py-3.5">
@@ -478,7 +478,7 @@ export function RecordBrowser() {
                           </div>
                         </div>
                         {/* Desktop grid layout */}
-                        <div className="hidden md:grid grid-cols-[1fr_80px_1fr_60px_70px] gap-3 px-5 py-4 hover:bg-muted/30 transition-colors">
+                        <div className={`hidden md:grid grid-cols-[1fr_80px_1fr_60px_70px] gap-3 px-5 py-4 hover:bg-muted/30 transition-colors ${idx % 2 === 1 ? 'bg-muted/10' : ''}`}>
                           <div className="font-mono text-sm font-medium truncate">
                             {r.fqdn}
                           </div>
