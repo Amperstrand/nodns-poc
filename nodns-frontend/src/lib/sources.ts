@@ -1,4 +1,5 @@
 import { API_BASE, DEFAULT_ZONE } from "./constants";
+import { MINT_URL } from "./wallet";
 import { queryDoh } from "./dns";
 import {
   queryRecordsByPubkey,
@@ -208,7 +209,7 @@ const DEFAULT_PRICING: ZonePricing = {
   update_price: 0,
   delete_price: 0,
   npub_names_free: true,
-  mint_url: "https://testnut.cashu.space",
+  mint_url: MINT_URL,
   mint_filter: "testnut",
 };
 
