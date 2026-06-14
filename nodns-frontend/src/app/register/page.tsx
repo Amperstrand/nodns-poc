@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useCallback, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { SiteHeader } from "@/components/site-header";
@@ -8,11 +8,13 @@ import { SiteFooter } from "@/components/site-footer";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { MINT_URL } from "@/lib/wallet";
 import { getPriceForName, sanitizeName, toFqdn } from "@/lib/pricing";
+import { fetchPricing } from "@/lib/sources";
 import { publishDnsEvent, keyPairFromNsec } from "@/lib/nostr";
 import { useWallet } from "@/contexts/WalletContext";
 import { useIdentity } from "@/contexts/IdentityContext";
 import { getEncodedToken } from "coco-cashu-core";
 import type { KeyPair } from "@/lib/types";
+import type { ZonePricing } from "@/lib/api";
 
 type Step = "review" | "paying" | "success" | "error";
 
@@ -27,8 +29,14 @@ function RegisterContent() {
   const [step, setStep] = useState<Step>("review");
   const [errorMsg, setErrorMsg] = useState("");
   const [txEventId, setTxEventId] = useState<string | null>(null);
+  const [pricing, setPricing] = useState<ZonePricing | null>(null);
 
-  const price = name ? getPriceForName(name) : 0;
+  useEffect(() => {
+    fetchPricing().then(setPricing).catch(() => {});
+  }, []);
+
+  const mintUrl = pricing?.mint_url ?? MINT_URL;
+  const price = name ? getPriceForName(name, pricing?.create_price ?? 2) : 0;
   const fqdn = name ? toFqdn(name) : "";
   const sufficient = balance >= price;
 
@@ -40,7 +48,7 @@ function RegisterContent() {
     setErrorMsg("");
 
     try {
-      const tokenObj = await manager.wallet.send(MINT_URL, price);
+      const tokenObj = await manager.wallet.send(mintUrl, price);
       const cashuToken = getEncodedToken(tokenObj);
 
       const keyPair: KeyPair = keyPairFromNsec(nsec);
@@ -56,7 +64,7 @@ function RegisterContent() {
         ],
         keyPair.secretKey,
         cashuToken,
-        MINT_URL,
+        mintUrl,
         price,
       );
 
@@ -67,7 +75,7 @@ function RegisterContent() {
       setStep("error");
       setErrorMsg(err instanceof Error ? err.message : "Payment failed");
     }
-  }, [manager, nsec, name, price, balance]);
+  }, [manager, nsec, name, price, balance, mintUrl]);
 
   if (!nameParam) {
     return (
