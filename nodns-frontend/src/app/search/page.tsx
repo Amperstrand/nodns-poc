@@ -91,7 +91,7 @@ function SearchContent() {
     return (
       <div className="mx-auto max-w-[640px] py-12">
         <h1 className="text-2xl font-bold mb-3 text-center">Search for a domain</h1>
-        <p className="text-sm text-muted-foreground mb-8 text-center">
+        <p className="text-sm text-foreground/60 mb-8 text-center">
           Find your .nodns.shop subdomain. No account needed.
         </p>
         <form
@@ -201,7 +201,7 @@ function SearchContent() {
               </span>
               <span className="text-red-400 font-bold text-xl">Already registered</span>
             </div>
-            <p className="text-sm text-muted-foreground mb-5">
+            <p className="text-sm text-foreground/60 mb-5">
               This domain is taken. Try a different name or check out these alternatives:
             </p>
             {suggestions().length > 0 && (
