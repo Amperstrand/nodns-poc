@@ -123,7 +123,8 @@ test.describe("Search - Pricing Tiers Display", () => {
   test("highlights correct tier based on name length", async ({ page }) => {
     await page.goto("./search?q=ab");
     await expect(page.getByText("Available!")).toBeVisible({ timeout: 10_000 });
-    const shortTier = page.locator("text=1-3 chars").locator("..");
+    const tiers = page.locator("text=Pricing tiers").locator("..");
+    const shortTier = tiers.locator("text=1-3 chars").locator("..");
     await expect(shortTier).toHaveClass(/border-primary/);
   });
 });
