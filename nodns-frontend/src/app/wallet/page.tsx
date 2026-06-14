@@ -695,7 +695,7 @@ export default function WalletPage() {
   return (
     <ErrorBoundary>
       <SiteHeader />
-      <main className="px-6 pb-16">
+      <main id="main-content" className="px-6 pb-16">
         <WalletContent />
       </main>
       <SiteFooter />

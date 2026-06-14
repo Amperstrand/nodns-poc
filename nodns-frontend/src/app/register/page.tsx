@@ -235,7 +235,7 @@ export default function RegisterPage() {
   return (
     <ErrorBoundary>
       <SiteHeader />
-      <main className="px-6 pb-16">
+      <main id="main-content" className="px-6 pb-16">
         <Suspense
           fallback={
             <div className="mx-auto max-w-[560px] py-20 text-center text-muted-foreground animate-pulse">
