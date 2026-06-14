@@ -481,7 +481,7 @@ export function RecordBrowser() {
                     className="rounded-b-lg bg-card ring-1 ring-foreground/10 ring-t-0 overflow-x-auto"
                   >
                     {/* Table header */}
-                    <div className="hidden md:grid grid-cols-[1fr_80px_1fr_60px_70px] gap-3 px-5 py-3 border-b border-border bg-muted/30 text-xs text-foreground/70 font-semibold uppercase tracking-wider">
+                    <div className="hidden md:grid grid-cols-[1fr_80px_1fr_60px_70px] gap-4 px-5 py-3 border-b-2 border-border bg-muted/30 text-xs text-foreground/70 font-semibold uppercase tracking-wider">
                       <span>FQDN</span>
                       <span>Type</span>
                       <span>Value</span>
@@ -521,7 +521,7 @@ export function RecordBrowser() {
                           )}
                         </div>
                         {/* Desktop grid layout */}
-                        <div className={`hidden md:grid grid-cols-[1fr_80px_1fr_60px_70px] gap-3 px-5 py-4 hover:bg-muted/30 transition-colors ${idx % 2 === 1 ? 'bg-muted/10' : ''}`}>
+                        <div className={`hidden md:grid grid-cols-[1fr_80px_1fr_60px_70px] gap-4 px-5 py-4 hover:bg-muted/30 transition-colors ${idx % 2 === 1 ? 'bg-muted/20' : ''}`}>
                           <div className="font-mono text-sm font-medium truncate">
                             {r.fqdn}
                           </div>

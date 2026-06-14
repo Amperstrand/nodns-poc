@@ -55,7 +55,7 @@ function historyColor(type: HistoryEntry["type"]): string {
 function StatusBadge({ status }: { status: string }) {
   const cfg =
     status === "ready"
-      ? { border: "border-emerald-800", bg: "bg-emerald-950/60", text: "text-emerald-400", dot: "bg-emerald-400" }
+      ? { border: "border-emerald-700", bg: "bg-emerald-900/50", text: "text-emerald-400", dot: "bg-emerald-400" }
       : status === "error"
         ? { border: "border-red-800", bg: "bg-red-950/60", text: "text-red-400", dot: "bg-red-400" }
         : { border: "border-yellow-800", bg: "bg-yellow-950/60", text: "text-yellow-400", dot: "bg-yellow-400 animate-pulse" };
