@@ -170,7 +170,7 @@ function RegisterContent() {
           )}
 
           {!sufficient && walletStatus === "ready" && (
-            <div className="rounded-lg border border-red-800 bg-red-950/40 px-4 py-3 text-sm text-red-400 mb-4">
+            <div className="rounded-lg border border-red-800 bg-red-950/40 px-4 py-3 text-sm font-medium text-red-400 mb-4">
               Add <span className="font-bold">{price - balance} more sats</span> to register this domain.
             </div>
           )}
