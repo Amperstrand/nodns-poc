@@ -364,7 +364,7 @@ function WalletContent() {
                 min={1}
                 value={topUpAmount}
                 onChange={(e) => setTopUpAmount(e.target.value)}
-                placeholder="100"
+                placeholder="Amount in sats"
                 className="pr-12 font-mono min-h-[44px]"
               />
               <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">
@@ -478,7 +478,7 @@ function WalletContent() {
               max={balance}
               value={sendAmount}
               onChange={(e) => setSendAmount(e.target.value)}
-              placeholder="0"
+              placeholder="Amount to send"
               className="pr-12 font-mono min-h-[44px]"
             />
             <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">
