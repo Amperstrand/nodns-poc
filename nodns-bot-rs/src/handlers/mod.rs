@@ -63,6 +63,9 @@ mod test_helpers {
             start_time: Instant::now(),
             dns_zones: vec![make_zone_config()],
             updaters: Arc::new(HashMap::new()),
+            nostr_client: nostr_sdk::Client::default(),
+            relay_urls: vec![],
+            db_path: std::path::PathBuf::from(":memory:"),
         })
     }
 
@@ -91,6 +94,9 @@ mod test_helpers {
             start_time: Instant::now(),
             dns_zones: vec![zc],
             updaters: Arc::new(updaters),
+            nostr_client: nostr_sdk::Client::default(),
+            relay_urls: vec![],
+            db_path: std::path::PathBuf::from(":memory:"),
         })
     }
 

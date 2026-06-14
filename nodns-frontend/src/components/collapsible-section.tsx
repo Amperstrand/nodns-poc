@@ -37,9 +37,9 @@ export function CollapsibleSection({
         aria-expanded={open}
       >
         <h2 className="text-[1.75rem] font-bold tracking-tight">{title}</h2>
-        <ChevronDownIcon
-          className={`size-5 text-muted-foreground transition-transform duration-200 ${open ? "rotate-180" : ""}`}
-        />
+        <span className={`flex size-8 items-center justify-center rounded-full bg-muted/40 transition-transform duration-200 ${open ? "rotate-180" : ""}`}>
+          <ChevronDownIcon className="size-5 text-foreground" />
+        </span>
       </button>
       <div
         className={`grid transition-all duration-300 ease-in-out ${

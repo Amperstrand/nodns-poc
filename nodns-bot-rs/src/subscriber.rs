@@ -48,9 +48,21 @@ pub struct Subscriber {
 
 impl Subscriber {
     /// Create a new subscriber from the Nostr section of the config.
+    #[allow(dead_code)]
     pub fn new(cfg: &NostrConfig, store: Arc<Store>) -> Self {
         Self {
             client: Client::default(),
+            relays: cfg.relays.clone(),
+            store,
+            handle: Mutex::new(None),
+            stopped: Arc::new(AtomicBool::new(false)),
+        }
+    }
+
+    /// Create a subscriber with a pre-existing Client (shared with AppState for health checks).
+    pub fn with_client(client: Client, cfg: &NostrConfig, store: Arc<Store>) -> Self {
+        Self {
+            client,
             relays: cfg.relays.clone(),
             store,
             handle: Mutex::new(None),

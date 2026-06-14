@@ -66,6 +66,9 @@ pub struct AppState {
     pub start_time: Instant,
     pub dns_zones: Vec<config::ZoneConfig>,
     pub updaters: Arc<HashMap<String, dns::Updater>>,
+    pub nostr_client: nostr_sdk::Client,
+    pub relay_urls: Vec<String>,
+    pub db_path: std::path::PathBuf,
 }
 
 // ---------------------------------------------------------------------------
@@ -365,6 +368,7 @@ async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // ── HTTP health server ──
+    let nostr_client = nostr_sdk::Client::default();
     let nip05_state = Arc::new(nip05::Nip05State {
         store: store.clone(),
         registrar_pubkeys: cfg.registrar_keys.clone(),
@@ -380,6 +384,9 @@ async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
         start_time: Instant::now(),
         dns_zones: cfg.dns.zones.clone(),
         updaters: updaters.clone(),
+        nostr_client: nostr_client.clone(),
+        relay_urls: cfg.nostr.relays.clone(),
+        db_path: std::path::PathBuf::from(&cfg.store.path),
     });
     let bind = cfg.server.bind.clone();
     let http_state = app_state.clone();
@@ -499,7 +506,7 @@ async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     // ── Nostr subscriber ──
-    let subscriber = Subscriber::new(&cfg.nostr, store.clone());
+    let subscriber = Subscriber::with_client(nostr_client, &cfg.nostr, store.clone());
     let mut event_rx = subscriber.subscribe()?;
 
     // ── Lease expiry task ──

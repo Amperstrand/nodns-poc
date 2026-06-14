@@ -87,6 +87,12 @@ pub async fn process_nostr_event(
     let pubkey_hex = evt.pubkey.to_hex();
     let created_at = evt.created_at.as_secs() as i64;
 
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs() as i64;
+    metrics.last_event_at.store(now, Ordering::Relaxed);
+
     let npub = match evt.pubkey.to_bech32() {
         Ok(n) => n,
         Err(e) => {

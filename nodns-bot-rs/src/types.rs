@@ -196,6 +196,7 @@ pub struct Metrics {
     pub events_rejected: std::sync::atomic::AtomicI64,
     pub ddns_successes: std::sync::atomic::AtomicI64,
     pub ddns_failures: std::sync::atomic::AtomicI64,
+    pub last_event_at: std::sync::atomic::AtomicI64,
 }
 
 /// Build a fully qualified domain name: [name.]npub1xxx.zone.

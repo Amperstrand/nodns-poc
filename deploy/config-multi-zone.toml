@@ -9,7 +9,7 @@ relays = [
     "wss://relay.damus.io",
     "wss://nos.lol",
     "wss://relay.nostr.band",
-    "wss://nostr.wine",
+    "wss://relay.tollgate.me",
 ]
 zone = "multi"
 reconnect_min = "1s"

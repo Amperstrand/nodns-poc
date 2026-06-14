@@ -1,0 +1,41 @@
+name: Domain Expiry Check
+
+on:
+  schedule:
+    # 08:00 UTC on the 1st of each month
+    - cron: "0 8 1 * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check-expiry:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify domain expiry config matches RDAP
+        run: |
+          chmod +x deploy/check-expiry.sh
+          ./deploy/check-expiry.sh
+
+      - name: Create issue on failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: "Domain expiry mismatch detected",
+              body: [
+                "The `operator_lease_expires` in `deploy/config-multi-zone.toml` does not match the RDAP record for `nodns.shop`.",
+                "",
+                "**Action required:** Run `./deploy/check-expiry.sh --update` locally to sync the config, then commit and push.",
+                "",
+                "[View workflow run](" + context.serverUrl + "/" + context.repo.owner + "/" + context.repo.repo + "/actions/runs/" + context.runId + ")"
+              ].join("\n"),
+              labels: ["bug", "infrastructure"]
+            });

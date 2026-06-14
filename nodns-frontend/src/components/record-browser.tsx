@@ -457,7 +457,7 @@ export function RecordBrowser() {
                 <div
                   data-testid="npub-group-header"
                   onClick={() => toggleGroup(npub)}
-                  className="flex cursor-pointer items-center justify-between rounded-lg bg-card ring-1 ring-foreground/10 border-l-2 border-primary px-4 py-3.5 select-none hover:bg-muted/30 transition-colors"
+                  className="flex cursor-pointer items-center justify-between rounded-lg bg-muted/20 ring-1 ring-foreground/10 border-l-4 border-primary px-4 py-3.5 select-none hover:bg-muted/40 transition-colors"
                 >
                   <div className="flex items-center gap-2 min-w-0">
                     <GlobeIcon className="size-4 text-muted-foreground shrink-0" />
@@ -467,9 +467,9 @@ export function RecordBrowser() {
                       </span>
                       .{DEFAULT_ZONE}
                     </span>
-                    <Badge variant="secondary" className="text-xs shrink-0">
-                      {recs.length} records
-                    </Badge>
+                    <span className="inline-flex items-center rounded-full bg-primary/15 px-2 py-0.5 text-xs font-medium text-primary shrink-0">
+                      {recs.length} {recs.length === 1 ? "record" : "records"}
+                    </span>
                   </div>
                   {expandedGroups.has(npub) ? (
                     <ChevronDownIcon className="size-4 text-muted-foreground shrink-0" />

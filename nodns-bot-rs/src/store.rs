@@ -88,6 +88,9 @@ pub enum StoreError {
     #[error("counting records for pubkey {0}: {1}")]
     RecordCountByPubkey(String, #[source] rusqlite::Error),
 
+    #[error("counting total records: {0}")]
+    TotalRecordCount(#[source] rusqlite::Error),
+
     #[error("counting recent events for pubkey {0}: {1}")]
     EventsInLastMinute(String, #[source] rusqlite::Error),
 
@@ -428,6 +431,17 @@ impl Store {
             .map_err(|e| StoreError::RecordCountByPubkey(pubkey.to_string(), e))?;
 
         Ok(count as usize)
+    }
+
+    /// Return the total count of active (non-deleted) records across all zones.
+    pub fn total_record_count(&self) -> Result<i64, StoreError> {
+        let conn = self.conn();
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM events WHERE deleted = 0", [], |row| {
+                row.get(0)
+            })
+            .map_err(StoreError::TotalRecordCount)?;
+        Ok(count)
     }
 
     /// Return the number of events processed for a pubkey in the last 60 seconds.
