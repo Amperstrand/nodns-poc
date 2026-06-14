@@ -46,6 +46,25 @@ test.describe("Learn Page", () => {
     await page.waitForTimeout(2_000);
     expect(errors.length).toBe(0);
   });
+
+  test("collapsible sections expand and collapse", async ({ page }) => {
+    await page.goto("./learn");
+    await expect(
+      page.getByRole("heading", { name: /Roadmap/i })
+    ).toBeVisible({ timeout: 10_000 });
+
+    const roadmapButton = page
+      .getByRole("button", { name: /Roadmap/i })
+      .first();
+
+    await expect(roadmapButton).toHaveAttribute("aria-expanded", "false");
+
+    await roadmapButton.click();
+    await expect(roadmapButton).toHaveAttribute("aria-expanded", "true");
+
+    await roadmapButton.click();
+    await expect(roadmapButton).toHaveAttribute("aria-expanded", "false");
+  });
 });
 
 test.describe("Discoveries Page", () => {

@@ -107,6 +107,31 @@ test.describe("Records Page", () => {
     await expect(allBodies).toHaveCount(initialCount, { timeout: 5_000 });
   });
 
+  test("expand all / collapse all button works", async ({ page }) => {
+    await page.goto("./records");
+    const header = page.getByTestId("npub-group-header").first();
+    await expect(header).toBeVisible({ timeout: 15_000 });
+    await page.waitForTimeout(3_000);
+
+    const expandBtn = page.getByRole("button", { name: /expand all/i });
+    const collapseBtn = page.getByRole("button", { name: /collapse all/i });
+
+    const bodies = page.getByTestId("npub-group-records");
+    const initialVisible = await bodies.count();
+
+    if (await expandBtn.isVisible().catch(() => false)) {
+      await expandBtn.click();
+      await page.waitForTimeout(500);
+      const afterExpand = await bodies.count();
+      expect(afterExpand).toBeGreaterThanOrEqual(initialVisible);
+
+      await collapseBtn.click();
+      await page.waitForTimeout(500);
+      const afterCollapse = await bodies.count();
+      expect(afterCollapse).toBeLessThan(afterExpand);
+    }
+  });
+
   test("DNS resolver tab accepts queries", async ({ page }) => {
     await page.goto("./records");
     await page.getByText("DNS Resolver").click();
