@@ -444,7 +444,7 @@ function DomainDetailContent() {
     return (
       <div className="mx-auto max-w-[560px] py-20 text-center">
         <h1 className="text-2xl font-bold mb-3">No domain selected</h1>
-        <p className="text-muted-foreground mb-6">
+        <p className="text-foreground/60 mb-6">
           Go to your dashboard to manage domains.
         </p>
         <Link href="/dashboard">
@@ -607,7 +607,7 @@ function DomainDetailContent() {
         {/* Empty state */}
         {pageStatus === "ready" && records.length === 0 && !addingRecord && (
           <div className="px-5 py-12 text-center">
-            <p className="text-muted-foreground text-sm mb-4">
+            <p className="text-foreground/60 text-sm mb-4">
               No DNS records yet. Add one to get started.
             </p>
             <Button
