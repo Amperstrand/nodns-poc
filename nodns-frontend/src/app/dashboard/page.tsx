@@ -352,20 +352,20 @@ function DashboardContent() {
             Your decentralized subdomain is a few sats away. Register one to control DNS records via Nostr — no registrar, no middleman.
           </p>
           <div className="mb-8 flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-6 text-xs text-muted-foreground max-w-[480px] mx-auto">
-            <div className="flex flex-col items-center gap-1.5">
-              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/15 ring-1 ring-primary/30 font-mono font-bold text-primary">1</span>
-              <span>Search a name</span>
-            </div>
+            <Link href="/" className="flex flex-col items-center gap-1.5 group cursor-pointer">
+              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/15 ring-1 ring-primary/30 font-mono font-bold text-primary transition-all group-hover:bg-primary/25 group-hover:ring-primary/50 group-hover:scale-110">1</span>
+              <span className="transition-colors group-hover:text-foreground">Search a name</span>
+            </Link>
             <ArrowRightIcon className="size-4 text-primary/40 rotate-90 sm:rotate-0" />
-            <div className="flex flex-col items-center gap-1.5">
-              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/15 ring-1 ring-primary/30 font-mono font-bold text-primary">2</span>
-              <span>Top up wallet</span>
-            </div>
+            <Link href="/wallet" className="flex flex-col items-center gap-1.5 group cursor-pointer">
+              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/15 ring-1 ring-primary/30 font-mono font-bold text-primary transition-all group-hover:bg-primary/25 group-hover:ring-primary/50 group-hover:scale-110">2</span>
+              <span className="transition-colors group-hover:text-foreground">Top up wallet</span>
+            </Link>
             <ArrowRightIcon className="size-4 text-primary/40 rotate-90 sm:rotate-0" />
-            <div className="flex flex-col items-center gap-1.5">
-              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/15 ring-1 ring-primary/30 font-mono font-bold text-primary">3</span>
-              <span>Register &amp; manage</span>
-            </div>
+            <Link href="/" className="flex flex-col items-center gap-1.5 group cursor-pointer">
+              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/15 ring-1 ring-primary/30 font-mono font-bold text-primary transition-all group-hover:bg-primary/25 group-hover:ring-primary/50 group-hover:scale-110">3</span>
+              <span className="transition-colors group-hover:text-foreground">Register &amp; manage</span>
+            </Link>
           </div>
           <Link href="/">
             <Button>
