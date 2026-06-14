@@ -79,11 +79,8 @@ const STATUS_LABELS: Record<RoadmapStatus, string> = {
 
 export function Roadmap() {
   return (
-    <section id="roadmap" className="px-6 py-16">
+    <div className="px-6 py-8">
       <div className="mx-auto max-w-[960px]">
-        <h2 className="mb-6 text-[1.75rem] font-bold tracking-tight">
-          Roadmap
-        </h2>
         <div className="rounded-xl border border-border bg-card p-6">
           {ROADMAP_ITEMS.map((item, i) => (
             <div
@@ -104,6 +101,6 @@ export function Roadmap() {
           ))}
         </div>
       </div>
-    </section>
+    </div>
   );
 }

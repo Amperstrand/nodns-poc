@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
 import { ErrorBoundary } from "@/components/error-boundary";
+import { CollapsibleSection } from "@/components/collapsible-section";
 import { Architecture } from "@/components/architecture";
 import { Consensus } from "@/components/consensus";
 import { ProtocolSpec } from "@/components/protocol-spec";
@@ -30,10 +31,18 @@ function LearnContent() {
           ))}
         </div>
       </nav>
-      <Architecture />
-      <Consensus />
-      <ProtocolSpec />
-      <Roadmap />
+      <CollapsibleSection id="architecture" title="Architecture" defaultOpen>
+        <Architecture />
+      </CollapsibleSection>
+      <CollapsibleSection id="consensus" title="Consensus">
+        <Consensus />
+      </CollapsibleSection>
+      <CollapsibleSection id="protocol" title="Protocol">
+        <ProtocolSpec />
+      </CollapsibleSection>
+      <CollapsibleSection id="roadmap" title="Roadmap">
+        <Roadmap />
+      </CollapsibleSection>
       <div className="mt-12 flex justify-center">
         <a
           href="#top"

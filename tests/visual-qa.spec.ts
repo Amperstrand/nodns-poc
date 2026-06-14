@@ -265,6 +265,42 @@ test.describe("Visual QA - Mobile (390x844)", () => {
 });
 
 test.describe("Visual QA - Registered Domain States", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.route("**/api/records**", async (route) => {
+      const url = route.request().url();
+      if (url.includes("e2elivetest")) {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            records: [
+              {
+                type: "TXT",
+                name: "",
+                rdata: "e2e live test record",
+                ttl: 3600,
+                fqdn: "e2elivetest.nodns.shop",
+                npub: "npub1afraxead9ra43p8gr77u2rmy3pln6nppeku748caxp8pdgpl5uqs02vtfr",
+                created_at: Math.floor(Date.now() / 1000) - 86400,
+              },
+              {
+                type: "A",
+                name: "",
+                rdata: "46.224.104.12",
+                ttl: 3600,
+                fqdn: "e2elivetest.nodns.shop",
+                npub: "npub1afraxead9ra43p8gr77u2rmy3pln6nppeku748caxp8pdgpl5uqs02vtfr",
+                created_at: Math.floor(Date.now() / 1000) - 86400,
+              },
+            ],
+          }),
+        });
+      } else {
+        await route.continue();
+      }
+    });
+  });
+
   test("domain page - registered domain with records", async ({ page }) => {
     await page.goto("./");
     await page.evaluate(() => {

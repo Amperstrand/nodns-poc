@@ -279,9 +279,8 @@ function ModelCard({ model }: { model: Model }) {
 
 export function Consensus() {
   return (
-    <section id="consensus" className="px-6 py-16">
+    <div className="px-6 py-8">
       <div className="mx-auto max-w-[960px]">
-        <h1 className="mb-2 text-[1.75rem] font-bold tracking-tight">{data.title}</h1>
         <p className="mb-4 text-lg text-muted-foreground">{data.subtitle}</p>
         <p className="mb-8 text-muted-foreground">{data.intro}</p>
 
@@ -366,6 +365,6 @@ export function Consensus() {
           <p className="text-sm text-yellow-400">{data.closing.nothing_is_production}</p>
         </div>
       </div>
-    </section>
+    </div>
   );
 }

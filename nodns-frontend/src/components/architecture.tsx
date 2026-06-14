@@ -22,11 +22,8 @@ export function Architecture() {
   ];
 
   return (
-    <section id="architecture" className="px-6 py-16">
+    <div className="px-6 py-8">
       <div className="mx-auto max-w-[960px]">
-        <h2 className="mb-6 text-[1.75rem] font-bold tracking-tight">
-          Architecture
-        </h2>
         <div className="mt-4">
           <div className="flex gap-0 max-[700px]:flex-col max-[700px]:gap-2">
             {/* Nostr Relays */}
@@ -143,6 +140,6 @@ export function Architecture() {
           </div>
         </div>
       </div>
-    </section>
+    </div>
   );
 }

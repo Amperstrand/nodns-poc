@@ -1,10 +1,7 @@
 export function ProtocolSpec() {
   return (
-    <section id="protocol" className="px-6 py-16">
+    <div className="px-6 py-8">
       <div className="mx-auto max-w-[960px]">
-        <h2 className="mb-6 text-[1.75rem] font-bold tracking-tight">
-          Protocol Specification
-        </h2>
         <p className="mb-4 text-muted-foreground">
           Nostr kind 11111 events with structured tags for DNS records,
           delegation, payments, and registrar management.
@@ -226,6 +223,6 @@ Delegated names:
           ))}
         </div>
       </div>
-    </section>
+    </div>
   );
 }

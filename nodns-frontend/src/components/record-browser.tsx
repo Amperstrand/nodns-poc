@@ -53,6 +53,7 @@ export function RecordBrowser() {
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({ total: 0, domains: 0, types: 0 });
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const [expandedRecords, setExpandedRecords] = useState<Set<string>>(new Set());
   const [nostrEvents, setNostrEvents] = useState<EventWithRelay[]>([]);
   const [expandedEvents, setExpandedEvents] = useState<Set<string>>(new Set());
   const [recordFilter, setRecordFilter] = useState("");
@@ -141,10 +142,9 @@ export function RecordBrowser() {
       });
 
       setExpandedGroups((prev) => {
-        const next = new Set(prev);
-        for (const npub of npubs) {
-          if (!next.has(npub)) next.add(npub);
-        }
+        if (prev.size > 0) return prev;
+        const next = new Set<string>();
+        if (npubs.length > 0) next.add(npubs[0]);
         return next;
       });
     } catch {
@@ -181,6 +181,15 @@ export function RecordBrowser() {
       const next = new Set(prev);
       if (next.has(npub)) next.delete(npub);
       else next.add(npub);
+      return next;
+    });
+  };
+
+  const toggleRecord = (id: string) => {
+    setExpandedRecords((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
   };
@@ -470,9 +479,17 @@ export function RecordBrowser() {
                           <div className="font-mono text-xs font-medium text-foreground mb-1 break-all leading-relaxed">
                             {r.fqdn}
                           </div>
-                          <div className="font-mono text-xs text-muted-foreground break-all line-clamp-2 leading-relaxed">
+                          <div className={`font-mono text-xs text-muted-foreground break-all leading-relaxed ${expandedRecords.has(r.id) ? "" : "line-clamp-2"}`}>
                             {r.value}
                           </div>
+                          {r.value.length > 60 && (
+                            <button
+                              onClick={() => toggleRecord(r.id)}
+                              className="mt-1 text-xs font-medium text-primary hover:text-primary/80 transition-colors"
+                            >
+                              {expandedRecords.has(r.id) ? "Show less" : "Show more"}
+                            </button>
+                          )}
                           <div className="text-xs text-muted-foreground/80 mt-1.5 font-mono">
                             TTL {r.ttl}s
                           </div>
