@@ -34,19 +34,19 @@ export function FAQ() {
               key={item.q}
               className="group rounded-xl bg-card ring-1 ring-foreground/10"
             >
-              <summary className="flex cursor-pointer items-center justify-between px-5 py-4 text-sm font-medium list-none hover:bg-muted/30 transition-colors">
+              <summary className="flex cursor-pointer items-center justify-between px-5 py-4 text-sm font-medium list-none hover:bg-muted/30 transition-colors [&::-webkit-details-marker]:hidden">
                 {item.q}
-                <span className="ml-2 shrink-0 text-muted-foreground transition-transform group-open:rotate-45">
+                <span className="ml-2 flex size-6 shrink-0 items-center justify-center rounded-full bg-muted/40 text-foreground transition-transform duration-200 group-open:rotate-45">
                   +
                 </span>
               </summary>
-              <div className="px-5 pb-4 text-sm text-muted-foreground">
+              <div className="px-5 pb-4 text-sm text-foreground/60">
                 {item.a}
               </div>
             </details>
           ))}
         </div>
-        <p className="mt-4 text-center text-xs text-muted-foreground">
+        <p className="mt-4 text-center text-xs text-foreground/50">
           More questions answered in{" "}
           <a href="/learn" className="text-primary hover:underline">
             Learn →
