@@ -28,7 +28,7 @@ export function RecordBrowserTeaser() {
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
             <div>
               <h2 className="text-xl font-bold mb-1">DNS Record Browser</h2>
-              <p className="text-sm text-muted-foreground mb-4">
+              <p className="text-sm text-foreground/60 mb-4">
                 Browse all DNS records verified from three independent sources
               </p>
               {stats && (
