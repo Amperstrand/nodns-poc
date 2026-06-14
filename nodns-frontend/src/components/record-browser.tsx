@@ -489,7 +489,7 @@ export function RecordBrowser() {
                       <span className="text-center">Src</span>
                     </div>
                     {recs.map((r, idx) => (
-                      <div key={r.id} className="border-b border-foreground/25 last:border-b-0">
+                      <div key={r.id} className="border-b-2 border-foreground/30 last:border-b-0">
                         {/* Mobile card layout */}
                         <div className="md:hidden px-4 py-4">
                           <div className="flex items-center justify-between mb-2.5">
