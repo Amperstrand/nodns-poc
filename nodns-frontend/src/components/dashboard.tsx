@@ -10,7 +10,8 @@ import {
 import { queryDoh } from "@/lib/dns";
 import { DEFAULT_ZONE } from "@/lib/constants";
 import { validateRecord } from "@/lib/validation";
-import { fetchZonePricing, type ZonePricing } from "@/lib/api";
+import { type ZonePricing } from "@/lib/api";
+import { fetchPricing } from "@/lib/sources";
 import type { KeyPair, PendingRecord, DnsRecord, FeedbackType } from "@/lib/types";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "";
@@ -244,7 +245,7 @@ export function Dashboard() {
 
   useEffect(() => {
     let cancelled = false;
-    fetchZonePricing(DEFAULT_ZONE)
+    fetchPricing()
       .then((data) => {
         if (!cancelled) setPricing(data);
       })

@@ -161,13 +161,6 @@ export interface ZonePricing {
   mint_filter: string;
 }
 
-export async function fetchZonePricing(zone: string): Promise<ZonePricing> {
-  const res = await safeFetch(`${API_BASE}/api/zones/${encodeURIComponent(zone)}/pricing`, {
-    headers: {},
-  });
-  return res.json();
-}
-
 export interface CheckSource {
   registered: boolean;
   records: Array<{
