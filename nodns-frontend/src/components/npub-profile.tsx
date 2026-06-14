@@ -78,7 +78,9 @@ export function NpubProfile() {
       if (kind0) {
         try {
           setMetadata(JSON.parse(kind0.content));
-        } catch {}
+        } catch {
+          // Invalid JSON metadata — skip update
+        }
       }
 
       const kind1s = noteEvents

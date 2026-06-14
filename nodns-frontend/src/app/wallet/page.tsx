@@ -228,7 +228,9 @@ function WalletContent() {
     try {
       const result = await topUp(amount);
       setInvoice(result.invoice);
-    } catch {}
+    } catch {
+      // topUp error already captured in topUpError state
+    }
   }, [topUp, topUpAmount]);
 
   const handleCopyInvoice = useCallback(async () => {

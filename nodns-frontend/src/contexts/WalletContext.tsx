@@ -48,7 +48,9 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     try {
       const balances = await mgr.wallet.getBalances();
       setBalance(balances[MINT_URL] ?? 0);
-    } catch {}
+    } catch {
+      // Balance refresh failure is non-critical — previous balance stays
+    }
   }, []);
 
   const topUp = useCallback(async (amount: number): Promise<{ invoice: string; operationId: string }> => {
@@ -121,7 +123,9 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         try {
           const balances = await manager.wallet.getBalances();
           bal = balances[MINT_URL] ?? 0;
-        } catch {}
+        } catch {
+          // Balance fetch failure during init — defaults to 0
+        }
 
         setError(null);
         setMintOnline(mintOk);
