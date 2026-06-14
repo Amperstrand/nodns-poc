@@ -239,6 +239,19 @@ export function RecordBrowser() {
     grouped[key].push(r);
   }
 
+  const allGroupKeys = Object.keys(grouped);
+  const allExpanded =
+    allGroupKeys.length > 0 &&
+    allGroupKeys.every((k) => expandedGroups.has(k));
+
+  const toggleAllGroups = () => {
+    if (allExpanded) {
+      setExpandedGroups(new Set());
+    } else {
+      setExpandedGroups(new Set(allGroupKeys));
+    }
+  };
+
   const trustBadge =
     activeTab === "api"
       ? { icon: "🗄️", text: "Source: API database + Nostr relay merge", authority: false }
@@ -402,6 +415,21 @@ export function RecordBrowser() {
                   Clear
                 </button>
               )}
+            </div>
+          )}
+
+          {/* Expand/Collapse all + group count */}
+          {!loading && mergedRecords.length > 0 && (
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs text-muted-foreground">
+                {allGroupKeys.length} {allGroupKeys.length === 1 ? "domain" : "domains"} · {filteredRecords.length} records
+              </span>
+              <button
+                onClick={toggleAllGroups}
+                className="text-xs font-medium text-primary hover:text-primary/80 transition-colors"
+              >
+                {allExpanded ? "Collapse all" : "Expand all"}
+              </button>
             </div>
           )}
 
