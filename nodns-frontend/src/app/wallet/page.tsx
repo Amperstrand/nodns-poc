@@ -438,7 +438,7 @@ function WalletContent() {
         <textarea
           value={tokenInput}
           onChange={(e) => setTokenInput(e.target.value)}
-          placeholder="cashuA..."
+          placeholder="Paste your Cashu token here…"
           rows={3}
           className="w-full rounded-lg border border-input bg-transparent px-3 py-2 text-sm font-mono text-foreground placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 outline-none resize-none mb-3"
         />

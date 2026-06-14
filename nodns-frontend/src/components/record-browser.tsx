@@ -454,41 +454,50 @@ export function RecordBrowser() {
                       <span className="text-center">Src</span>
                     </div>
                     {recs.map((r) => (
-                      <div
-                        key={r.id}
-                        className="grid grid-cols-1 md:grid-cols-[1fr_80px_1fr_60px_70px] gap-2 md:gap-3 px-5 py-3 border-b border-border last:border-b-0 hover:bg-muted/30 transition-colors"
-                      >
-                        <div className="font-mono text-xs font-medium truncate">
-                          <span className="md:hidden text-xs text-muted-foreground mr-1">
-                            FQDN:
-                          </span>
-                          {r.fqdn}
+                      <div key={r.id} className="border-b border-border last:border-b-0">
+                        {/* Mobile card layout */}
+                        <div className="md:hidden px-4 py-3.5">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="inline-flex items-center rounded-md bg-primary/10 ring-1 ring-primary/20 px-2 py-1 text-xs font-mono font-medium text-primary">
+                              {r.type}
+                            </span>
+                            <div className="flex items-center gap-1">
+                              {r.sources.map((s) => (
+                                <span key={s}>{sourceBadge(s)}</span>
+                              ))}
+                            </div>
+                          </div>
+                          <div className="font-mono text-xs font-medium text-foreground mb-1 break-all leading-relaxed">
+                            {r.fqdn}
+                          </div>
+                          <div className="font-mono text-xs text-muted-foreground break-all leading-relaxed">
+                            {r.value}
+                          </div>
+                          <div className="text-[10px] text-muted-foreground/60 mt-1.5 font-mono">
+                            TTL {r.ttl}s
+                          </div>
                         </div>
-                        <div>
-                          <span className="md:hidden text-xs text-muted-foreground mr-1">
-                            Type:
-                          </span>
-                          <span className="inline-flex items-center rounded-md bg-secondary px-2 py-0.5 text-xs font-mono font-medium">
-                            {r.type}
-                          </span>
-                        </div>
-                        <div className="font-mono text-xs truncate">
-                          <span className="md:hidden text-xs text-muted-foreground mr-1">
-                            Value:
-                          </span>
-                          {r.value}
-                        </div>
-                        <div className="text-sm text-muted-foreground text-center">
-                          <span className="md:hidden text-xs mr-1">TTL:</span>
-                          {r.ttl}
-                        </div>
-                        <div className="flex items-center justify-center gap-0.5">
-                          <span className="md:hidden text-xs text-muted-foreground mr-1">
-                            Sources:
-                          </span>
-                          {r.sources.map((s) => (
-                            <span key={s}>{sourceBadge(s)}</span>
-                          ))}
+                        {/* Desktop grid layout */}
+                        <div className="hidden md:grid grid-cols-[1fr_80px_1fr_60px_70px] gap-3 px-5 py-3 hover:bg-muted/30 transition-colors">
+                          <div className="font-mono text-xs font-medium truncate">
+                            {r.fqdn}
+                          </div>
+                          <div>
+                            <span className="inline-flex items-center rounded-md bg-secondary px-2 py-0.5 text-xs font-mono font-medium">
+                              {r.type}
+                            </span>
+                          </div>
+                          <div className="font-mono text-xs truncate">
+                            {r.value}
+                          </div>
+                          <div className="text-sm text-muted-foreground text-center">
+                            {r.ttl}
+                          </div>
+                          <div className="flex items-center justify-center gap-0.5">
+                            {r.sources.map((s) => (
+                              <span key={s}>{sourceBadge(s)}</span>
+                            ))}
+                          </div>
                         </div>
                       </div>
                     ))}
