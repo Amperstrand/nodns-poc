@@ -45,6 +45,15 @@ function LearnContent() {
           Back to top
         </a>
       </div>
+      <a
+        href="#top"
+        aria-label="Back to top"
+        className="fixed bottom-6 right-6 z-40 flex size-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg ring-1 ring-primary/50 hover:bg-primary/80 hover:scale-110 transition-all"
+      >
+        <svg className="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="m18 15-6-6-6 6" />
+        </svg>
+      </a>
     </div>
   );
 }
