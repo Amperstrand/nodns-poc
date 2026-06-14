@@ -481,7 +481,7 @@ export function RecordBrowser() {
                     className="rounded-b-lg bg-card ring-1 ring-foreground/10 ring-t-0 overflow-x-auto"
                   >
                     {/* Table header */}
-                    <div className="hidden md:grid grid-cols-[1fr_80px_1fr_60px_70px] gap-4 px-5 py-3 border-b-2 border-foreground/20 bg-foreground/[0.10] text-xs text-foreground/70 font-semibold uppercase tracking-wider">
+                    <div className="hidden md:grid grid-cols-[1fr_80px_1fr_60px_70px] gap-4 px-5 py-3 border-b-2 border-foreground/30 bg-foreground/[0.15] text-xs text-foreground/70 font-semibold uppercase tracking-wider">
                       <span>FQDN</span>
                       <span>Type</span>
                       <span>Value</span>
@@ -489,7 +489,7 @@ export function RecordBrowser() {
                       <span className="text-center">Src</span>
                     </div>
                     {recs.map((r, idx) => (
-                      <div key={r.id} className="border-b border-foreground/10 last:border-b-0">
+                      <div key={r.id} className="border-b border-foreground/25 last:border-b-0">
                         {/* Mobile card layout */}
                         <div className="md:hidden px-4 py-4">
                           <div className="flex items-center justify-between mb-2.5">
@@ -521,7 +521,7 @@ export function RecordBrowser() {
                           )}
                         </div>
                         {/* Desktop grid layout */}
-                        <div className={`hidden md:grid grid-cols-[1fr_80px_1fr_60px_70px] gap-4 px-5 py-5 hover:bg-foreground/[0.15] transition-colors ${idx % 2 === 1 ? 'bg-foreground/[0.08]' : ''}`}>
+                        <div className={`hidden md:grid grid-cols-[1fr_80px_1fr_60px_70px] gap-4 px-5 py-5 hover:bg-foreground/[0.22] transition-colors ${idx % 2 === 1 ? 'bg-foreground/[0.12]' : ''}`}>
                           <div className="font-mono text-sm font-medium truncate">
                             {r.fqdn}
                           </div>
