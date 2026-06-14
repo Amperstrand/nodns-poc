@@ -6,7 +6,7 @@ import Link from "next/link";
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
 import { ErrorBoundary } from "@/components/error-boundary";
-import { DEFAULT_ZONE } from "@/lib/constants";
+import { DEFAULT_ZONE, statusDot } from "@/lib/constants";
 import { getPriceForName, sanitizeName, toFqdn } from "@/lib/pricing";
 import {
   fetchTripartiteRecords,
@@ -15,13 +15,6 @@ import {
   type TripartiteRecords,
 } from "@/lib/sources";
 import type { ZonePricing } from "@/lib/types";
-
-function statusDot(status: string) {
-  if (status === "ok") return "🟢";
-  if (status === "error") return "🔴";
-  if (status === "loading") return "🟡";
-  return "⚫";
-}
 
 function SearchContent() {
   const searchParams = useSearchParams();

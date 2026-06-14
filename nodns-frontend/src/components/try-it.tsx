@@ -68,7 +68,7 @@ dig +trace npub190queyng2pmx0jfw5rkx4fjjl3u0zxz6nlyaja53p2n0ydupr6jsdnqt8q.nodns
           <h3 className="mb-3 text-lg font-semibold">
             In-Browser DNS Lookup
           </h3>
-          <p className="mb-4 text-sm text-muted-foreground">
+          <p className="mb-4 text-sm text-foreground/60">
             Resolve DNS records directly from your browser via Cloudflare
             DNS-over-HTTPS:
           </p>

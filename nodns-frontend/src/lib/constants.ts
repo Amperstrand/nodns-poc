@@ -28,3 +28,10 @@ export const DNS_STATUS_CODES: Record<number, string> = {
   4: 'Not Implemented',
   5: 'Refused',
 };
+
+export function statusDot(status: string): string {
+  if (status === 'ok') return '🟢';
+  if (status === 'error') return '🔴';
+  if (status === 'loading') return '🟡';
+  return '⚫';
+}

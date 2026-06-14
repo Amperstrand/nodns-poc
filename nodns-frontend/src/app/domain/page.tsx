@@ -34,6 +34,7 @@ import {
 import { useIdentity } from "@/contexts/IdentityContext";
 import { useWallet } from "@/contexts/WalletContext";
 import { MINT_URL } from "@/lib/wallet";
+import { statusDot } from "@/lib/constants";
 import { toFqdn } from "@/lib/pricing";
 import {
   fetchTripartiteRecords,
@@ -85,13 +86,6 @@ function makeRecordId(r: {
   value: string;
 }): string {
   return `${r.type}:${r.name}:${r.value}`;
-}
-
-function statusDot(status: string) {
-  if (status === "ok") return "🟢";
-  if (status === "error") return "🔴";
-  if (status === "loading") return "🟡";
-  return "⚫";
 }
 
 function DomainDetailContent() {
