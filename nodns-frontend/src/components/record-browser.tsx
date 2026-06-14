@@ -192,6 +192,15 @@ export function RecordBrowser() {
     });
   };
 
+  const toggleEventExpand = (id: string) => {
+    setExpandedEvents((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
   const handleDnsQuery = useCallback(async () => {
     if (!dohFqdn.trim()) {
       setDohResults("Enter a domain name.");
@@ -454,8 +463,17 @@ export function RecordBrowser() {
               <div key={npub} className="mb-2">
                 <div
                   data-testid="npub-group-header"
+                  role="button"
+                  tabIndex={0}
+                  aria-expanded={expandedGroups.has(npub)}
                   onClick={() => toggleGroup(npub)}
-                  className="flex cursor-pointer items-center justify-between rounded-lg bg-muted/20 ring-1 ring-foreground/10 border-l-4 border-primary px-4 py-3.5 select-none hover:bg-muted/40 transition-colors"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      toggleGroup(npub);
+                    }
+                  }}
+                  className="flex cursor-pointer items-center justify-between rounded-lg bg-muted/20 ring-1 ring-foreground/10 border-l-4 border-primary px-4 py-3.5 select-none hover:bg-muted/40 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <div className="flex items-center gap-2 min-w-0">
                     <GlobeIcon className="size-4 text-muted-foreground shrink-0" />
@@ -641,15 +659,17 @@ export function RecordBrowser() {
                   className="mb-2 rounded-lg bg-card ring-1 ring-foreground/10 px-4 py-3"
                 >
                   <div
-                    onClick={() =>
-                      setExpandedEvents((prev) => {
-                        const next = new Set(prev);
-                        if (next.has(ev.id)) next.delete(ev.id);
-                        else next.add(ev.id);
-                        return next;
-                      })
-                    }
-                    className="flex cursor-pointer items-center justify-between select-none hover:opacity-80"
+                    role="button"
+                    tabIndex={0}
+                    aria-expanded={expandedEvents.has(ev.id)}
+                    onClick={() => toggleEventExpand(ev.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        toggleEventExpand(ev.id);
+                      }
+                    }}
+                    className="flex cursor-pointer items-center justify-between select-none hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
                   >
                     <div className="flex items-center gap-2 min-w-0">
                       <ShieldIcon className="size-3.5 text-primary shrink-0" />
