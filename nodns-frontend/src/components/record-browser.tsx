@@ -416,11 +416,11 @@ export function RecordBrowser() {
             </div>
           ) : (
             Object.entries(grouped).map(([npub, recs]) => (
-              <div key={npub} className="mb-1">
+              <div key={npub} className="mb-2">
                 <div
                   data-testid="npub-group-header"
                   onClick={() => toggleGroup(npub)}
-                  className="flex cursor-pointer items-center justify-between rounded-lg bg-card ring-1 ring-foreground/10 px-4 py-3 select-none hover:bg-muted/30 transition-colors"
+                  className="flex cursor-pointer items-center justify-between rounded-lg bg-card ring-1 ring-foreground/10 border-l-2 border-primary px-4 py-3.5 select-none hover:bg-muted/30 transition-colors"
                 >
                   <div className="flex items-center gap-2 min-w-0">
                     <GlobeIcon className="size-4 text-muted-foreground shrink-0" />
@@ -446,7 +446,7 @@ export function RecordBrowser() {
                     className="rounded-b-lg bg-card ring-1 ring-foreground/10 ring-t-0 overflow-x-auto"
                   >
                     {/* Table header */}
-                    <div className="hidden md:grid grid-cols-[1fr_80px_1fr_60px_70px] gap-3 px-5 py-2.5 border-b border-border text-xs text-muted-foreground font-medium uppercase tracking-wider">
+                    <div className="hidden md:grid grid-cols-[1fr_80px_1fr_60px_70px] gap-3 px-5 py-3 border-b border-border bg-muted/30 text-xs text-foreground/70 font-semibold uppercase tracking-wider">
                       <span>FQDN</span>
                       <span>Type</span>
                       <span>Value</span>
@@ -478,12 +478,12 @@ export function RecordBrowser() {
                           </div>
                         </div>
                         {/* Desktop grid layout */}
-                        <div className="hidden md:grid grid-cols-[1fr_80px_1fr_60px_70px] gap-3 px-5 py-3 hover:bg-muted/30 transition-colors">
-                          <div className="font-mono text-xs font-medium truncate">
+                        <div className="hidden md:grid grid-cols-[1fr_80px_1fr_60px_70px] gap-3 px-5 py-4 hover:bg-muted/30 transition-colors">
+                          <div className="font-mono text-sm font-medium truncate">
                             {r.fqdn}
                           </div>
                           <div>
-                            <span className="inline-flex items-center rounded-md bg-secondary px-2 py-0.5 text-xs font-mono font-medium">
+                            <span className="inline-flex items-center rounded-md bg-primary/10 ring-1 ring-primary/20 px-2 py-0.5 text-xs font-mono font-medium text-primary">
                               {r.type}
                             </span>
                           </div>
