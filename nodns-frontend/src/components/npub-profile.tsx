@@ -4,12 +4,11 @@ import { useState, useEffect } from "react";
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
 import { ErrorBoundary } from "@/components/error-boundary";
-import { RELAYS } from "@/lib/constants";
+import { RELAYS, API_BASE } from "@/lib/constants";
 import type { DnsRecord, ApiRecordsResponse } from "@/lib/types";
 import { SimplePool } from "nostr-tools/pool";
 import { decode as nip19Decode } from "nostr-tools/nip19";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "";
 const pool = new SimplePool();
 
 interface NostrMetadata {

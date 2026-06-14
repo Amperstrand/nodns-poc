@@ -5,7 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { RELAYS, DNS_TYPES, DNS_STATUS_CODES, DEFAULT_ZONE } from "@/lib/constants";
+import { RELAYS, DNS_TYPES, DNS_STATUS_CODES, DEFAULT_ZONE, API_BASE } from "@/lib/constants";
 import { queryDoh } from "@/lib/dns";
 import { queryAllRecentRecords, subscribeToDnsEvents } from "@/lib/nostr";
 import type {
@@ -24,8 +24,6 @@ import {
   SearchIcon,
   RadioIcon,
 } from "lucide-react";
-
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "";
 
 interface MergedRecord {
   id: string;

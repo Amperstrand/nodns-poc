@@ -8,13 +8,12 @@ import {
   publishDeleteEvent,
 } from "@/lib/nostr";
 import { queryDoh } from "@/lib/dns";
-import { DEFAULT_ZONE } from "@/lib/constants";
+import { DEFAULT_ZONE, API_BASE } from "@/lib/constants";
 import { validateRecord } from "@/lib/validation";
 import { type ZonePricing } from "@/lib/api";
 import { fetchPricing } from "@/lib/sources";
 import type { KeyPair, PendingRecord, DnsRecord, FeedbackType } from "@/lib/types";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "";
 import {
   PublishPipeline,
   type PipelineStatus,

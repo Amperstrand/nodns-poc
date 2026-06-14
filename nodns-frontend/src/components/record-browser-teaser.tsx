@@ -5,8 +5,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import type { ApiRecordsResponse } from "@/lib/types";
 import { DatabaseIcon, GlobeIcon, ArrowRightIcon } from "lucide-react";
-
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "";
+import { API_BASE } from "@/lib/constants";
 
 export function RecordBrowserTeaser() {
   const [stats, setStats] = useState<{ total: number; domains: number } | null>(null);

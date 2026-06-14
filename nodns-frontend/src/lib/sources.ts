@@ -1,4 +1,4 @@
-import { DEFAULT_ZONE } from "./constants";
+import { API_BASE, DEFAULT_ZONE } from "./constants";
 import { queryDoh } from "./dns";
 import {
   queryRecordsByPubkey,
@@ -24,8 +24,6 @@ export interface TripartiteRecords {
   nostr: SourceResult<NostrDnsRecord>;
   dns: SourceResult<{ name: string; type: string; ttl: number; data: string }>;
 }
-
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "";
 
 const WILDCARD_REDIRECT_IPS = new Set(["46.224.104.12"]);
 

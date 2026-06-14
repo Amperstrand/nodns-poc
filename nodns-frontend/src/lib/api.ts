@@ -1,4 +1,4 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "";
+import { API_BASE } from "./constants";
 
 /** Default request timeout in milliseconds. */
 const REQUEST_TIMEOUT_MS = 30_000;
