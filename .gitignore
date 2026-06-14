@@ -3,8 +3,6 @@ node_modules/
 
 # Build artifacts
 nodns-bot-rs/target/
-nodns-bot/nodns-bot
-nodns-bot-archive/nodns-bot
 nodns-nameserver/bin/
 nodns-nameserver/dist/
 nodns-nameserver/build/
@@ -12,12 +10,6 @@ nodns-nameserver/build/
 # Rust
 *.swp
 *.swo
-
-# Go
-*.test
-*.out
-coverage.html
-vendor/
 
 # Database & logs
 *.db
@@ -34,12 +26,15 @@ vendor/
 .env
 .env.local
 config.local.toml
-nodns-bot/config.toml
 nodns-bot-rs/config.toml
 
 # Test artifacts
 test-results/
 .playwright-mcp/
+
+# Package manager (project uses npm)
+pnpm-lock.yaml
+pnpm-workspace.yaml
 
 # OS
 Thumbs.db

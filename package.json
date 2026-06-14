@@ -1,17 +1,13 @@
 {
   "name": "nodns",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
-  "directories": {
-    "doc": "docs"
-  },
+  "description": "NoDNS — DNS Records from Nostr Events. A thought experiment in decentralized naming.",
+  "private": true,
   "scripts": {
     "test": "npx playwright test",
     "test:ui": "npx playwright test --ui"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": ["dns", "nostr", "decentralized", "cashu"],
   "license": "Unlicense",
   "devDependencies": {
     "@playwright/test": "^1.60.0"
