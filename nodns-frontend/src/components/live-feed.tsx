@@ -81,7 +81,7 @@ export function LiveFeed() {
                   key={ev.id}
                   className="flex items-center gap-2 sm:gap-3 border-b border-border px-4 py-2.5 text-xs sm:text-sm last:border-b-0"
                 >
-                  <span className="shrink-0 font-mono text-foreground/50">{time}</span>
+                  <span className="shrink-0 font-mono text-foreground/60">{time}</span>
                   <span className="shrink-0 font-mono font-medium text-foreground">{shortPk}</span>
                   <span className="min-w-0 truncate text-foreground/60">{getRecordSummary(ev)}</span>
                 </div>

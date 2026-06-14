@@ -124,7 +124,7 @@ export function PublishDemo() {
 
         {/* Code Panel */}
         <div className="relative mt-5 overflow-hidden rounded-lg bg-background p-4 ring-1 ring-foreground/5">
-          <pre className="overflow-x-auto text-xs leading-relaxed text-foreground/60">
+          <pre className="overflow-x-auto text-xs leading-relaxed text-foreground/70">
             <code>
               {isSuccess
                 ? "✓ Record live! npub190q...nodns.shop → 185.18.221.10"

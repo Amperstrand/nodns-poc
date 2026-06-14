@@ -32,7 +32,7 @@ export function Architecture() {
                 Nostr Relays
               </div>
               {RELAYS.map((relay) => (
-                <div key={relay} className="text-xs text-muted-foreground leading-relaxed">
+                <div key={relay} className="text-xs text-foreground/60 leading-relaxed">
                   {relay}
                 </div>
               ))}
@@ -51,7 +51,7 @@ export function Architecture() {
                   Rust
                 </span>
               </div>
-              <div className="text-xs text-muted-foreground leading-relaxed">
+              <div className="text-xs text-foreground/60 leading-relaxed">
                 Subscribe to kind 11111
               </div>
               <div className="text-xs text-muted-foreground leading-relaxed">
@@ -78,7 +78,7 @@ export function Architecture() {
               <div className="mb-2.5 border-b border-border pb-2 text-sm font-bold text-emerald-400">
                 Knot DNS
               </div>
-              <div className="text-xs text-muted-foreground leading-relaxed">
+              <div className="text-xs text-foreground/60 leading-relaxed">
                 Authoritative nameserver
               </div>
               <div className="text-xs text-muted-foreground leading-relaxed">
@@ -105,7 +105,7 @@ export function Architecture() {
               <div className="mb-2.5 border-b border-border pb-2 text-sm font-bold text-blue-400">
                 Internet
               </div>
-              <div className="text-xs text-muted-foreground leading-relaxed">
+              <div className="text-xs text-foreground/60 leading-relaxed">
                 Standard DNS queries
               </div>
               <div className="text-xs text-muted-foreground leading-relaxed">
@@ -134,7 +134,7 @@ export function Architecture() {
                 <h4 className="mb-1 text-sm font-semibold text-foreground">
                   {card.title}
                 </h4>
-                <p className="mb-0 text-xs text-muted-foreground">{card.desc}</p>
+                <p className="mb-0 text-xs text-foreground/60">{card.desc}</p>
               </div>
             ))}
           </div>
