@@ -116,7 +116,7 @@ export function Architecture() {
               </div>
             </div>
           </div>
-          <p className="mt-4 text-sm text-muted-foreground">
+          <p className="mt-4 text-sm text-foreground/60">
             In the future, a ccTLD operator could run their own nodns-bot to
             enable Nostr-native DNS for an entire country-code TLD.
           </p>
