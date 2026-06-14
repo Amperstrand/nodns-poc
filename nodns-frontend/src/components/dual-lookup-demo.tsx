@@ -258,7 +258,7 @@ export function DualLookupDemo() {
               <p className="mt-1 text-sm text-emerald-400">
                 <span className="font-semibold">NoDNS TXT:</span> &ldquo;No you!&rdquo;
               </p>
-              <p className="mt-3 text-xs text-muted-foreground">
+              <p className="mt-3 text-xs text-foreground/60">
                 The Bitcoin &ldquo;Liar / No you&rdquo; meme lives in DNS. Cloudflare
                 says &ldquo;Liar!&rdquo; and our Knot DNS says &ldquo;No you!&rdquo;
                 — two truths for one domain.
@@ -273,7 +273,7 @@ export function DualLookupDemo() {
               <p className="mt-1 text-sm text-emerald-400">
                 <span className="font-semibold">NoDNS:</span> Liar. No you.
               </p>
-              <p className="mt-3 text-xs text-muted-foreground">
+              <p className="mt-3 text-xs text-foreground/60">
                 Cloudflare is the registrar — their DNS points to their IP. NoDNS
                 resolves from Nostr-published records pointing to the VPS.
               </p>
