@@ -58,7 +58,7 @@ export function LiveFeed() {
           </div>
           <Link
             href="/records"
-            className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+            className="text-sm text-muted-foreground hover:text-foreground transition-colors px-2 py-1 rounded-md hover:bg-muted/30"
           >
             See more →
           </Link>
