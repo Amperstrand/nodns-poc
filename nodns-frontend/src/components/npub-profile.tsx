@@ -323,7 +323,7 @@ export function NpubProfile() {
 
               {!nostrLoading && !metadata && notes.length === 0 && (
                 <div className="rounded-lg border border-[#222] bg-[#141414] px-6 py-10 text-center">
-                  <p className="text-muted-foreground">
+                  <p className="text-foreground/60">
                     No recent Nostr activity found for this npub.
                   </p>
                 </div>

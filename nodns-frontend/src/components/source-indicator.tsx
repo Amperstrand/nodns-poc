@@ -269,7 +269,7 @@ function PopoverContent({
       )}
 
       {/* Explanation */}
-      <p className="text-xs text-muted-foreground leading-relaxed">
+      <p className="text-xs text-foreground/60 leading-relaxed">
         {info.explanation}
       </p>
 

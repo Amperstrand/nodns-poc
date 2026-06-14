@@ -220,7 +220,7 @@ export function DualLookupDemo() {
                     <code className="font-mono text-[0.85rem] text-primary">
                       {r.value}
                     </code>
-                    <p className="mt-1 text-xs text-muted-foreground">
+                    <p className="mt-1 text-xs text-foreground/60">
                       API error: {r.error}
                     </p>
                   </div>

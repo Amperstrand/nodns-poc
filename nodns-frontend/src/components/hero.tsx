@@ -56,7 +56,7 @@ export function Hero() {
               <span className="sm:hidden">Go</span>
             </button>
           </div>
-          <p className="mt-3 text-xs text-muted-foreground">
+          <p className="mt-3 text-xs text-foreground/60">
             e.g., <span className="text-foreground/70">alice</span>.nodns.shop
           </p>
         </form>
