@@ -135,15 +135,18 @@ function ProfileContent() {
   if (!rawDomain) {
     return (
       <div className="mx-auto max-w-[560px] py-20 text-center">
-        <h1 className="text-2xl font-bold mb-3">No domain specified</h1>
-        <p className="text-muted-foreground mb-6">
-          Use the search bar to find a domain.
+        <div className="mb-5 opacity-20">
+          <GlobeIcon className="size-12 mx-auto text-muted-foreground" />
+        </div>
+        <h1 className="text-lg font-semibold mb-2">No domain specified</h1>
+        <p className="text-sm text-muted-foreground mb-8 max-w-[400px] mx-auto">
+          Search for a domain to view its tripartite verification, DNS records, and ownership details.
         </p>
         <Link
           href="/"
-          className="text-sm text-primary hover:underline"
+          className="inline-flex items-center justify-center rounded-lg bg-primary px-6 py-2.5 text-sm font-semibold text-primary-foreground hover:bg-primary/80 transition-colors"
         >
-          ← Go home
+          Search a domain
         </Link>
       </div>
     );
