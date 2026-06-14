@@ -250,7 +250,7 @@ function DashboardContent() {
       {/* Loading skeleton */}
       {pageStatus === "loading" && domains.length === 0 && (
         <div className="rounded-xl bg-card ring-1 ring-foreground/10 overflow-hidden">
-          <div className="hidden md:grid grid-cols-[1fr_100px_90px_110px_100px] gap-4 px-5 py-3 border-b border-border text-xs text-muted-foreground font-medium">
+          <div className="hidden md:grid grid-cols-[1fr_100px_90px_110px_100px] gap-4 px-5 py-3 border-b border-border bg-muted/30 text-xs text-foreground/70 font-semibold uppercase tracking-wider">
             <span>Domain</span>
             <span>Status</span>
             <span>Records</span>
@@ -276,7 +276,7 @@ function DashboardContent() {
       {pageStatus !== "loading" && domains.length > 0 && (
         <div className="rounded-xl bg-card ring-1 ring-foreground/10 overflow-hidden">
           {/* Desktop header */}
-          <div className="hidden md:grid grid-cols-[1fr_100px_90px_110px_100px] gap-4 px-5 py-3 border-b border-border text-xs text-muted-foreground font-medium uppercase tracking-wider">
+          <div className="hidden md:grid grid-cols-[1fr_100px_90px_110px_100px] gap-4 px-5 py-3 border-b border-border bg-muted/30 text-xs text-foreground/70 font-semibold uppercase tracking-wider">
             <span>Domain</span>
             <span>Status</span>
             <span>Records</span>
@@ -284,10 +284,10 @@ function DashboardContent() {
             <span className="text-right">Actions</span>
           </div>
 
-          {domains.map((domain) => (
+          {domains.map((domain, idx) => (
             <div
               key={domain.fqdn}
-              className="grid grid-cols-1 md:grid-cols-[1fr_100px_90px_110px_100px] gap-2 md:gap-4 px-5 py-4 border-b border-border last:border-b-0 hover:bg-muted/30 transition-colors"
+              className={`grid grid-cols-1 md:grid-cols-[1fr_100px_90px_110px_100px] gap-2 md:gap-4 px-5 py-4 border-b border-border last:border-b-0 hover:bg-muted/30 transition-colors ${idx % 2 === 1 ? 'bg-muted/10' : ''}`}
             >
               {/* Domain name */}
               <div className="flex items-center gap-2">
