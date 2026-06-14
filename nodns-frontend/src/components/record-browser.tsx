@@ -470,7 +470,7 @@ export function RecordBrowser() {
                           <div className="font-mono text-xs font-medium text-foreground mb-1 break-all leading-relaxed">
                             {r.fqdn}
                           </div>
-                          <div className="font-mono text-xs text-muted-foreground break-all leading-relaxed">
+                          <div className="font-mono text-xs text-muted-foreground break-all line-clamp-2 leading-relaxed">
                             {r.value}
                           </div>
                           <div className="text-xs text-muted-foreground/80 mt-1.5 font-mono">
