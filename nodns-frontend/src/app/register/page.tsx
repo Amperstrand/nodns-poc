@@ -81,7 +81,7 @@ function RegisterContent() {
     return (
       <div className="mx-auto max-w-[560px] py-20 text-center">
         <h1 className="text-2xl font-bold mb-3">No domain selected</h1>
-        <p className="text-muted-foreground mb-6">
+        <p className="text-foreground/60 mb-6">
           Search for a domain first to register it.
         </p>
         <Link
@@ -101,7 +101,7 @@ function RegisterContent() {
         <div className="rounded-xl border border-emerald-800 bg-emerald-950/40 p-8 text-center mb-6">
           <div className="text-4xl mb-3">🎉</div>
           <h1 className="text-2xl font-bold text-emerald-400 mb-2">Domain Registered!</h1>
-          <p className="text-muted-foreground mb-4">
+          <p className="text-foreground/60 mb-4">
             <span className="font-mono text-foreground">{fqdn}</span> is now yours.
           </p>
           {txEventId && (
@@ -135,7 +135,7 @@ function RegisterContent() {
             <span className={step === "review" || step === "paying" ? "text-foreground font-medium" : ""}>Review & Pay</span>
             <span className="h-px flex-1 bg-border" />
             <span className="flex h-6 w-6 items-center justify-center rounded-full bg-secondary">2</span>
-            <span>Registered</span>
+            <span>Done</span>
           </div>
 
           <h1 className="text-lg font-semibold mb-5">Order Summary</h1>
@@ -208,7 +208,7 @@ function RegisterContent() {
         <div className="rounded-xl border border-primary/30 bg-primary/5 p-8 text-center">
           <div className="animate-pulse text-2xl mb-3">⚡</div>
           <h2 className="text-lg font-semibold mb-2">Processing Payment</h2>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-foreground/60">
             Sending {price} sats and publishing Nostr event...
           </p>
         </div>
@@ -218,7 +218,7 @@ function RegisterContent() {
       {step === "error" && (
         <div className="rounded-xl border border-red-800 bg-red-950/40 p-6 text-center">
           <h2 className="text-lg font-semibold text-red-400 mb-2">Payment Failed</h2>
-          <p className="text-sm text-muted-foreground mb-4">{errorMsg}</p>
+          <p className="text-sm text-foreground/60 mb-4">{errorMsg}</p>
           <button
             onClick={() => setStep("review")}
             className="rounded-lg border border-border px-5 py-2 text-sm font-medium text-foreground hover:bg-secondary transition-colors"
