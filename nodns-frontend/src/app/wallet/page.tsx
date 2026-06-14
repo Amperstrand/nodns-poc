@@ -265,7 +265,7 @@ function WalletContent() {
         <h1 className="text-2xl font-bold mb-6 flex items-center gap-3">Wallet <span className="rounded-md border border-yellow-800 bg-yellow-950/60 px-2 py-0.5 text-xs font-mono font-medium text-yellow-400">TESTNET</span></h1>
         <div className="rounded-xl border border-border bg-card p-8 sm:p-12 text-center">
           <div className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-muted-foreground border-t-transparent" />
-          <p className="text-sm text-muted-foreground mt-4">
+          <p className="text-sm text-foreground/60 mt-4">
             Initializing wallet...
           </p>
         </div>
@@ -355,7 +355,7 @@ function WalletContent() {
           <h2 className="text-xs font-semibold mb-1 text-foreground/70 uppercase tracking-wider">
             Top Up via Lightning
           </h2>
-          <p className="text-xs text-muted-foreground mb-4">
+          <p className="text-xs text-foreground/60 mb-4">
             Request a Lightning invoice. On testnut, it settles automatically.
           </p>
 
@@ -394,7 +394,7 @@ function WalletContent() {
 
           {topUpState === 'waiting' && invoice && (
             <div className="space-y-2">
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-foreground/60">
                 Waiting for payment... (auto-settles on testnut)
               </p>
               <div className="rounded-lg border border-input bg-muted/50 p-3">
@@ -433,7 +433,7 @@ function WalletContent() {
         <h2 className="text-xs font-semibold mb-1 text-foreground/70 uppercase tracking-wider">
           Receive Tokens
         </h2>
-        <p className="text-xs text-muted-foreground mb-4">
+        <p className="text-xs text-foreground/60 mb-4">
           Paste a Cashu token (cashuA...) to add funds.
         </p>
 
@@ -468,7 +468,7 @@ function WalletContent() {
         <h2 className="text-xs font-semibold mb-1 text-foreground/70 uppercase tracking-wider">
           Send Tokens
         </h2>
-        <p className="text-xs text-muted-foreground mb-4">
+        <p className="text-xs text-foreground/60 mb-4">
           Create a token to send sats to someone.
         </p>
 
@@ -541,7 +541,7 @@ function WalletContent() {
           </div>
         ) : history.length === 0 ? (
           <div className="text-center py-8">
-            <p className="text-sm text-muted-foreground">No transactions yet</p>
+            <p className="text-sm text-foreground/60">No transactions yet</p>
           </div>
         ) : (
           <div className="space-y-0">
@@ -655,7 +655,7 @@ function WalletContent() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
           <div className="mx-4 w-full max-w-sm rounded-xl border border-border bg-card p-6">
             <h3 className="text-base font-semibold mb-2">Copy Private Key?</h3>
-            <p className="text-sm text-muted-foreground mb-6 leading-relaxed">
+            <p className="text-sm text-foreground/60 mb-6 leading-relaxed">
               This is your private key. <strong className="text-foreground">Never share it</strong> with
               anyone. Anyone with this key can access your wallet and identity.
             </p>

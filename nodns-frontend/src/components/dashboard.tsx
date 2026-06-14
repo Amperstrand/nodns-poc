@@ -531,7 +531,7 @@ export function Dashboard() {
             )}
 
             {!keyPair ? (
-              <p className="text-sm text-muted-foreground">
+              <p className="text-sm text-foreground/60">
                 Generate or load a keypair first to publish records.
               </p>
             ) : (

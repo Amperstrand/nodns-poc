@@ -251,7 +251,7 @@ export function DualLookupDemo() {
         <div className="mt-6 rounded-lg border border-border bg-background p-4">
           {mode === "txt" ? (
             <>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-sm text-foreground/60">
                 <span className="font-semibold text-foreground">Cloudflare TXT:</span>{" "}
                 &ldquo;Liar!&rdquo;
               </p>
@@ -266,7 +266,7 @@ export function DualLookupDemo() {
             </>
           ) : (
             <>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-sm text-foreground/60">
                 <span className="font-semibold text-foreground">Cloudflare:</span>{" "}
                 Respect my authority! My IP is {CLOUDFLARE_IP}
               </p>

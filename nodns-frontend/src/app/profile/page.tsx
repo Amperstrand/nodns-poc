@@ -139,7 +139,7 @@ function ProfileContent() {
           <GlobeIcon className="size-12 mx-auto text-muted-foreground" />
         </div>
         <h1 className="text-lg font-semibold mb-2">No domain specified</h1>
-        <p className="text-sm text-muted-foreground mb-8 max-w-[400px] mx-auto">
+        <p className="text-sm text-foreground/60 mb-8 max-w-[400px] mx-auto">
           Search for a domain to view its tripartite verification, DNS records, and ownership details.
         </p>
         <Link

@@ -165,7 +165,7 @@ function DashboardContent() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
         <div>
           <h1 className="text-2xl font-bold mb-1">My Domains</h1>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-foreground/60">
             Manage your registered subdomains
             {pricing && (
               <span className="ml-2 text-xs">
@@ -341,7 +341,7 @@ function DashboardContent() {
             <GlobeIcon className="size-12 mx-auto text-muted-foreground" />
           </div>
           <h2 className="text-lg font-semibold mb-2">No domains yet</h2>
-          <p className="text-sm text-muted-foreground mb-8 max-w-[420px] mx-auto">
+          <p className="text-sm text-foreground/60 mb-8 max-w-[420px] mx-auto">
             Your decentralized subdomain is a few sats away. Register one to control DNS records via Nostr — no registrar, no middleman.
           </p>
           <div className="mb-8 flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-6 text-xs text-muted-foreground max-w-[480px] mx-auto">

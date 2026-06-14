@@ -284,7 +284,7 @@ export function RecordBrowser() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <div>
           <h1 className="text-2xl font-bold mb-1">DNS Record Browser</h1>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-foreground/60">
             Browse all DNS records verified from three independent sources
           </p>
         </div>
@@ -447,7 +447,7 @@ export function RecordBrowser() {
           ) : mergedRecords.length === 0 ? (
             <div className="rounded-xl border border-dashed border-border bg-card p-12 text-center">
               <DatabaseIcon className="size-12 mx-auto text-muted-foreground opacity-20 mb-4" />
-              <p className="text-muted-foreground text-sm">No records found.</p>
+              <p className="text-foreground/60 text-sm">No records found.</p>
             </div>
           ) : (
             Object.entries(grouped).map(([npub, recs]) => (
@@ -598,7 +598,7 @@ export function RecordBrowser() {
             ) : (
               <div className="rounded-xl border border-dashed border-border bg-card p-12 text-center">
                 <GlobeIcon className="size-12 mx-auto text-muted-foreground opacity-20 mb-4" />
-                <p className="text-muted-foreground text-sm">
+                <p className="text-foreground/60 text-sm">
                   Enter a domain and click Query DNS to resolve via Cloudflare
                   DoH.
                 </p>
@@ -612,7 +612,7 @@ export function RecordBrowser() {
           {nostrEvents.length === 0 ? (
             <div className="rounded-xl border border-dashed border-border bg-card p-12 text-center">
               <RadioIcon className="size-12 mx-auto text-muted-foreground opacity-20 mb-4" />
-              <p className="text-muted-foreground text-sm">
+              <p className="text-foreground/60 text-sm">
                 Waiting for live events from relays...
               </p>
               <div className="flex flex-wrap justify-center gap-2 mt-4">
