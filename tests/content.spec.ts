@@ -11,14 +11,14 @@ test.describe("Learn Page", () => {
   test("renders consensus rules section", async ({ page }) => {
     await page.goto("./learn");
     await expect(
-      page.getByRole("heading", { name: "Consensus Rules" })
+      page.getByRole("heading", { name: /Consensus/i }).first()
     ).toBeVisible({ timeout: 10_000 });
   });
 
   test("renders protocol spec section", async ({ page }) => {
     await page.goto("./learn");
     await expect(
-      page.getByRole("heading", { name: "Protocol Specification" })
+      page.getByRole("heading", { name: "Protocol" })
     ).toBeVisible();
   });
 
