@@ -65,6 +65,38 @@ export function NpubProfile() {
   const [notes, setNotes] = useState<NostrNote[]>([]);
   const [nostrLoading, setNostrLoading] = useState(false);
 
+  async function fetchNostrEvents(hex: string | null) {
+    if (!hex) return;
+    setNostrLoading(true);
+    try {
+      const [metaEvents, noteEvents] = await Promise.all([
+        pool.querySync(RELAYS, { kinds: [0], authors: [hex], limit: 1 }),
+        pool.querySync(RELAYS, { kinds: [1], authors: [hex], limit: 5 }),
+      ]);
+
+      const kind0 = metaEvents.find((e) => e.kind === 0);
+      if (kind0) {
+        try {
+          setMetadata(JSON.parse(kind0.content));
+        } catch {}
+      }
+
+      const kind1s = noteEvents
+        .filter((e) => e.kind === 1)
+        .sort((a, b) => b.created_at - a.created_at)
+        .slice(0, 5)
+        .map((e) => ({
+          id: e.id,
+          created_at: e.created_at,
+          content: e.content,
+        }));
+      setNotes(kind1s);
+    } catch {
+    } finally {
+      setNostrLoading(false);
+    }
+  }
+
   useEffect(() => {
     const hostname = window.location.hostname;
     const extracted = extractNpubFromHost(hostname);
@@ -100,38 +132,6 @@ export function NpubProfile() {
       })
       .finally(() => setLoading(false));
   }, []);
-
-  async function fetchNostrEvents(hex: string | null) {
-    if (!hex) return;
-    setNostrLoading(true);
-    try {
-      const [metaEvents, noteEvents] = await Promise.all([
-        pool.querySync(RELAYS, { kinds: [0], authors: [hex], limit: 1 }),
-        pool.querySync(RELAYS, { kinds: [1], authors: [hex], limit: 5 }),
-      ]);
-
-      const kind0 = metaEvents.find((e) => e.kind === 0);
-      if (kind0) {
-        try {
-          setMetadata(JSON.parse(kind0.content));
-        } catch {}
-      }
-
-      const kind1s = noteEvents
-        .filter((e) => e.kind === 1)
-        .sort((a, b) => b.created_at - a.created_at)
-        .slice(0, 5)
-        .map((e) => ({
-          id: e.id,
-          created_at: e.created_at,
-          content: e.content,
-        }));
-      setNotes(kind1s);
-    } catch {
-    } finally {
-      setNostrLoading(false);
-    }
-  }
 
   if (!npub) return null;
 
