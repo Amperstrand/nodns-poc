@@ -7,7 +7,7 @@ test.describe("Profile Page - No Domain", () => {
       page.getByRole("heading", { name: /No domain specified/i })
     ).toBeVisible();
     await expect(
-      page.getByRole("link", { name: /Go home/i })
+      page.getByRole("link", { name: /Search a domain/i })
     ).toBeVisible();
   });
 });
