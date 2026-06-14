@@ -521,7 +521,7 @@ export function RecordBrowser() {
                           )}
                         </div>
                         {/* Desktop grid layout */}
-                        <div className={`hidden md:grid grid-cols-[1fr_80px_1fr_60px_70px] gap-4 px-5 py-4 hover:bg-muted/30 transition-colors ${idx % 2 === 1 ? 'bg-muted/20' : ''}`}>
+                        <div className={`hidden md:grid grid-cols-[1fr_80px_1fr_60px_70px] gap-4 px-5 py-4 hover:bg-foreground/10 transition-colors ${idx % 2 === 1 ? 'bg-foreground/[0.04]' : ''}`}>
                           <div className="font-mono text-sm font-medium truncate">
                             {r.fqdn}
                           </div>
