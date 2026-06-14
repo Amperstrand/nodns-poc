@@ -39,7 +39,7 @@ export function Architecture() {
             </div>
 
             {/* Arrow */}
-            <div className="flex items-center px-2 text-2xl text-foreground/40 max-[700px]:rotate-90 max-[700px]:justify-center max-[700px]:py-1">
+            <div className="flex items-center px-2 text-2xl text-primary/60 max-[700px]:rotate-90 max-[700px]:justify-center max-[700px]:py-1">
               →
             </div>
 
@@ -69,7 +69,7 @@ export function Architecture() {
             </div>
 
             {/* Arrow */}
-            <div className="flex items-center px-2 text-2xl text-foreground/40 max-[700px]:rotate-90 max-[700px]:justify-center max-[700px]:py-1">
+            <div className="flex items-center px-2 text-2xl text-primary/60 max-[700px]:rotate-90 max-[700px]:justify-center max-[700px]:py-1">
               →
             </div>
 
@@ -96,7 +96,7 @@ export function Architecture() {
             </div>
 
             {/* Arrow */}
-            <div className="flex items-center px-2 text-2xl text-foreground/40 max-[700px]:rotate-90 max-[700px]:justify-center max-[700px]:py-1">
+            <div className="flex items-center px-2 text-2xl text-primary/60 max-[700px]:rotate-90 max-[700px]:justify-center max-[700px]:py-1">
               →
             </div>
 

@@ -33,12 +33,12 @@ export function CollapsibleSection({
     <div id={id} className="scroll-mt-32 border-b border-border">
       <button
         onClick={() => setOpen(!open)}
-        className="flex w-full cursor-pointer items-center justify-between px-6 py-4 text-left transition-colors hover:bg-muted/30"
+        className="group flex w-full cursor-pointer items-center justify-between px-6 py-4 text-left transition-colors hover:bg-muted/30"
         aria-expanded={open}
       >
         <h2 className="text-[1.75rem] font-bold tracking-tight">{title}</h2>
         <span className={`flex size-8 items-center justify-center rounded-full bg-muted/40 transition-transform duration-200 ${open ? "rotate-180" : ""}`}>
-          <ChevronDownIcon className="size-5 text-foreground" />
+          <ChevronDownIcon className="size-5 text-foreground transition-colors group-hover:text-primary" />
         </span>
       </button>
       <div
