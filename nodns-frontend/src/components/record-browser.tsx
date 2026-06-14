@@ -240,19 +240,19 @@ export function RecordBrowser() {
   const sourceBadge = (source: string) => {
     if (source === "api")
       return (
-        <span className="text-[10px] px-1 py-0.5 rounded bg-secondary" title="API confirmed">
+        <span className="text-xs px-1.5 py-0.5 rounded bg-secondary" title="API confirmed">
           🗄
         </span>
       );
     if (source === "nostr")
       return (
-        <span className="text-[10px] px-1 py-0.5 rounded bg-secondary" title="Nostr confirmed">
+        <span className="text-xs px-1.5 py-0.5 rounded bg-secondary" title="Nostr confirmed">
           🔐
         </span>
       );
     if (source === "dns")
       return (
-        <span className="text-[10px] px-1 py-0.5 rounded bg-secondary" title="DNS confirmed">
+        <span className="text-xs px-1.5 py-0.5 rounded bg-secondary" title="DNS confirmed">
           🌐
         </span>
       );
@@ -473,7 +473,7 @@ export function RecordBrowser() {
                           <div className="font-mono text-xs text-muted-foreground break-all leading-relaxed">
                             {r.value}
                           </div>
-                          <div className="text-[10px] text-muted-foreground/60 mt-1.5 font-mono">
+                          <div className="text-xs text-muted-foreground/80 mt-1.5 font-mono">
                             TTL {r.ttl}s
                           </div>
                         </div>

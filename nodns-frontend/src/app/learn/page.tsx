@@ -37,7 +37,7 @@ function LearnContent() {
       <div className="mt-12 flex justify-center">
         <a
           href="#top"
-          className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-4 py-2.5 text-sm text-muted-foreground hover:text-foreground hover:border-primary/30 transition-colors min-h-[44px]"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-4 py-2.5 text-sm text-foreground/60 hover:text-foreground hover:border-primary/30 transition-colors min-h-[44px]"
         >
           <svg className="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="m18 15-6-6-6 6" />
