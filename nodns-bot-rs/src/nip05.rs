@@ -66,7 +66,7 @@ pub async fn nip05_handler(
     let name = params
         .name
         .as_deref()
-        .map(|s| s.trim())
+        .map(str::trim)
         .filter(|s| !s.is_empty());
 
     // No name provided → return registrar key

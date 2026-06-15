@@ -187,7 +187,7 @@ impl AcmeService {
         );
 
         let contact = [format!("mailto:{email}")];
-        let contact_refs: Vec<&str> = contact.iter().map(|s| s.as_str()).collect();
+        let contact_refs: Vec<&str> = contact.iter().map(String::as_str).collect();
 
         let eab = if directory_url.contains("zerossl.com") {
             self.zerossl_eab.as_ref()

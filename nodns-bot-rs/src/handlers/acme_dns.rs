@@ -29,7 +29,7 @@ pub async fn acmedns_register_handler(
     let npub = headers
         .get("X-Nostr-Npub")
         .and_then(|v| v.to_str().ok())
-        .map(|s| s.to_string())
+        .map(ToString::to_string)
         .unwrap_or_else(|| "anonymous".to_string());
 
     let zone = match state.dns_zones.first() {

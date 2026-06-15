@@ -61,7 +61,7 @@ pub async fn acme_order_handler(
     let npub = headers
         .get("X-Nostr-Npub")
         .and_then(|v| v.to_str().ok())
-        .map(|s| s.to_string())
+        .map(ToString::to_string)
         .unwrap_or_else(|| "api".to_string());
 
     let domain = body.domain.trim().to_lowercase();
@@ -170,7 +170,7 @@ pub async fn acme_cert_handler(
     let request_npub = headers
         .get("X-Nostr-Npub")
         .and_then(|v| v.to_str().ok())
-        .map(|s| s.to_string());
+        .map(ToString::to_string);
 
     match state.store.get_acme_order(&id) {
         Ok(Some(order)) => {
