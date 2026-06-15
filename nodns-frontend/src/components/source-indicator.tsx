@@ -65,13 +65,6 @@ const STATUS_BG: Record<string, string> = {
   unavailable: "bg-zinc-500/10",
 };
 
-const STATUS_RING: Record<string, string> = {
-  ok: "ring-emerald-500/20",
-  error: "ring-red-500/20",
-  loading: "ring-yellow-500/20",
-  unavailable: "ring-zinc-500/20",
-};
-
 /* ------------------------------------------------------------------ */
 /*  Props                                                               */
 /* ------------------------------------------------------------------ */

@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useIdentity } from "@/contexts/IdentityContext";
 import { useWallet } from "@/contexts/WalletContext";
-import { DEFAULT_ZONE, statusDot } from "@/lib/constants";
+import { DEFAULT_ZONE } from "@/lib/constants";
 import { fetchTripartiteRecords, fetchPricing } from "@/lib/sources";
 import type { TripartiteRecords } from "@/lib/sources";
 import { hexPk } from "@/lib/identity";

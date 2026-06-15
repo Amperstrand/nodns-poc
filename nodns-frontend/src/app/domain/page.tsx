@@ -34,7 +34,6 @@ import {
 import { useIdentity } from "@/contexts/IdentityContext";
 import { useWallet } from "@/contexts/WalletContext";
 import { MINT_URL } from "@/lib/wallet";
-import { statusDot } from "@/lib/constants";
 import { toFqdn } from "@/lib/pricing";
 import {
   fetchTripartiteRecords,

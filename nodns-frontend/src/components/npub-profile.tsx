@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useSyncExternalStore } from "react";
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
 import { ErrorBoundary } from "@/components/error-boundary";
@@ -32,6 +32,14 @@ function extractNpubFromHost(hostname: string): string | null {
   return null;
 }
 
+function useExtractedNpub() {
+  return useSyncExternalStore(
+    () => () => {},
+    () => extractNpubFromHost(window.location.hostname),
+    () => null,
+  );
+}
+
 function npubToHex(npub: string): string | null {
   try {
     const decoded = nip19Decode(npub);
@@ -58,7 +66,7 @@ function formatTime(utcSeconds: number): string {
 
 export function NpubProfile() {
   const [records, setRecords] = useState<DnsRecord[]>([]);
-  const [npub, setNpub] = useState<string | null>(null);
+  const npub = useExtractedNpub();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [metadata, setMetadata] = useState<NostrMetadata | null>(null);
@@ -100,17 +108,11 @@ export function NpubProfile() {
   }
 
   useEffect(() => {
-    const hostname = window.location.hostname;
-    const extracted = extractNpubFromHost(hostname);
-    if (!extracted) {
-      setLoading(false);
-      return;
-    }
-    setNpub(extracted);
+    if (!npub) return;
 
-    const hex = npubToHex(extracted);
+    const hex = npubToHex(npub);
 
-    fetch(`${API_BASE}/api/records/by-npub/${extracted}`)
+    fetch(`${API_BASE}/api/records/by-npub/${npub}`)
       .then((r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json();
@@ -133,7 +135,7 @@ export function NpubProfile() {
         if (hex) fetchNostrEvents(hex);
       })
       .finally(() => setLoading(false));
-  }, []);
+  }, [npub]);
 
   if (!npub) return null;
 
@@ -161,6 +163,7 @@ export function NpubProfile() {
             </div>
 
             {metadata?.picture && (
+              // eslint-disable-next-line @next/next/no-img-element -- external user avatar, static export has no image optimization server
               <img
                 src={metadata.picture}
                 alt={displayName}
@@ -276,6 +279,7 @@ export function NpubProfile() {
                 <div className="mb-4 rounded-lg border border-[#222] bg-[#141414] p-5">
                   <div className="flex items-start gap-4">
                     {metadata.picture && (
+                      // eslint-disable-next-line @next/next/no-img-element -- external user avatar, static export has no image optimization server
                       <img
                         src={metadata.picture}
                         alt=""

@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { RELAYS, DNS_TYPES, DNS_STATUS_CODES, DEFAULT_ZONE, API_BASE } from "@/lib/constants";
 import { queryDoh } from "@/lib/dns";
