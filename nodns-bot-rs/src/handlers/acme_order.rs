@@ -65,7 +65,7 @@ pub async fn acme_order_handler(
         .unwrap_or_else(|| "api".to_string());
 
     let domain = body.domain.trim().to_lowercase();
-    let _email = body.email.unwrap_or_else(|| format!("cert@{}", domain));
+    let _email = body.email.unwrap_or_else(|| format!("cert@{domain}"));
 
     let records = match state.store.list_all_records() {
         Ok(r) => r,

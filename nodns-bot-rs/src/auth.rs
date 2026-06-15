@@ -83,15 +83,15 @@ impl AuthorityChecker {
 
         // Convert pubkey hex to npub using nostr_sdk's built-in bech32 encoding
         let public_key = PublicKey::from_hex(pubkey_hex)
-            .map_err(|e| AuthError::NpubEncoding(format!("invalid pubkey hex: {}", e)))?;
+            .map_err(|e| AuthError::NpubEncoding(format!("invalid pubkey hex: {e}")))?;
         let npub = public_key
             .to_bech32()
-            .map_err(|e| AuthError::NpubEncoding(format!("bech32 encoding: {}", e)))?;
+            .map_err(|e| AuthError::NpubEncoding(format!("bech32 encoding: {e}")))?;
 
         debug!(fqdn = %fqdn, zone = %zone, npub = %npub, "checking authority");
 
         // Check if this is an npub-based name (direct or subdomain)
-        let zone_suffix = format!(".{}", zone);
+        let zone_suffix = format!(".{zone}");
         if fqdn.ends_with(&zone_suffix) {
             let prefix = &fqdn[..fqdn.len() - zone_suffix.len()];
 
@@ -283,7 +283,7 @@ impl AuthorityChecker {
         }
 
         let domain = delegation.domain.trim_end_matches('.');
-        let zone_suffix = format!(".{}", zone);
+        let zone_suffix = format!(".{zone}");
         if !domain.ends_with(&zone_suffix) && domain != zone {
             return Err(AuthError::DelegationNotInZone {
                 domain: delegation.domain.clone(),

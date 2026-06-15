@@ -103,7 +103,7 @@ fn verify_tsig(raw: &[u8], signer: &TSigner) -> bool {
 fn find_zone_for_domain<'a>(fqdn: &str, zones: &'a [String]) -> Option<&'a str> {
     let fqdn = fqdn.trim_end_matches('.');
     for zone in zones {
-        let suffix = format!(".{}", zone);
+        let suffix = format!(".{zone}");
         if fqdn.ends_with(&suffix) || fqdn == zone.as_str() {
             return Some(zone.as_str());
         }
@@ -469,7 +469,7 @@ fn rdata_to_string(rdata: &RData, rt: RecordType) -> String {
 /// Extract the name (subdomain label) from a FQDN like `foo.npub1abc.nodns.shop`
 /// by stripping the zone suffix. Returns the first label for the store.
 fn extract_name_from_fqdn<'a>(fqdn: &'a str, zone: &str) -> &'a str {
-    let zone_suffix = format!(".{}", zone);
+    let zone_suffix = format!(".{zone}");
     if let Some(name) = fqdn.strip_suffix(&zone_suffix) {
         // name might be "foo.npub1abc" — return just the first label.
         name.split('.').next().unwrap_or(name)
@@ -483,7 +483,7 @@ fn extract_name_from_fqdn<'a>(fqdn: &'a str, zone: &str) -> &'a str {
 /// Extract npub from FQDN. The FQDN format is `<name>.<npub>.<zone>` or
 /// just `<npub>.<zone>`. For the prototype, return the portion before the zone.
 fn extract_npub_from_fqdn(fqdn: &str, zone: &str) -> String {
-    let zone_suffix = format!(".{}", zone);
+    let zone_suffix = format!(".{zone}");
     if let Some(prefix) = fqdn.strip_suffix(&zone_suffix) {
         // If prefix contains a dot, the last part is the npub.
         if let Some(npub) = prefix.rsplit('.').next() {

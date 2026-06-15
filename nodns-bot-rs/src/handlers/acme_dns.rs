@@ -49,7 +49,7 @@ pub async fn acmedns_register_handler(
     let password_bytes: [u8; 32] = rand_bytes();
     let password = base64::engine::general_purpose::STANDARD_NO_PAD.encode(password_bytes);
 
-    let fulldomain = format!("{}.acme.{}", subdomain, zone);
+    let fulldomain = format!("{subdomain}.acme.{zone}");
 
     if let Err(e) = state.store.save_acme_dns_registration(
         &subdomain,

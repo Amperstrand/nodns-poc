@@ -204,9 +204,9 @@ pub struct Metrics {
 #[must_use]
 pub fn build_fqdn(npub: &str, name: &str, zone: &str) -> String {
     if name == "@" || name.is_empty() {
-        format!("{}.{}.", npub, zone)
+        format!("{npub}.{zone}.")
     } else {
-        format!("{}.{}.{}.", name, npub, zone)
+        format!("{name}.{npub}.{zone}.")
     }
 }
 

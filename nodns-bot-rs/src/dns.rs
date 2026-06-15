@@ -222,7 +222,7 @@ fn parse_rdata(record_type: u16, rdata: &str) -> Result<RData> {
         }
         _ => Err(DnsError::ParseRR {
             rr_line: rdata.to_string(),
-            error: format!("unsupported record type {}", record_type),
+            error: format!("unsupported record type {record_type}"),
         }),
     }
 }

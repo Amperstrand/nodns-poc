@@ -131,7 +131,7 @@ impl AcmeService {
         order_id: &str,
         directory_url: &str,
     ) -> Result<Option<Account>, AcmeError> {
-        let meta_key = format!("acme_creds:{}", directory_url);
+        let meta_key = format!("acme_creds:{directory_url}");
         let json = match self.store.get_meta(&meta_key) {
             Ok(Some(v)) => v,
             Ok(None) => return Ok(None),
@@ -182,11 +182,11 @@ impl AcmeService {
         self.log_stage(
             order_id,
             "account_create",
-            &format!("Creating ACME account with {}", ca_name),
+            &format!("Creating ACME account with {ca_name}"),
             Some(&serde_json::json!({ "email": email, "directory_url": directory_url, "ca": ca_name }).to_string()),
         );
 
-        let contact = [format!("mailto:{}", email)];
+        let contact = [format!("mailto:{email}")];
         let contact_refs: Vec<&str> = contact.iter().map(|s| s.as_str()).collect();
 
         let eab = if directory_url.contains("zerossl.com") {
@@ -209,7 +209,7 @@ impl AcmeService {
             .await
             .map_err(|e| AcmeError::AccountError(e.to_string()))?;
 
-        let meta_key = format!("acme_creds:{}", directory_url);
+        let meta_key = format!("acme_creds:{directory_url}");
         let json = serde_json::to_string(&credentials)
             .map_err(|e| AcmeError::StoreError(e.to_string()))?;
         self.store
@@ -238,12 +238,7 @@ impl AcmeService {
         {
             let err_msg = e.to_string();
             error!(order_id = %order_id, error = %err_msg, "ACME order failed");
-            self.log_stage(
-                order_id,
-                "error",
-                &format!("Order failed: {}", err_msg),
-                None,
-            );
+            self.log_stage(order_id, "error", &format!("Order failed: {err_msg}"), None);
             if let Err(se) =
                 self.store
                     .update_acme_order_status(order_id, "failed", None, None, Some(&err_msg))
@@ -280,7 +275,7 @@ impl AcmeService {
             .iter()
             .map(|i| match i {
                 Identifier::Dns(s) => s.clone(),
-                _ => format!("{:?}", i),
+                _ => format!("{i:?}"),
             })
             .collect();
 
@@ -349,14 +344,15 @@ impl AcmeService {
             );
 
             let zone = self.find_zone_for_domain(&challenge_name).ok_or_else(|| {
-                AcmeError::DnsUpdateFailed(format!("no zone configured for {}", challenge_name))
+                AcmeError::DnsUpdateFailed(format!("no zone configured for {challenge_name}"))
             })?;
 
-            let updater = self.updaters.get(&zone).ok_or_else(|| {
-                AcmeError::DnsUpdateFailed(format!("no updater for zone {}", zone))
-            })?;
+            let updater = self
+                .updaters
+                .get(&zone)
+                .ok_or_else(|| AcmeError::DnsUpdateFailed(format!("no updater for zone {zone}")))?;
 
-            let fqdn = format!("{}.", challenge_name);
+            let fqdn = format!("{challenge_name}.");
 
             self.log_stage(
                 order_id,
@@ -416,8 +412,7 @@ impl AcmeService {
 
         if status != OrderStatus::Ready {
             return Err(AcmeError::OrderFailed(format!(
-                "unexpected order status after polling: {:?}",
-                status
+                "unexpected order status after polling: {status:?}"
             )));
         }
 
@@ -479,7 +474,7 @@ impl AcmeService {
         );
 
         // Cleanup
-        let challenge_fqdn = format!("_acme-challenge.{}", domain);
+        let challenge_fqdn = format!("_acme-challenge.{domain}");
         if let Some(zone) = self.find_zone_for_domain(&challenge_fqdn) {
             if let Some(updater) = self.updaters.get(&zone) {
                 if let Err(e) = updater.delete_record(&challenge_fqdn, 16).await {
@@ -518,7 +513,7 @@ impl AcmeService {
     fn find_zone_for_domain(&self, domain: &str) -> Option<String> {
         let domain = domain.trim_end_matches('.');
         for zone in &self.zones {
-            let suffix = format!(".{}", zone);
+            let suffix = format!(".{zone}");
             if domain.ends_with(&suffix) || domain == zone.as_str() {
                 return Some(zone.clone());
             }

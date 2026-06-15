@@ -339,7 +339,7 @@ impl Store {
         conn.execute(
             "UPDATE events SET deleted = 1 WHERE npub = ?1 AND record_type = ?2 AND name = ?3 AND zone = ?4 AND deleted = 0",
             params![npub, record_type, name, zone],
-        ).map_err(|e| StoreError::MarkDeleted(format!("{}-{}-{}-{}", npub, record_type, name, zone), e))?;
+        ).map_err(|e| StoreError::MarkDeleted(format!("{npub}-{record_type}-{name}-{zone}"), e))?;
         Ok(())
     }
 
@@ -833,7 +833,7 @@ impl Store {
                 "UPDATE events SET deleted = 1 WHERE npub = ?1 AND zone = ?2 AND deleted = 0",
                 params![npub, zone],
             )
-            .map_err(|e| StoreError::MarkDeleted(format!("{}-{}", npub, zone), e))?;
+            .map_err(|e| StoreError::MarkDeleted(format!("{npub}-{zone}"), e))?;
         Ok(affected)
     }
 

@@ -88,7 +88,7 @@ pub async fn dyndns_update_handler(
     let zone_config = state.dns_zones.iter().find(|z| z.zone == zone);
     let default_ttl = zone_config.map(|z| z.default_ttl).unwrap_or(3600);
 
-    let zone_suffix = format!(".{}", zone);
+    let zone_suffix = format!(".{zone}");
     let (name, is_npub_name) = if hostname.ends_with(&zone_suffix) {
         let prefix = &hostname[..hostname.len() - zone_suffix.len()];
         if prefix.is_empty() {
@@ -143,9 +143,9 @@ pub async fn dyndns_update_handler(
     }
 
     let fqdn = if name == "@" {
-        format!("{}.{}.", derived_npub, zone)
+        format!("{derived_npub}.{zone}.")
     } else {
-        format!("{}.{}.", name, zone)
+        format!("{name}.{zone}.")
     };
 
     let existing_records = state

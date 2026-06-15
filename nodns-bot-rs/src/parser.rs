@@ -292,8 +292,7 @@ pub fn parse_delete_tag(tag: &[String]) -> Result<DeleteRequest, ParserError> {
     let known = ["A", "AAAA", "CNAME", "TXT", "MX", "SRV", "NS", "PTR"];
     if !known.contains(&rtype.as_str()) {
         return Err(ParserError::Validation(format!(
-            "unsupported delete type: {}",
-            rtype
+            "unsupported delete type: {rtype}"
         )));
     }
     let name = if tag[2].is_empty() {
@@ -473,8 +472,7 @@ fn parse_new_format(
     }
     if !allowed_types.is_empty() && !allowed_types.contains(&rtype) {
         return Err(ParserError::Validation(format!(
-            "record type {:?} not allowed",
-            rtype
+            "record type {rtype:?} not allowed"
         )));
     }
 
@@ -527,8 +525,7 @@ fn parse_legacy_format(
     }
     if !allowed_types.is_empty() && !allowed_types.contains(&rtype) {
         return Err(ParserError::Validation(format!(
-            "record type {:?} not allowed",
-            rtype
+            "record type {rtype:?} not allowed"
         )));
     }
 
@@ -601,13 +598,11 @@ pub fn validate_dns_label(name: &str) -> Result<(), ParserError> {
         if !ch.is_ascii_lowercase() && !ch.is_ascii_digit() && ch != '-' && ch != '_' {
             if ch.is_ascii_uppercase() {
                 return Err(ParserError::Validation(format!(
-                    "DNS label must be lowercase, found uppercase: '{}'",
-                    ch
+                    "DNS label must be lowercase, found uppercase: '{ch}'"
                 )));
             }
             return Err(ParserError::Validation(format!(
-                "DNS label contains invalid character: '{}'",
-                ch
+                "DNS label contains invalid character: '{ch}'"
             )));
         }
     }

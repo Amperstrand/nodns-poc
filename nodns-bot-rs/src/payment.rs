@@ -157,7 +157,7 @@ impl Verifier {
             if !token_mint_str.contains(filter) {
                 return Err(PaymentError::MintMismatch {
                     token_mint: token_mint_str,
-                    configured_mint: format!("(filter: must contain '{}')", filter),
+                    configured_mint: format!("(filter: must contain '{filter}')"),
                 });
             }
         }
