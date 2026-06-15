@@ -9,7 +9,7 @@ export function Discoveries() {
         <h1 className="mb-2 text-[1.75rem] font-bold tracking-tight">
           Discoveries
         </h1>
-        <p className="mb-8 text-lg text-foreground/60">
+        <p className="mb-8 text-lg text-foreground/70">
           Things we learned while building NoDNS — the unexpected properties,
           emergent behaviors, and architectural insights.
         </p>
@@ -18,7 +18,7 @@ export function Discoveries() {
           <h3 className="mb-3 text-lg font-semibold">
             The Zone-Agnostic Wire Format
           </h3>
-          <p className="mb-3 text-foreground/60">
+          <p className="mb-3 text-foreground/70">
             Kind 11111 record tags contain no zone information. The wire format
             is purely about the record itself — type, name, data, and metadata.
             For <code className="text-primary">$npub</code> registrations, the
@@ -33,7 +33,7 @@ export function Discoveries() {
 {`["record", "A", "", "1.2.3.4", "", "", "", "", "", "", "3600"]`}
             </pre>
           </div>
-          <p className="text-foreground/60">
+          <p className="text-foreground/70">
             For <code className="text-primary">$string</code> registrations,
             zone awareness lives in the claim and delegation tags — e.g.{" "}
             <code className="text-primary">
@@ -49,7 +49,7 @@ export function Discoveries() {
           <h3 className="mb-3 text-lg font-semibold">
             The .nostr TLD
           </h3>
-          <p className="mb-3 text-foreground/60">
+          <p className="mb-3 text-foreground/70">
             The <code className="text-primary">.nostr</code> TLD supports only{" "}
             <code className="text-primary">$npub.nostr</code> — cryptographic
             ownership tied to the Nostr keypair. There is no{" "}
@@ -57,7 +57,7 @@ export function Discoveries() {
             no consensus mechanism for string ownership in a decentralized
             namespace. Non-npub queries return NXDOMAIN.
           </p>
-          <p className="mb-3 text-foreground/60">
+          <p className="mb-3 text-foreground/70">
             Resolves via DNS-over-HTTPS at{" "}
             <code className="text-primary">dns.nodns.shop/dns-query</code> or
             through a local resolver. We are the only publicly available NoDNS
@@ -78,7 +78,7 @@ export function Discoveries() {
           <h3 className="mb-3 text-lg font-semibold">
             DNS-over-HTTPS Resolver
           </h3>
-          <p className="mb-3 text-foreground/60">
+          <p className="mb-3 text-foreground/70">
             Our public DoH endpoint at{" "}
             <code className="text-primary">
               https://dns.nodns.shop/dns-query
@@ -88,7 +88,7 @@ export function Discoveries() {
             local Knot DNS. Everything else goes to Google and Cloudflare DoH
             upstreams.
           </p>
-          <p className="mb-3 text-foreground/60">
+          <p className="mb-3 text-foreground/70">
             Users can configure their system DNS to use this endpoint for
             one-click <code className="text-primary">.nostr</code> resolution.
             No browser extension, no special software — just point your DNS at
@@ -105,7 +105,7 @@ export function Discoveries() {
           <h3 className="mb-3 text-lg font-semibold">
             Demo 1: TXT Record — &ldquo;Liar!&rdquo; vs &ldquo;No you!&rdquo;
           </h3>
-          <p className="mb-3 text-foreground/60">
+          <p className="mb-3 text-foreground/70">
             The Bitcoin &ldquo;Liar / No you&rdquo; meme, rendered in DNS. A
             TXT record on{" "}
             <code className="text-primary break-all">
@@ -113,7 +113,7 @@ export function Discoveries() {
             </code>{" "}
             returns different values depending on which resolver you ask.
           </p>
-          <p className="mb-3 text-foreground/60">
+          <p className="mb-3 text-foreground/70">
             Standard DNS (Google/Cloudflare) returns{" "}
             <code className="text-primary">&quot;Liar!&quot;</code> because the
             domain&apos;s authoritative path goes through Cloudflare, where we
@@ -146,7 +146,7 @@ truth.npub10ml...dns4sats.xyz. 300 IN TXT "No you!"`}
               </pre>
             </div>
           </div>
-          <p className="text-sm text-foreground/60">
+          <p className="text-sm text-foreground/70">
             Try it yourself — replace the truncated npub with the full one and
             query both resolvers.
           </p>
@@ -156,7 +156,7 @@ truth.npub10ml...dns4sats.xyz. 300 IN TXT "No you!"`}
           <h3 className="mb-3 text-lg font-semibold">
             Demo 2: Web — &ldquo;Respect my authority&rdquo; vs &ldquo;Liar&rdquo; &ldquo;No you&rdquo;
           </h3>
-          <p className="mb-3 text-foreground/60">
+          <p className="mb-3 text-foreground/70">
             The same domain resolves to entirely different web pages depending on
             which DNS resolver you use. Standard DNS returns Cloudflare IPs
             (the registrar&apos;s page saying{" "}
@@ -175,7 +175,7 @@ truth.npub10ml...dns4sats.xyz. 300 IN TXT "No you!"`}
               <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-red-400">
                 Standard DNS (8.8.8.8)
               </h4>
-              <p className="text-sm text-foreground/60">
+              <p className="text-sm text-foreground/70">
                 Cloudflare Pages — &ldquo;Respect my authority&rdquo;
               </p>
               <code className="font-mono text-[0.8rem] text-primary">
@@ -186,7 +186,7 @@ truth.npub10ml...dns4sats.xyz. 300 IN TXT "No you!"`}
               <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-emerald-400">
                 NoDNS (dns.nodns.shop)
               </h4>
-              <p className="text-sm text-foreground/60">
+              <p className="text-sm text-foreground/70">
                 VPS — &ldquo;Liar&rdquo;
               </p>
               <code className="font-mono text-[0.8rem] text-primary">
@@ -218,7 +218,7 @@ npub10ml...dns4sats.xyz. 300 IN A 46.224.104.12`}
               </pre>
             </div>
           </div>
-          <p className="text-sm text-foreground/60">
+          <p className="text-sm text-foreground/70">
             Cloudflare is the registrar for dns4sats.xyz — their DNS returns their
             own IP. NoDNS resolves from Nostr-published records pointing to the
             VPS. Two completely different realities from one domain name.
@@ -229,7 +229,7 @@ npub10ml...dns4sats.xyz. 300 IN A 46.224.104.12`}
           <h3 className="mb-3 text-lg font-semibold">
             Interactive Dual-Resolution Lookup
           </h3>
-          <p className="mb-4 text-foreground/60">
+          <p className="mb-4 text-foreground/70">
             Run the lookups yourself right here. Switch between TXT and A record
             queries to see both demos in action.
           </p>

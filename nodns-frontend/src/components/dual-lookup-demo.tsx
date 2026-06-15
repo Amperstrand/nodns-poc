@@ -220,7 +220,7 @@ export function DualLookupDemo() {
                     <code className="font-mono text-[0.85rem] text-primary">
                       {r.value}
                     </code>
-                    <p className="mt-1 text-xs text-foreground/60">
+                    <p className="mt-1 text-xs text-foreground/70">
                       API error: {r.error}
                     </p>
                   </div>
@@ -251,14 +251,14 @@ export function DualLookupDemo() {
         <div className="mt-6 rounded-lg border border-border bg-background p-4">
           {mode === "txt" ? (
             <>
-              <p className="text-sm text-foreground/60">
+              <p className="text-sm text-foreground/70">
                 <span className="font-semibold text-foreground">Cloudflare TXT:</span>{" "}
                 &ldquo;Liar!&rdquo;
               </p>
               <p className="mt-1 text-sm text-emerald-400">
                 <span className="font-semibold">NoDNS TXT:</span> &ldquo;No you!&rdquo;
               </p>
-              <p className="mt-3 text-xs text-foreground/60">
+              <p className="mt-3 text-xs text-foreground/70">
                 The Bitcoin &ldquo;Liar / No you&rdquo; meme lives in DNS. Cloudflare
                 says &ldquo;Liar!&rdquo; and our Knot DNS says &ldquo;No you!&rdquo;
                 — two truths for one domain.
@@ -266,14 +266,14 @@ export function DualLookupDemo() {
             </>
           ) : (
             <>
-              <p className="text-sm text-foreground/60">
+              <p className="text-sm text-foreground/70">
                 <span className="font-semibold text-foreground">Cloudflare:</span>{" "}
                 Respect my authority! My IP is {CLOUDFLARE_IP}
               </p>
               <p className="mt-1 text-sm text-emerald-400">
                 <span className="font-semibold">NoDNS:</span> Liar. No you.
               </p>
-              <p className="mt-3 text-xs text-foreground/60">
+              <p className="mt-3 text-xs text-foreground/70">
                 Cloudflare is the registrar — their DNS points to their IP. NoDNS
                 resolves from Nostr-published records pointing to the VPS.
               </p>

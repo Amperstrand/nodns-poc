@@ -41,7 +41,7 @@ export class ErrorBoundary extends Component<
              <h1 className="mb-2 text-xl font-bold text-foreground">
                Something went wrong
              </h1>
-             <p className="mb-6 text-sm text-foreground/60">
+             <p className="mb-6 text-sm text-foreground/70">
                An unexpected error occurred while rendering this page. The error
                has been logged to the console.
              </p>

@@ -116,7 +116,7 @@ function ModelCard({ model }: { model: Model }) {
         <span className="text-sm text-muted-foreground">{model.tagline}</span>
       </div>
 
-      <p className="mb-3 text-foreground/60">{model.description}</p>
+      <p className="mb-3 text-foreground/70">{model.description}</p>
 
       <p className="mb-1 text-sm">
         <strong>Authority:</strong>{" "}
@@ -226,7 +226,7 @@ function ModelCard({ model }: { model: Model }) {
           {model.philosophy && (
             <div>
               <h4 className="mb-2 text-sm font-semibold">Philosophy</h4>
-              <p className="italic text-foreground/60">{model.philosophy}</p>
+              <p className="italic text-foreground/70">{model.philosophy}</p>
             </div>
           )}
 
@@ -237,7 +237,7 @@ function ModelCard({ model }: { model: Model }) {
                   <h4 className="mb-2 text-sm font-semibold text-emerald-400">
                     ✓ Pros
                   </h4>
-                  <ul className="list-disc pl-5 text-sm text-foreground/60">
+                  <ul className="list-disc pl-5 text-sm text-foreground/70">
                     {model.pros.map((p, i) => (
                       <li key={i}>{p}</li>
                     ))}
@@ -249,7 +249,7 @@ function ModelCard({ model }: { model: Model }) {
                   <h4 className="mb-2 text-sm font-semibold text-red-400">
                     ✗ Cons
                   </h4>
-                  <ul className="list-disc pl-5 text-sm text-foreground/60">
+                  <ul className="list-disc pl-5 text-sm text-foreground/70">
                     {model.cons.map((c, i) => (
                       <li key={i}>{c}</li>
                     ))}
@@ -264,7 +264,7 @@ function ModelCard({ model }: { model: Model }) {
               <h4 className="mb-2 text-sm font-semibold text-yellow-400">
                 Open Questions
               </h4>
-              <ul className="list-disc pl-5 text-sm text-foreground/60">
+              <ul className="list-disc pl-5 text-sm text-foreground/70">
                 {model.open_questions.map((q, i) => (
                   <li key={i}>{q}</li>
                 ))}
@@ -281,23 +281,23 @@ export function Consensus() {
   return (
     <div className="px-6 py-8">
       <div className="mx-auto max-w-[960px]">
-        <p className="mb-4 text-lg text-foreground/60">{data.subtitle}</p>
-        <p className="mb-8 text-foreground/60">{data.intro}</p>
+        <p className="mb-4 text-lg text-foreground/70">{data.subtitle}</p>
+        <p className="mb-8 text-foreground/70">{data.intro}</p>
 
         {/* No-token principle */}
         <div className="mb-12 rounded-xl border border-emerald-800/30 bg-emerald-950/20 p-6">
           <h3 className="mb-3 text-lg font-semibold text-emerald-400">
             ⛔ No Token. Ever.
           </h3>
-          <p className="mb-4 text-foreground/60">{data.principle.statement}</p>
+          <p className="mb-4 text-foreground/70">{data.principle.statement}</p>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <h4 className="mb-1 text-sm font-semibold text-emerald-400">Anti-spam</h4>
-              <p className="text-sm text-foreground/60">{data.principle.payments.anti_spam}</p>
+              <p className="text-sm text-foreground/70">{data.principle.payments.anti_spam}</p>
             </div>
             <div>
               <h4 className="mb-1 text-sm font-semibold text-primary">Namespace lease</h4>
-              <p className="text-sm text-foreground/60">{data.principle.payments.namespace_lease}</p>
+              <p className="text-sm text-foreground/70">{data.principle.payments.namespace_lease}</p>
             </div>
           </div>
           <p className="mt-3 text-sm text-red-400">{data.principle.payments.never}</p>
@@ -353,7 +353,7 @@ export function Consensus() {
           <h2 className="mb-4 text-[1.75rem] font-bold tracking-tight">
             {data.closing.title}
           </h2>
-          <p className="mb-3 text-foreground/60">{data.closing.body}</p>
+          <p className="mb-3 text-foreground/70">{data.closing.body}</p>
           <p className="mb-2 text-sm">
             <strong>No token:</strong>{" "}
             <span className="text-muted-foreground">{data.closing.no_token}</span>

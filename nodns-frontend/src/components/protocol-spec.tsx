@@ -2,7 +2,7 @@ export function ProtocolSpec() {
   return (
     <div className="px-6 py-8">
       <div className="mx-auto max-w-[960px]">
-        <p className="mb-4 text-foreground/60">
+        <p className="mb-4 text-foreground/70">
           Nostr kind 11111 events with structured tags for DNS records,
           delegation, payments, and registrar management.
         </p>
@@ -172,7 +172,7 @@ Delegated names:
         <h3 className="mb-3 text-lg font-semibold">
           Delegation &amp; Custom Names
         </h3>
-        <p className="mb-4 text-foreground/60">
+        <p className="mb-4 text-foreground/70">
           A zone registrar (identified by a <code className="font-mono text-primary">registrar</code> tag)
           can delegate a human-readable name to a specific Nostr pubkey. For
           example, the <code className="font-mono text-primary">nodns.shop</code> zone registrar can
@@ -181,7 +181,7 @@ Delegated names:
           The delegation is signed by the registrar&apos;s private key and published as
           a Nostr event.
         </p>
-        <p className="mb-6 text-foreground/60">
+        <p className="mb-6 text-foreground/70">
           Once delegated, the user publishes standard <code className="font-mono text-primary">record</code>{" "}
           tags with <code className="font-mono text-primary">name</code> set to their delegated name.
           The bot verifies the delegation exists and is valid before pushing DNS
@@ -218,7 +218,7 @@ Delegated names:
               className="rounded-xl border border-border bg-card p-6"
             >
               <h3 className="mb-3 text-lg font-semibold">{rec.type}</h3>
-              <p className="text-foreground/60">{rec.desc}</p>
+              <p className="text-foreground/70">{rec.desc}</p>
             </div>
           ))}
         </div>

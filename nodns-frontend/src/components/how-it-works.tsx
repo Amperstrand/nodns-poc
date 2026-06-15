@@ -43,7 +43,7 @@ export function HowItWorks() {
                   {step.num}
                 </div>
                 <h3 className="mb-2 text-base font-semibold">{step.title}</h3>
-                <p className="text-sm text-foreground/60 leading-relaxed">{step.desc}</p>
+                <p className="text-sm text-foreground/70 leading-relaxed">{step.desc}</p>
               </div>
             </div>
           ))}

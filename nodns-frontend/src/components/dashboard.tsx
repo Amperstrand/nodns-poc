@@ -524,7 +524,7 @@ export function Dashboard() {
               Publish DNS Records
             </h3>
             {pricing?.enabled && (
-              <p className="mb-3 text-xs text-foreground/60">
+              <p className="mb-3 text-xs text-foreground/70">
                 {pricing.create_price} sat{pricing.create_price !== 1 ? 's' : ''} per new record
                 {pricing.update_price === 0 ? ' · Free updates' : ` · ${pricing.update_price} sats to update`}
                 {pricing.delete_price === 0 ? ' · Free deletes' : ` · ${pricing.delete_price} sats to delete`}
@@ -532,7 +532,7 @@ export function Dashboard() {
             )}
 
             {!keyPair ? (
-              <p className="text-sm text-foreground/60">
+              <p className="text-sm text-foreground/70">
                 Generate or load a keypair first to publish records.
               </p>
             ) : (
@@ -657,7 +657,7 @@ export function Dashboard() {
                 )}
 
                 {pendingRecords.length > 0 && (
-                  <p data-testid="record-count" className="mb-3 text-xs text-foreground/60">
+                  <p data-testid="record-count" className="mb-3 text-xs text-foreground/70">
                     {pendingRecords.length} record
                     {pendingRecords.length > 1 ? "s" : ""} queued
                   </p>
@@ -666,7 +666,7 @@ export function Dashboard() {
                 <div className="mb-3">
                   <button
                     onClick={() => setShowCashu(!showCashu)}
-                    className="text-xs text-foreground/60 hover:text-foreground"
+                    className="text-xs text-foreground/70 hover:text-foreground"
                   >
                     {showCashu ? "▾" : "▸"} Payment (optional)
                   </button>
@@ -683,7 +683,7 @@ export function Dashboard() {
                         placeholder="cashuA..."
                         className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary"
                       />
-                      <p className="mt-1 text-xs text-foreground/60">
+                      <p className="mt-1 text-xs text-foreground/70">
                         {pricing?.enabled
                           ? `Required for new records (${pricing.create_price} sat${pricing.create_price !== 1 ? 's' : ''})`
                           : 'Optional Cashu token for payment'}

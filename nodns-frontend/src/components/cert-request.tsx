@@ -242,7 +242,7 @@ export function CertRequest({ domain, disabled, nsecBytes, npub }: CertRequestPr
             >
               {loading ? "Requesting..." : "Get HTTPS Certificate"}
             </button>
-            <p className="mt-2 text-xs text-foreground/60">
+            <p className="mt-2 text-xs text-foreground/70">
               {nsecBytes ? (
                 <>
                   🔒 Your private key is derived from your nsec and never leaves
@@ -257,7 +257,7 @@ export function CertRequest({ domain, disabled, nsecBytes, npub }: CertRequestPr
               )}
             </p>
             {disabled && (
-              <p className="mt-1 text-xs text-foreground/60">
+              <p className="mt-1 text-xs text-foreground/70">
                 Publish at least one DNS record first.
               </p>
             )}
@@ -299,7 +299,7 @@ export function CertRequest({ domain, disabled, nsecBytes, npub }: CertRequestPr
               </span>
             </div>
             <AcmeLogDisplay logs={logs} isComplete={false} />
-            <p className="text-xs text-foreground/60">
+            <p className="text-xs text-foreground/70">
               Domain: <code className="text-foreground">{orderStatus.domain}</code>
             </p>
           </div>
@@ -312,7 +312,7 @@ export function CertRequest({ domain, disabled, nsecBytes, npub }: CertRequestPr
               <p className="text-sm font-semibold text-chart-2">
                 ✅ Certificate ready!
               </p>
-              <p className="mt-1 text-xs text-foreground/60">
+              <p className="mt-1 text-xs text-foreground/70">
                 Certificate valid for 90 days
               </p>
             </div>

@@ -36,7 +36,7 @@ export function Infrastructure() {
               <h4 className="mb-1 text-sm font-semibold text-foreground">
                 {card.title}
               </h4>
-              <p className="mb-0 text-xs text-foreground/60">{card.desc}</p>
+              <p className="mb-0 text-xs text-foreground/70">{card.desc}</p>
             </div>
           ))}
         </div>
