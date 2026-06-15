@@ -157,8 +157,8 @@ export function NpubProfile() {
       <main className="px-6 pb-20 pt-16">
         <div className="mx-auto max-w-[720px]">
           <div className="mb-10 text-center">
-            <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-[#222] bg-[#141414] px-4 py-1.5 text-xs font-mono text-muted-foreground">
-              <span className="inline-block h-1.5 w-1.5 rounded-full bg-[#2ecc71] animate-pulse" />
+            <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-border bg-card px-4 py-1.5 text-xs font-mono text-muted-foreground">
+              <span className="inline-block h-1.5 w-1.5 rounded-full bg-nodns-success animate-pulse" />
               {records.length > 0 ? "DNS Profile" : "Nostr Profile"}
             </div>
 
@@ -167,7 +167,7 @@ export function NpubProfile() {
               <img
                 src={metadata.picture}
                 alt={displayName}
-                className="mx-auto mb-4 h-16 w-16 rounded-full border-2 border-[#222]"
+                className="mx-auto mb-4 h-16 w-16 rounded-full border-2 border-border"
               />
             )}
 
@@ -182,7 +182,7 @@ export function NpubProfile() {
                 {metadata.nip05}
               </p>
             )}
-            <p className="mt-2 text-xs text-[#666]">
+            <p className="mt-2 text-xs text-muted-foreground">
               {npub.slice(0, 12)}...{npub.slice(-8)}.nodns.shop
             </p>
             <a
@@ -216,9 +216,9 @@ export function NpubProfile() {
               {Object.entries(grouped).map(([name, recs]) => (
                 <div
                   key={name}
-                  className="mb-3 rounded-lg border border-[#222] bg-[#141414] overflow-hidden"
+                  className="mb-3 rounded-lg border border-border bg-card overflow-hidden"
                 >
-                  <div className="border-b border-[#222] bg-[#0f0f0f] px-5 py-2.5">
+                  <div className="border-b border-border bg-muted px-5 py-2.5">
                     <span className="font-mono text-sm font-semibold text-foreground">
                       {name}
                     </span>
@@ -226,13 +226,13 @@ export function NpubProfile() {
                       {recs.length} record{recs.length !== 1 ? "s" : ""}
                     </span>
                   </div>
-                  <div className="divide-y divide-[#222]">
+                  <div className="divide-y divide-border">
                     {recs.map((r, i) => (
                       <div
                         key={`${r.type}-${r.rdata}-${i}`}
                         className="flex items-center gap-4 px-5 py-2.5 text-sm"
                       >
-                        <span className="inline-block min-w-[52px] rounded bg-[#222] px-2 py-0.5 text-center text-xs font-semibold text-primary">
+                        <span className="inline-block min-w-[52px] rounded bg-secondary px-2 py-0.5 text-center text-xs font-semibold text-primary">
                           {r.type}
                         </span>
                         <span className="flex-1 font-mono text-foreground break-all">
@@ -246,7 +246,7 @@ export function NpubProfile() {
                   </div>
                 </div>
               ))}
-              <div className="text-center text-xs text-[#666]">
+              <div className="text-center text-xs text-muted-foreground">
                 from kind 11111 events ·{" "}
                 <a
                   href={`${API_BASE}/api/records/by-npub/${npub}`}
@@ -264,7 +264,7 @@ export function NpubProfile() {
             <div className="mb-8">
               <h2 className="mb-4 flex items-center gap-2 text-lg font-bold tracking-tight">
                 Recent Nostr Activity
-                <span className="rounded-full bg-[#222] px-2 py-0.5 text-xs font-mono text-muted-foreground">
+                <span className="rounded-full bg-secondary px-2 py-0.5 text-xs font-mono text-muted-foreground">
                   verified
                 </span>
               </h2>
@@ -276,14 +276,14 @@ export function NpubProfile() {
               )}
 
               {!nostrLoading && metadata && (
-                <div className="mb-4 rounded-lg border border-[#222] bg-[#141414] p-5">
+                <div className="mb-4 rounded-lg border border-border bg-card p-5">
                   <div className="flex items-start gap-4">
                     {metadata.picture && (
                       // eslint-disable-next-line @next/next/no-img-element -- external user avatar, static export has no image optimization server
                       <img
                         src={metadata.picture}
                         alt=""
-                        className="h-10 w-10 rounded-full border border-[#222]"
+                        className="h-10 w-10 rounded-full border border-border"
                       />
                     )}
                     <div className="min-w-0 flex-1">
@@ -293,14 +293,14 @@ export function NpubProfile() {
                         </p>
                       )}
                       {metadata.about && (
-                        <p className="mt-1 text-sm text-[#bbb] line-clamp-3">
+                        <p className="mt-1 text-sm text-foreground/80 line-clamp-3">
                           {metadata.about}
                         </p>
                       )}
                     </div>
                   </div>
-                  <div className="mt-3 flex items-center gap-2 text-xs text-[#666]">
-                    <span className="rounded bg-[#222] px-1.5 py-0.5 font-mono">kind 0</span>
+                  <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
+                    <span className="rounded bg-secondary px-1.5 py-0.5 font-mono">kind 0</span>
                     metadata event
                   </div>
                 </div>
@@ -311,13 +311,13 @@ export function NpubProfile() {
                   {notes.map((note) => (
                     <div
                       key={note.id}
-                      className="rounded-lg border border-[#222] bg-[#141414] p-4"
+                      className="rounded-lg border border-border bg-card p-4"
                     >
                       <p className="text-sm text-foreground whitespace-pre-wrap break-words line-clamp-6">
                         {note.content}
                       </p>
-                      <div className="mt-3 flex items-center justify-between text-xs text-[#666]">
-                        <span className="rounded bg-[#222] px-1.5 py-0.5 font-mono">kind 1</span>
+                      <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
+                        <span className="rounded bg-secondary px-1.5 py-0.5 font-mono">kind 1</span>
                         <span>{formatTime(note.created_at)}</span>
                       </div>
                     </div>
@@ -326,7 +326,7 @@ export function NpubProfile() {
               )}
 
               {!nostrLoading && !metadata && notes.length === 0 && (
-                <div className="rounded-lg border border-[#222] bg-[#141414] px-6 py-10 text-center">
+                <div className="rounded-lg border border-border bg-card px-6 py-10 text-center">
                   <p className="text-foreground/60">
                     No recent Nostr activity found for this npub.
                   </p>
@@ -334,7 +334,7 @@ export function NpubProfile() {
               )}
 
               {!nostrLoading && (metadata || notes.length > 0) && (
-                <div className="mt-4 text-center text-xs text-[#666]">
+                <div className="mt-4 text-center text-xs text-muted-foreground">
                   from {RELAYS.length} relays · all events cryptographically signed
                 </div>
               )}
@@ -346,7 +346,7 @@ export function NpubProfile() {
               <p className="mb-1 text-sm font-semibold text-primary">
                 No DNS records yet
               </p>
-              <p className="text-sm text-[#bbb]">
+              <p className="text-sm text-foreground/80">
                 This npub has not published any kind 11111 events.{" "}
                 <a
                   href="https://nodns.shop/dashboard"
@@ -358,11 +358,11 @@ export function NpubProfile() {
             </div>
           )}
 
-          <div className="mt-8 rounded-lg border border-[#222] bg-[#141414] p-6">
+          <div className="mt-8 rounded-lg border border-border bg-card p-6">
             <h2 className="mb-3 text-sm font-semibold text-foreground">
               What am I looking at?
             </h2>
-            <p className="text-sm text-[#bbb]">
+            <p className="text-sm text-foreground/80">
               This page shows data published as Nostr events by the owner of
               this npub. DNS records come from{" "}
               <span className="font-mono text-primary">kind 11111</span>{" "}
