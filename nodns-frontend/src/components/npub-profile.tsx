@@ -101,7 +101,8 @@ export function NpubProfile() {
           content: e.content,
         }));
       setNotes(kind1s);
-    } catch {
+    } catch (e) {
+      console.error("Nostr relay query failed:", e);
     } finally {
       setNostrLoading(false);
     }
