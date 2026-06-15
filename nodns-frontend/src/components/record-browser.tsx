@@ -409,6 +409,7 @@ export function RecordBrowser() {
               <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
               <input
                 type="text"
+                aria-label="Filter records"
                 value={recordFilter}
                 onChange={(e) => setRecordFilter(e.target.value)}
                 placeholder="Filter by domain, type, value, or npub..."

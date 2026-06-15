@@ -51,9 +51,6 @@ pub enum AuthError {
     DelegationInvalidRange { valid_from: i64, valid_until: i64 },
     #[error("delegation domain {domain:?} is not within zone {zone:?}")]
     DelegationNotInZone { domain: String, zone: String },
-    #[error("checking registrar status: {0}")]
-    #[allow(dead_code)]
-    RegistrarCheck(StoreError),
     #[error("signer {signer} is not the registrar for zone {zone}")]
     NotRegistrar { signer: String, zone: String },
 }

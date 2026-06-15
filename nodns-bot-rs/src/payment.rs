@@ -78,27 +78,11 @@ pub struct Verifier {
     update_free: bool,
     create_price: u64,
     update_price: u64,
-    #[allow(dead_code)]
-    delete_price: u64,
     npub_names_free: bool,
     mint_filter: Option<String>,
 }
 
 impl Verifier {
-    #[allow(dead_code)]
-    pub fn new(mint_url: &str, required_sats: i64, update_free: bool) -> Self {
-        Self {
-            mint_url: mint_url.to_string(),
-            required_sats,
-            update_free,
-            create_price: required_sats as u64,
-            update_price: if update_free { 0 } else { required_sats as u64 },
-            delete_price: 0,
-            npub_names_free: true,
-            mint_filter: None,
-        }
-    }
-
     pub fn from_zone_config(config: &ZonePaymentConfig) -> Self {
         Self {
             mint_url: config.mint_url.trim_end_matches('/').to_string(),
@@ -106,7 +90,6 @@ impl Verifier {
             update_free: config.update_price == 0,
             create_price: config.create_price,
             update_price: config.update_price,
-            delete_price: config.delete_price,
             npub_names_free: config.npub_names_free,
             mint_filter: if config.mint_filter.is_empty() {
                 None
@@ -122,11 +105,6 @@ impl Verifier {
 
     pub fn update_price(&self) -> u64 {
         self.update_price
-    }
-
-    #[allow(dead_code)]
-    pub fn delete_price(&self) -> u64 {
-        self.delete_price
     }
 
     /// Determines if payment is needed for this operation.

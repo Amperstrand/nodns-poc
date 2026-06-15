@@ -482,6 +482,7 @@ export function Dashboard() {
                     </div>
                     <input
                       type="password"
+                      aria-label="Private key (nsec)"
                       value={nsecInput}
                       onChange={(e) => {
                         setNsecInput(e.target.value);
@@ -573,6 +574,7 @@ export function Dashboard() {
                     </label>
                     <input
                       type="text"
+                      aria-label="Record name"
                       data-testid="rec-name"
                       value={recName}
                       onChange={(e) => setRecName(e.target.value)}
@@ -586,6 +588,7 @@ export function Dashboard() {
                     </label>
                     <input
                       type="text"
+                      aria-label="Record value"
                       data-testid="rec-value"
                       value={recValue}
                       onChange={(e) => setRecValue(e.target.value)}
@@ -599,6 +602,7 @@ export function Dashboard() {
                     </label>
                     <input
                       type="number"
+                      aria-label="TTL in seconds"
                       value={recTtl}
                       onChange={(e) =>
                         setRecTtl(
@@ -673,6 +677,7 @@ export function Dashboard() {
                       </label>
                       <input
                         type="text"
+                        aria-label="Cashu token"
                         value={cashuToken}
                         onChange={(e) => setCashuToken(e.target.value)}
                         placeholder="cashuA..."

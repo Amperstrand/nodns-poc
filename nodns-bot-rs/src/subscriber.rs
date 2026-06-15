@@ -22,15 +22,7 @@ use crate::types::KIND_DNS_RECORD;
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Error)]
-pub enum SubscriberError {
-    #[error("relay connection failed: {0}")]
-    #[allow(dead_code)]
-    Connection(String),
-
-    #[error("subscription failed: {0}")]
-    #[allow(dead_code)]
-    Subscription(String),
-}
+pub enum SubscriberError {}
 
 // ---------------------------------------------------------------------------
 // Subscriber
@@ -47,18 +39,6 @@ pub struct Subscriber {
 }
 
 impl Subscriber {
-    /// Create a new subscriber from the Nostr section of the config.
-    #[allow(dead_code)]
-    pub fn new(cfg: &NostrConfig, store: Arc<Store>) -> Self {
-        Self {
-            client: Client::default(),
-            relays: cfg.relays.clone(),
-            store,
-            handle: Mutex::new(None),
-            stopped: Arc::new(AtomicBool::new(false)),
-        }
-    }
-
     /// Create a subscriber with a pre-existing Client (shared with AppState for health checks).
     pub fn with_client(client: Client, cfg: &NostrConfig, store: Arc<Store>) -> Self {
         Self {

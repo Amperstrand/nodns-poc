@@ -75,6 +75,7 @@ dig +trace npub190queyng2pmx0jfw5rkx4fjjl3u0zxz6nlyaja53p2n0ydupr6jsdnqt8q.nodns
           <div className="mb-4 flex gap-2">
             <input
               type="text"
+              aria-label="Domain to look up"
               value={dohFqdn}
               onChange={(e) => setDohFqdn(e.target.value)}
               placeholder="Enter FQDN"

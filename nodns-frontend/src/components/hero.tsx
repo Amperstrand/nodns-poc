@@ -42,6 +42,7 @@ export function Hero() {
           <div className="flex items-center rounded-xl border border-border bg-card overflow-hidden shadow-lg shadow-black/30 focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/20 transition-all">
             <input
               type="text"
+              aria-label="Search for a .nodns.shop domain"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Find your .nodns.shop domain"

@@ -97,6 +97,7 @@ function SearchContent() {
         >
           <input
             type="text"
+            aria-label="Search for a .nodns.shop domain"
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
             placeholder="Find your .nodns.shop domain"
