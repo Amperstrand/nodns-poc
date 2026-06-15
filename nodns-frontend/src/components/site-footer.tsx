@@ -1,6 +1,6 @@
 export function SiteFooter() {
   return (
-    <footer className="border-t border-border px-6 py-8 text-center text-sm text-muted-foreground">
+    <footer className="border-t border-border px-6 py-8 text-center text-base text-foreground/70">
       <p>NoDNS &mdash; DNS from Nostr. Open protocol, no central authority.</p>
       <p className="mt-2 flex items-center justify-center gap-1">
         <a

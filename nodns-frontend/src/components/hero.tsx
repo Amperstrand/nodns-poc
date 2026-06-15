@@ -32,7 +32,7 @@ export function Hero() {
           <br />
           <span className="text-primary">No registrar needed.</span>
         </h1>
-        <p className="mx-auto mb-10 max-w-[520px] text-lg text-foreground/60">
+        <p className="mx-auto mb-10 max-w-[520px] text-lg text-foreground/70">
           Register a .nodns.shop subdomain instantly. Pay with Cashu sats.
           Records propagate via Nostr in seconds.
         </p>
@@ -57,13 +57,13 @@ export function Hero() {
               <span className="sm:hidden">Go</span>
             </button>
           </div>
-          <p className="mt-3 text-xs text-foreground/60">
-            e.g., <span className="text-foreground/70">alice</span>.nodns.shop
+          <p className="mt-3 text-sm text-foreground/70">
+            e.g., <span className="text-foreground/80">alice</span>.nodns.shop
           </p>
         </form>
 
         {/* Pricing hint */}
-        <div className="mt-8 flex flex-wrap items-center justify-center gap-4 text-xs text-foreground/60">
+        <div className="mt-8 flex flex-wrap items-center justify-center gap-4 text-sm text-foreground/70">
           <span className="flex items-center gap-1.5">
             <span className="font-mono text-foreground">1-3 chars</span> 200 sats
           </span>

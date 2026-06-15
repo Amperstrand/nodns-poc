@@ -40,7 +40,7 @@ export function FAQ() {
                   +
                 </span>
               </summary>
-              <div className="px-5 pb-4 text-sm text-foreground/60">
+              <div className="px-5 pb-4 text-base text-foreground/70">
                 {item.a}
               </div>
             </details>
