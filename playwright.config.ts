@@ -45,5 +45,15 @@ export default defineConfig({
       testMatch: "visual-qa.spec.ts",
       timeout: 90_000,
     },
+    {
+      name: "accessibility",
+      testDir: "./tests",
+      testMatch: "accessibility.spec.ts",
+    },
+    {
+      name: "navigation",
+      testDir: "./tests",
+      testMatch: "navigation.spec.ts",
+    },
   ],
 });
