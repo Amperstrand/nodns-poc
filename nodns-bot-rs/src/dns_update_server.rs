@@ -1,9 +1,9 @@
-//! RFC 2136 DNS UPDATE server for NoDNS.
+//! RFC 2136 DNS UPDATE server for `NoDNS`.
 //!
 //! Listens on a configurable UDP port and accepts DNS UPDATE messages
 //! authenticated via a single shared TSIG key (HMAC-SHA256).  Authorized
 //! updates are forwarded to Knot DNS through the existing `dns::Updater` and
-//! persisted to the SQLite store.
+//! persisted to the `SQLite` store.
 
 use std::collections::HashMap;
 use std::net::SocketAddr;
@@ -249,7 +249,7 @@ impl DnsUpdateServer {
 
     /// Process a verified DNS UPDATE message.
     ///
-    /// RFC 2136 §2 — the update section (name_servers in hickory) contains
+    /// RFC 2136 §2 — the update section (`name_servers` in hickory) contains
     /// the actual add/delete operations.
     async fn process_update(&self, msg: &Message) -> Result<(), ResponseCode> {
         // Validate the zone section: it must match one of our managed zones.
@@ -411,7 +411,7 @@ impl DnsUpdateServer {
 // RData stringification
 // ---------------------------------------------------------------------------
 
-/// Convert RData to a human-friendly string matching the format expected by
+/// Convert `RData` to a human-friendly string matching the format expected by
 /// the `dns::Updater` methods.
 fn rdata_to_string(rdata: &RData, rt: RecordType) -> String {
     match (rt, rdata) {

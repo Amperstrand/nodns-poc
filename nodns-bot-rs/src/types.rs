@@ -27,7 +27,7 @@ pub struct DnsRecord {
 }
 
 /// A parsed delegation tag.
-/// Format: ["delegation", DOMAIN, NPUB, VALID_FROM, VALID_UNTIL, RENEW_BY]
+/// Format: ["delegation", DOMAIN, NPUB, `VALID_FROM`, `VALID_UNTIL`, `RENEW_BY`]
 #[derive(Debug, Clone)]
 pub struct Delegation {
     pub domain: String,   // e.g., "alice.test.shop"
@@ -38,7 +38,7 @@ pub struct Delegation {
 }
 
 /// A parsed registrar key publication tag.
-/// Format: ["registrar", ZONE, PUBKEY_HEX]
+/// Format: ["registrar", ZONE, `PUBKEY_HEX`]
 #[derive(Debug, Clone)]
 pub struct RegistrarKey {
     pub zone: String,       // e.g., "test.shop", "nodns.shop"

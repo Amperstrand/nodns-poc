@@ -39,7 +39,7 @@ pub struct Subscriber {
 }
 
 impl Subscriber {
-    /// Create a subscriber with a pre-existing Client (shared with AppState for health checks).
+    /// Create a subscriber with a pre-existing Client (shared with `AppState` for health checks).
     pub fn with_client(client: Client, cfg: &NostrConfig, store: Arc<Store>) -> Self {
         Self {
             client,

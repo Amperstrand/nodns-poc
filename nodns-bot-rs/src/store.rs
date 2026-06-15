@@ -1,4 +1,4 @@
-//! SQLite persistence layer for processed events.
+//! `SQLite` persistence layer for processed events.
 //!
 //! Ported 1:1 from `nodns-bot/internal/store/sqlite.go`.
 //! Uses `rusqlite` with a `Mutex<Connection>` for `Send + Sync` safety.
@@ -693,7 +693,7 @@ impl Store {
         Ok(result)
     }
 
-    /// Renew a delegation: update valid_until, renew_by, event_id, and reset status to 'active'.
+    /// Renew a delegation: update `valid_until`, `renew_by`, `event_id`, and reset status to 'active'.
     pub fn renew_delegation(
         &self,
         domain: &str,
@@ -771,7 +771,7 @@ impl Store {
         Ok(count == 0)
     }
 
-    /// Get all delegations that have passed their valid_until but are not yet expired.
+    /// Get all delegations that have passed their `valid_until` but are not yet expired.
     pub fn get_delegations_past_valid_until(&self) -> Result<Vec<DelegationRecord>, StoreError> {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)

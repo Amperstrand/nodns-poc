@@ -316,9 +316,9 @@ pub struct RegistrarConfig {
 #[serde(default)]
 pub struct AcmeConfig {
     pub enabled: bool,
-    /// "staging" (default) or "production". Used to resolve directory_url if not explicitly set.
+    /// "staging" (default) or "production". Used to resolve `directory_url` if not explicitly set.
     pub environment: String,
-    /// ACME directory URL. If empty, resolved from `environment` during apply_defaults().
+    /// ACME directory URL. If empty, resolved from `environment` during `apply_defaults()`.
     /// If explicitly set in config, overrides the environment-based URL.
     pub directory_url: String,
     /// Default contact email for ACME account. Can be empty (will use cert@nodns.shop).
@@ -326,9 +326,9 @@ pub struct AcmeConfig {
     pub challenge_ttl: u32,
     /// Default CA: "letsencrypt-staging" (default), "zerossl", "letsencrypt-production"
     pub ca: String,
-    /// ZeroSSL EAB Key ID (required for ZeroSSL)
+    /// `ZeroSSL` EAB Key ID (required for `ZeroSSL`)
     pub zerossl_eab_kid: String,
-    /// ZeroSSL EAB HMAC key (base64-encoded, required for ZeroSSL)
+    /// `ZeroSSL` EAB HMAC key (base64-encoded, required for `ZeroSSL`)
     pub zerossl_eab_hmac_key: String,
     /// Hex-encoded 32-byte key for encrypting ACME private keys at rest.
     /// If empty, a random key is generated at startup (keys unreadable after restart).

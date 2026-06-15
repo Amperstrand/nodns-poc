@@ -1,10 +1,10 @@
 //! SLIP-0010 P-256 DNSSEC key derivation from Nostr nsec.
 //!
-//! Derives a P-256 (NIST256p1) private key from a secp256k1 private key
+//! Derives a P-256 (`NIST256p1`) private key from a secp256k1 private key
 //! using the SLIP-0010 master key derivation formula:
 //!
-//!   I = HMAC-SHA512(key="Nist256p1 seed", data=nsec_bytes)
-//!   private_key = parse256(I[0:32])
+//!   I = HMAC-SHA512(key="Nist256p1 seed", `data=nsec_bytes`)
+//!   `private_key` = parse256(I[0:32])
 //!
 //! Output is PKCS#8 PEM importable by Knot DNS `keymgr import-pem`.
 

@@ -22,7 +22,7 @@ pub struct DynDnsUpdateParams {
     myip: Option<String>,
 }
 
-/// Plain-text response helper for DynDNS protocol.
+/// Plain-text response helper for `DynDNS` protocol.
 fn dyndns_response(status_code: axum::http::StatusCode, body: &str) -> Response {
     (
         status_code,

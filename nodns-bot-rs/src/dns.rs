@@ -4,7 +4,7 @@
 //!
 //! Uses raw TCP transport with length-prefix framing instead of the hickory
 //! `Client` wrapper so we can send a single atomic Update message containing
-//! both a RemoveRRset and an Insert entry — exactly matching the Go behaviour.
+//! both a `RemoveRRset` and an Insert entry — exactly matching the Go behaviour.
 
 use std::net::SocketAddr;
 use std::str::FromStr;
@@ -343,7 +343,7 @@ impl Updater {
     // Message builders
     // -----------------------------------------------------------------------
 
-    /// Build a base DNS Update message (zone section set, OpCode = Update).
+    /// Build a base DNS Update message (zone section set, `OpCode` = Update).
     fn build_update_message(&self) -> Message {
         let mut zone_q = Query::new();
         zone_q
@@ -361,7 +361,7 @@ impl Updater {
         msg
     }
 
-    /// Create a minimal record for RFC 2136 §2.5.2 "Delete An RRset".
+    /// Create a minimal record for RFC 2136 §2.5.2 "Delete An `RRset`".
     ///
     /// Uses `RData::Update0` which serialises with RDLENGTH = 0 — exactly
     /// what the RFC requires.  The record type is taken from `template`.
@@ -385,7 +385,7 @@ impl Updater {
     // Public API
     // -----------------------------------------------------------------------
 
-    /// Remove existing RRset for `fqdn`/`record_type`, then insert the new
+    /// Remove existing `RRset` for `fqdn`/`record_type`, then insert the new
     /// record.  A single atomic DDNS message is sent, matching Go's
     /// `UpdateRecord`.
     pub async fn update_record(
@@ -447,7 +447,7 @@ impl Updater {
         Ok(())
     }
 
-    /// Append a single record to an existing RRset without removing existing
+    /// Append a single record to an existing `RRset` without removing existing
     /// records.  Sends a bare DDNS INSERT (RFC 2136 §2.5.1).
     pub async fn append_record(
         &self,

@@ -311,7 +311,7 @@ pub fn parse_delete_tag(tag: &[String]) -> Result<DeleteRequest, ParserError> {
 /// Validates:
 /// - NAME is a valid DNS label (alphanumeric + hyphen, 1-63 chars, no leading/trailing hyphens)
 /// - ZONE is non-empty
-/// - VALID_UNTIL is a valid unix timestamp
+/// - `VALID_UNTIL` is a valid unix timestamp
 pub fn parse_claim_tag(tag: &[String]) -> Result<ClaimRequest, ParserError> {
     if tag.len() < 4 {
         return Err(ParserError::Validation(format!(
