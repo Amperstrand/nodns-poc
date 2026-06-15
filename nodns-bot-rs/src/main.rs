@@ -397,7 +397,7 @@ async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
                 .per_second(1)
                 .burst_size(30)
                 .finish()
-                .unwrap(),
+                .expect("governor: invalid API rate limit config"),
         );
 
         let acme_limit = Arc::new(
@@ -406,7 +406,7 @@ async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
                 .per_second(1)
                 .burst_size(3)
                 .finish()
-                .unwrap(),
+                .expect("governor: invalid ACME rate limit config"),
         );
 
         let acme_routes = axum::Router::new()
