@@ -108,6 +108,7 @@ pub enum DelegationState {
 }
 
 impl DelegationState {
+    #[must_use]
     pub fn as_str(&self) -> &'static str {
         match self {
             DelegationState::Active => "active",
@@ -200,6 +201,7 @@ pub struct Metrics {
 }
 
 /// Build a fully qualified domain name: [name.]npub1xxx.zone.
+#[must_use]
 pub fn build_fqdn(npub: &str, name: &str, zone: &str) -> String {
     if name == "@" || name.is_empty() {
         format!("{}.{}.", npub, zone)
@@ -209,6 +211,7 @@ pub fn build_fqdn(npub: &str, name: &str, zone: &str) -> String {
 }
 
 /// DNS record type string to u16 constant mapping.
+#[must_use]
 pub fn record_type_to_u16(t: &str) -> u16 {
     match t {
         "A" => 1,
