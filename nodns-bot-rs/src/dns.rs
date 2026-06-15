@@ -628,7 +628,7 @@ pub async fn query_txt_records(nameserver: SocketAddr, fqdn: &str) -> DnsQueryRe
     })
     .await;
 
-    if write_result.map(|r| r.is_err()).unwrap_or(true) {
+    if write_result.map_or(true, |r| r.is_err()) {
         return DnsQueryResult {
             registered: false,
             records: vec![],

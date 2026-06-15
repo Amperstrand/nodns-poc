@@ -506,12 +506,11 @@ impl Store {
 
     fn decrypt_private_key(&self, mut order: AcmeOrder) -> AcmeOrder {
         if let (Some(encrypted), Some(key)) = (&order.private_key_pem, &self.acme_encryption_key) {
-            match decrypt_aes_gcm(key, encrypted) {
-                Ok(plain) => order.private_key_pem = Some(plain),
-                Err(_) => {
-                    tracing::error!(order_id = %order.id, "failed to decrypt private_key_pem, clearing");
-                    order.private_key_pem = None;
-                }
+            if let Ok(plain) = decrypt_aes_gcm(key, encrypted) {
+                order.private_key_pem = Some(plain);
+            } else {
+                tracing::error!(order_id = %order.id, "failed to decrypt private_key_pem, clearing");
+                order.private_key_pem = None;
             }
         }
         order

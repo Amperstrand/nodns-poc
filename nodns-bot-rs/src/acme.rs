@@ -459,7 +459,7 @@ impl AcmeService {
             hasher.update(cert_chain_pem.as_bytes());
             let hash = hasher.finalize();
             let mut hex = String::with_capacity(hash.len() * 2);
-            for b in hash.iter() {
+            for b in &hash {
                 use std::fmt::Write;
                 write!(hex, "{b:02x}").unwrap();
             }

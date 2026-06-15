@@ -15,7 +15,7 @@ mod store;
 mod subscriber;
 pub mod types;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::net::SocketAddr;
 use std::str::FromStr;
 use std::sync::atomic::Ordering;
@@ -99,9 +99,8 @@ async fn lease_expiry_task(
 
         for del in &delegations {
             let grace_config = zone_configs.iter().find(|z| z.zone == del.zone);
-            let grace_period_secs = grace_config
-                .map(|z| z.lease.grace_period_days as i64 * 86400)
-                .unwrap_or(30 * 86400);
+            let grace_period_secs =
+                grace_config.map_or(30 * 86400, |z| i64::from(z.lease.grace_period_days) * 86400);
 
             let state = DelegationState::from_str(&del.status).unwrap_or(DelegationState::Active);
             let grace_deadline = del.valid_until + grace_period_secs;
@@ -117,7 +116,7 @@ async fn lease_expiry_task(
                             .collect::<Vec<_>>();
 
                         let mut sent_fqdns: std::collections::HashSet<(String, u16)> =
-                            Default::default();
+                            HashSet::default();
                         for rec in &records {
                             let fqdn = if rec.name == "@" || rec.name.is_empty() {
                                 format!("{}.{}.", del.domain, del.zone)
@@ -529,23 +528,20 @@ async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
 
     tokio::spawn(async move {
         loop {
-            match event_rx.recv().await {
-                Some(evt) => {
-                    event_processor::process_nostr_event(
-                        &evt,
-                        &ev_cfg,
-                        &ev_updaters,
-                        &ev_store,
-                        &ev_auth,
-                        &ev_zone_verifiers,
-                        &ev_metrics.metrics,
-                    )
-                    .await;
-                }
-                None => {
-                    info!("event channel closed");
-                    break;
-                }
+            if let Some(evt) = event_rx.recv().await {
+                event_processor::process_nostr_event(
+                    &evt,
+                    &ev_cfg,
+                    &ev_updaters,
+                    &ev_store,
+                    &ev_auth,
+                    &ev_zone_verifiers,
+                    &ev_metrics.metrics,
+                )
+                .await;
+            } else {
+                info!("event channel closed");
+                break;
             }
         }
     });

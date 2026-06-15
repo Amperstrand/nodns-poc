@@ -537,7 +537,7 @@ async fn process_renewal(
         return;
     }
 
-    let grace_period_secs = zone_config.lease.grace_period_days as i64 * 24 * 3600;
+    let grace_period_secs = i64::from(zone_config.lease.grace_period_days) * 24 * 3600;
     let grace_deadline = delegation.valid_until + grace_period_secs;
     if created_at >= grace_deadline {
         warn!(
@@ -550,7 +550,7 @@ async fn process_renewal(
         return;
     }
 
-    let max_extension_secs = zone_config.lease.max_lease_days as i64 * 24 * 3600;
+    let max_extension_secs = i64::from(zone_config.lease.max_lease_days) * 24 * 3600;
     let max_valid_until = delegation.valid_until + max_extension_secs;
     let base_valid_until = created_at + max_extension_secs;
     let effective_max = max_valid_until.max(base_valid_until);
