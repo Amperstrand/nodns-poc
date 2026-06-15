@@ -396,18 +396,14 @@ mod tests {
     }
 
     #[test]
-    fn new_backward_compat_sets_create_price_from_required_sats() {
-        let v = Verifier::new("https://testnut.cashu.space", 250, true);
-        assert_eq!(v.required_sats, 250);
-        assert_eq!(v.create_price(), 250);
-        assert_eq!(v.update_price(), 0);
-        assert!(v.update_free);
-        assert!(v.mint_filter.is_none());
-    }
-
-    #[test]
-    fn new_backward_compat_update_not_free() {
-        let v = Verifier::new("https://testnut.cashu.space", 250, false);
+    fn from_zone_config_update_not_free_when_price_set() {
+        let cfg = ZonePaymentConfig {
+            enabled: true,
+            create_price: 250,
+            update_price: 250,
+            ..ZonePaymentConfig::default()
+        };
+        let v = Verifier::from_zone_config(&cfg);
         assert!(!v.update_free);
         assert_eq!(v.update_price(), 250);
         assert!(v.should_require_payment(true));
@@ -415,7 +411,12 @@ mod tests {
 
     #[test]
     fn should_require_payment_disabled_when_zero() {
-        let v = Verifier::new("https://testnut.cashu.space", 0, false);
+        let cfg = ZonePaymentConfig {
+            enabled: true,
+            create_price: 0,
+            ..ZonePaymentConfig::default()
+        };
+        let v = Verifier::from_zone_config(&cfg);
         assert!(!v.should_require_payment(false));
         assert!(!v.should_require_payment(true));
     }
