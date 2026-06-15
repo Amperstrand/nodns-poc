@@ -276,13 +276,11 @@ impl DnsUpdateServer {
             let rt = rec.record_type();
 
             // Determine zone for this FQDN.
-            let zone = match find_zone_for_domain(&fqdn, &self.zones) {
-                Some(z) => z.to_string(),
-                None => {
-                    warn!(fqdn = %fqdn, "UPDATE record FQDN not in any managed zone");
-                    return Err(ResponseCode::Refused);
-                }
+            let Some(zone) = find_zone_for_domain(&fqdn, &self.zones) else {
+                warn!(fqdn = %fqdn, "UPDATE record FQDN not in any managed zone");
+                return Err(ResponseCode::Refused);
             };
+            let zone = zone.to_string();
 
             // Reject unsupported record types.
             if !is_allowed_record_type(rt) {
@@ -307,12 +305,9 @@ impl DnsUpdateServer {
                 return Err(ResponseCode::Refused);
             }
 
-            let updater = match self.updaters.get(&zone) {
-                Some(u) => u,
-                None => {
-                    error!(zone = %zone, "no updater for zone");
-                    return Err(ResponseCode::ServFail);
-                }
+            let Some(updater) = self.updaters.get(&zone) else {
+                error!(zone = %zone, "no updater for zone");
+                return Err(ResponseCode::ServFail);
             };
 
             let ttl = rec.ttl();

@@ -444,13 +444,10 @@ async fn process_claim(
         }
     }
 
-    let registrar_pubkey = match authority.get_registrar_pubkey(zone_name) {
-        Some(pk) => pk,
-        None => {
-            warn!(event_id = %event_id, zone = %zone_name, "no registrar key configured for zone");
-            metrics.events_rejected.fetch_add(1, Ordering::Relaxed);
-            return;
-        }
+    let Some(registrar_pubkey) = authority.get_registrar_pubkey(zone_name) else {
+        warn!(event_id = %event_id, zone = %zone_name, "no registrar key configured for zone");
+        metrics.events_rejected.fetch_add(1, Ordering::Relaxed);
+        return;
     };
 
     let valid_from = now;

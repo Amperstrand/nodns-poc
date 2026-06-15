@@ -583,14 +583,11 @@ pub struct DnsRecord {
 }
 
 pub async fn query_txt_records(nameserver: SocketAddr, fqdn: &str) -> DnsQueryResult {
-    let name = match Name::from_str(fqdn) {
-        Ok(n) => n,
-        Err(_) => {
-            return DnsQueryResult {
-                registered: false,
-                records: vec![],
-            }
-        }
+    let Ok(name) = Name::from_str(fqdn) else {
+        return DnsQueryResult {
+            registered: false,
+            records: vec![],
+        };
     };
 
     let mut query = Query::new();
@@ -607,25 +604,20 @@ pub async fn query_txt_records(nameserver: SocketAddr, fqdn: &str) -> DnsQueryRe
 
     let timeout = Duration::from_secs(2);
 
-    let stream = match tokio::time::timeout(timeout, TokioTcpStream::connect(nameserver)).await {
-        Ok(Ok(s)) => s,
-        _ => {
-            return DnsQueryResult {
-                registered: false,
-                records: vec![],
-            }
-        }
+    let Ok(Ok(stream)) = tokio::time::timeout(timeout, TokioTcpStream::connect(nameserver)).await
+    else {
+        return DnsQueryResult {
+            registered: false,
+            records: vec![],
+        };
     };
     let mut stream = stream;
 
-    let bytes = match msg.to_bytes() {
-        Ok(b) => b,
-        Err(_) => {
-            return DnsQueryResult {
-                registered: false,
-                records: vec![],
-            }
-        }
+    let Ok(bytes) = msg.to_bytes() else {
+        return DnsQueryResult {
+            registered: false,
+            records: vec![],
+        };
     };
 
     let len = bytes.len() as u16;
@@ -654,24 +646,18 @@ pub async fn query_txt_records(nameserver: SocketAddr, fqdn: &str) -> DnsQueryRe
     })
     .await;
 
-    let buf = match read_result {
-        Ok(Ok(b)) => b,
-        _ => {
-            return DnsQueryResult {
-                registered: false,
-                records: vec![],
-            }
-        }
+    let Ok(Ok(buf)) = read_result else {
+        return DnsQueryResult {
+            registered: false,
+            records: vec![],
+        };
     };
 
-    let resp = match Message::from_vec(&buf) {
-        Ok(m) => m,
-        Err(_) => {
-            return DnsQueryResult {
-                registered: false,
-                records: vec![],
-            }
-        }
+    let Ok(resp) = Message::from_vec(&buf) else {
+        return DnsQueryResult {
+            registered: false,
+            records: vec![],
+        };
     };
 
     if resp.response_code() == ResponseCode::NXDomain

@@ -169,16 +169,13 @@ pub async fn acmedns_update_handler(
             .into_response();
     }
 
-    let updater = match state.updaters.get(&registration.zone) {
-        Some(u) => u,
-        None => {
-            error!(zone = %registration.zone, "acme-dns update: no updater for zone");
-            return (
-                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({"error": "Internal error"})),
-            )
-                .into_response();
-        }
+    let Some(updater) = state.updaters.get(&registration.zone) else {
+        error!(zone = %registration.zone, "acme-dns update: no updater for zone");
+        return (
+            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({"error": "Internal error"})),
+        )
+            .into_response();
     };
 
     let fqdn = format!("{}.", registration.fulldomain);

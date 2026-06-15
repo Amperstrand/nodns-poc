@@ -38,14 +38,12 @@ pub async fn dyndns_update_handler(
     connect_info: axum::extract::ConnectInfo<SocketAddr>,
     Query(params): Query<DynDnsUpdateParams>,
 ) -> Response {
-    let auth_header = match headers.get("authorization").and_then(|v| v.to_str().ok()) {
-        Some(h) => h,
-        None => return dyndns_response(axum::http::StatusCode::UNAUTHORIZED, "badauth"),
+    let Some(auth_header) = headers.get("authorization").and_then(|v| v.to_str().ok()) else {
+        return dyndns_response(axum::http::StatusCode::UNAUTHORIZED, "badauth");
     };
 
-    let (username, password) = match parse_basic_auth(auth_header) {
-        Some(pair) => pair,
-        None => return dyndns_response(axum::http::StatusCode::UNAUTHORIZED, "badauth"),
+    let Some((username, password)) = parse_basic_auth(auth_header) else {
+        return dyndns_response(axum::http::StatusCode::UNAUTHORIZED, "badauth");
     };
 
     if password.is_empty() {
@@ -166,12 +164,9 @@ pub async fn dyndns_update_handler(
         return dyndns_response(axum::http::StatusCode::OK, &format!("nochg {ip_str}"));
     }
 
-    let updater = match state.updaters.get(&zone) {
-        Some(u) => u,
-        None => {
-            error!(zone = %zone, "dyndns: no updater for zone");
-            return dyndns_response(axum::http::StatusCode::INTERNAL_SERVER_ERROR, "911");
-        }
+    let Some(updater) = state.updaters.get(&zone) else {
+        error!(zone = %zone, "dyndns: no updater for zone");
+        return dyndns_response(axum::http::StatusCode::INTERNAL_SERVER_ERROR, "911");
     };
 
     if let Err(e) = updater

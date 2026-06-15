@@ -248,9 +248,8 @@ pub async fn check_event_payment(
     store: &Store,
     verifier: Option<&Verifier>,
 ) -> Result<(), PaymentError> {
-    let verifier = match verifier {
-        None => return Ok(()),
-        Some(v) => v,
+    let Some(verifier) = verifier else {
+        return Ok(());
     };
 
     let mut total_required: u64 = 0;
