@@ -410,7 +410,7 @@ impl Config {
                 z.negative_ttl = self.dns.negative_ttl;
             }
             if z.tsig_algorithm.is_empty() {
-                z.tsig_algorithm = self.dns.tsig_algorithm.clone();
+                z.tsig_algorithm.clone_from(&self.dns.tsig_algorithm);
             }
         }
 

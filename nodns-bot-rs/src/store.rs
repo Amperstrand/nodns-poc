@@ -1118,7 +1118,7 @@ impl Store {
 // Schema constant — matches Go exactly
 // ---------------------------------------------------------------------------
 
-const SCHEMA: &str = r#"
+const SCHEMA: &str = r"
     CREATE TABLE IF NOT EXISTS events (
         event_id TEXT NOT NULL,
         npub TEXT NOT NULL,
@@ -1216,7 +1216,7 @@ const SCHEMA: &str = r#"
 
     CREATE INDEX IF NOT EXISTS idx_acme_dns_reg_username ON acme_dns_registrations(username);
     CREATE INDEX IF NOT EXISTS idx_acme_dns_reg_npub ON acme_dns_registrations(npub);
-"#;
+";
 
 // ---------------------------------------------------------------------------
 // Row scanners

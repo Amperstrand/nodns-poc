@@ -458,7 +458,12 @@ impl AcmeService {
             let mut hasher = Sha256::new();
             hasher.update(cert_chain_pem.as_bytes());
             let hash = hasher.finalize();
-            hash.iter().map(|b| format!("{b:02x}")).collect::<String>()
+            let mut hex = String::with_capacity(hash.len() * 2);
+            for b in hash.iter() {
+                use std::fmt::Write;
+                write!(hex, "{b:02x}").unwrap();
+            }
+            hex
         };
 
         self.log_stage(
