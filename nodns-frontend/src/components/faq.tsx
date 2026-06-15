@@ -46,7 +46,7 @@ export function FAQ() {
             </details>
           ))}
         </div>
-        <p className="mt-4 text-center text-xs text-foreground/50">
+        <p className="mt-4 text-center text-xs text-foreground/70">
           More questions answered in{" "}
           <a href="/learn" className="text-primary hover:underline">
             Learn →
