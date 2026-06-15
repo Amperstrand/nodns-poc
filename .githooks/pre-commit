@@ -2,8 +2,11 @@
 set -e
 
 STAGED=$(git diff --cached --name-only)
+ROOT="$(git rev-parse --show-toplevel)"
 
+# ---------------------------------------------------------------------------
 # 1. Secret scan (gitleaks)
+# ---------------------------------------------------------------------------
 if command -v gitleaks >/dev/null 2>&1; then
     echo "[pre-commit] Scanning staged changes for secrets..."
     if ! gitleaks git --staged --exit-code 1; then
@@ -14,27 +17,49 @@ if command -v gitleaks >/dev/null 2>&1; then
     fi
     echo "[pre-commit] OK - no secrets detected."
 else
-    echo "[pre-commit] gitleaks not installed; skipping secret scan."
-    echo "[pre-commit] Install with: brew install gitleaks"
+    echo "[pre-commit] SKIP: gitleaks not installed (brew install gitleaks)."
 fi
 
-# 2. Rust formatting + clippy (only when Rust files changed)
-if echo "$STAGED" | grep -q 'nodns-bot-rs/.*\.rs$'; then
-    cd "$(git rev-parse --show-toplevel)/nodns-bot-rs"
+# ---------------------------------------------------------------------------
+# 2. Rust: format check + clippy (bot-rs)
+# ---------------------------------------------------------------------------
+if echo "$STAGED" | grep -q '^nodns-bot-rs/.*\.rs$'; then
+    echo "[pre-commit] Bot: checking formatting..."
+    (cd "$ROOT/nodns-bot-rs" && cargo fmt --check)
+    echo "[pre-commit] OK - bot formatting clean."
 
-    echo "[pre-commit] Checking formatting..."
-    cargo fmt --check
-    echo "[pre-commit] OK - formatting clean."
-
-    echo "[pre-commit] Running clippy..."
-    cargo clippy -- -D warnings
-    echo "[pre-commit] OK - clippy clean."
+    echo "[pre-commit] Bot: running clippy..."
+    (cd "$ROOT/nodns-bot-rs" && cargo clippy -- -D warnings)
+    echo "[pre-commit] OK - bot clippy clean."
 fi
 
-# 3. Domain expiry check (when deploy config changes)
+# ---------------------------------------------------------------------------
+# 3. Rust: format check + clippy (CLI)
+# ---------------------------------------------------------------------------
+if echo "$STAGED" | grep -q '^nodns-cli/.*\.rs$'; then
+    echo "[pre-commit] CLI: checking formatting..."
+    (cd "$ROOT/nodns-cli" && cargo fmt --check)
+    echo "[pre-commit] OK - CLI formatting clean."
+
+    echo "[pre-commit] CLI: running clippy..."
+    (cd "$ROOT/nodns-cli" && cargo clippy -- -D warnings)
+    echo "[pre-commit] OK - CLI clippy clean."
+fi
+
+# ---------------------------------------------------------------------------
+# 4. Frontend: ESLint check
+# ---------------------------------------------------------------------------
+if echo "$STAGED" | grep -q '^nodns-frontend/.*\.\(ts\|tsx\|js\|jsx\)$'; then
+    echo "[pre-commit] Frontend: running ESLint..."
+    (cd "$ROOT/nodns-frontend" && npx eslint --max-warnings 0)
+    echo "[pre-commit] OK - ESLint clean."
+fi
+
+# ---------------------------------------------------------------------------
+# 5. Domain expiry check (when deploy config changes)
+# ---------------------------------------------------------------------------
 if echo "$STAGED" | grep -q 'deploy/config-multi-zone.toml'; then
-    ROOT="$(git rev-parse --show-toplevel)"
-    echo "[pre-commit] Config changed — verifying domain expiry..."
+    echo "[pre-commit] Config changed - verifying domain expiry..."
     bash "$ROOT/deploy/check-expiry.sh"
 fi
 

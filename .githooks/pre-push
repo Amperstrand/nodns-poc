@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+set -e
+
+# Pre-push hook: runs slower correctness checks (tests, build).
+# Bypass with --no-verify if needed (e.g. WIP pushes).
+
+PUSHED=$(git diff --name-only HEAD@{push}...HEAD 2>/dev/null || git diff --cached --name-only)
+ROOT="$(git rev-parse --show-toplevel)"
+
+# ---------------------------------------------------------------------------
+# 1. Rust tests
+# ---------------------------------------------------------------------------
+if echo "$PUSHED" | grep -q '^nodns-bot-rs/.*\.rs$'; then
+    echo "[pre-push] Bot: running tests..."
+    (cd "$ROOT/nodns-bot-rs" && cargo test)
+    echo "[pre-push] OK - bot tests passed."
+fi
+
+if echo "$PUSHED" | grep -q '^nodns-cli/.*\.rs$'; then
+    echo "[pre-push] CLI: running tests..."
+    (cd "$ROOT/nodns-cli" && cargo test)
+    echo "[pre-push] OK - CLI tests passed."
+fi
+
+# ---------------------------------------------------------------------------
+# 2. Frontend build (catches type errors, SSG issues)
+# ---------------------------------------------------------------------------
+if echo "$PUSHED" | grep -q '^nodns-frontend/.*\.\(ts\|tsx\|css\)$'; then
+    echo "[pre-push] Frontend: running build check..."
+    (cd "$ROOT/nodns-frontend" && npx next build)
+    echo "[pre-push] OK - frontend build passed."
+fi
+
+echo "[pre-push] All checks passed."
