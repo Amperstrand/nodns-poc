@@ -58,9 +58,7 @@ pub async fn health_handler(AxumState(state): AxumState<Arc<AppState>>) -> Json<
         }
     };
 
-    let db_size_bytes = std::fs::metadata(&state.db_path)
-        .map(|m| m.len())
-        .unwrap_or(0);
+    let db_size_bytes = std::fs::metadata(&state.db_path).map_or(0, |m| m.len());
 
     let ddns_failures = state.metrics.ddns_failures.load(Ordering::Relaxed);
     let status = if connected_count == 0 || ddns_failures > 10 {

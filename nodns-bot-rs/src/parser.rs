@@ -61,10 +61,10 @@ pub fn classify_event(
     block_private_ip: bool,
     max_txt_length: usize,
 ) -> Result<ParsedEvent, ParserError> {
-    if event.kind.as_u16() != KIND_DNS_RECORD as u16 {
+    if u64::from(event.kind.as_u16()) != KIND_DNS_RECORD {
         return Err(ParserError::WrongKind {
             expected: KIND_DNS_RECORD,
-            got: event.kind.as_u16() as u64,
+            got: u64::from(event.kind.as_u16()),
         });
     }
 

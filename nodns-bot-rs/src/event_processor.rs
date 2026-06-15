@@ -33,9 +33,8 @@ pub(crate) fn resolve_fqdn(npub: &str, name: &str, zone: &str, store: &Arc<Store
         if let Some(del) = delegations.iter().find(|d| d.zone == zone) {
             if name == "@" || name.is_empty() {
                 return format!("{}.{}.", del.domain, zone);
-            } else {
-                return format!("{}.{}.{}.", name, del.domain, zone);
             }
+            return format!("{}.{}.{}.", name, del.domain, zone);
         }
     }
     build_fqdn(npub, name, zone)
@@ -66,8 +65,8 @@ fn parse_operator_expiry(date_str: &Option<String>) -> Option<i64> {
     let m_adj = if month > 2 { month - 3 } else { month + 9 };
     let doy = (153 * m_adj + 2) / 5 + day - 1; // [0, 365]
     let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy; // [0, 146096]
-    let days_since_epoch = era * 146097 + doe - 719468;
-    Some(days_since_epoch * 86400)
+    let days_since_epoch = era * 146_097 + doe - 719_468;
+    Some(days_since_epoch * 86_400)
 }
 
 // ---------------------------------------------------------------------------

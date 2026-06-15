@@ -86,7 +86,7 @@ pub async fn dyndns_update_handler(
     };
 
     let zone_config = state.dns_zones.iter().find(|z| z.zone == zone);
-    let default_ttl = zone_config.map(|z| z.default_ttl).unwrap_or(3600);
+    let default_ttl = zone_config.map_or(3600, |z| z.default_ttl);
 
     let zone_suffix = format!(".{zone}");
     let (name, is_npub_name) = if hostname.ends_with(&zone_suffix) {

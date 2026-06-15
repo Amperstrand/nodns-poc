@@ -61,8 +61,7 @@ pub async fn acme_order_handler(
     let npub = headers
         .get("X-Nostr-Npub")
         .and_then(|v| v.to_str().ok())
-        .map(ToString::to_string)
-        .unwrap_or_else(|| "api".to_string());
+        .map_or_else(|| "api".to_string(), ToString::to_string);
 
     let domain = body.domain.trim().to_lowercase();
     let _email = body.email.unwrap_or_else(|| format!("cert@{domain}"));
