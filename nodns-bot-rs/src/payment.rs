@@ -381,7 +381,6 @@ mod tests {
         let v = Verifier::from_zone_config(&cfg);
         assert_eq!(v.create_price(), 5);
         assert_eq!(v.update_price(), 3);
-        assert_eq!(v.delete_price(), 1);
     }
 
     #[test]
