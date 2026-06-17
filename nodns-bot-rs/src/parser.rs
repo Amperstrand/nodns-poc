@@ -1555,4 +1555,121 @@ mod tests {
         let err = classify_event(&event, &[], false, 0).unwrap_err();
         assert!(err.to_string().contains("duplicate renewal tag"));
     }
+
+    #[test]
+    fn test_parse_record_tag_aaaa_blocks_private_ipv6() {
+        let tag_fc00: Vec<String> = vec![
+            "record".to_string(),
+            "AAAA".to_string(),
+            "@".to_string(),
+            "3600".to_string(),
+            "fc00::1".to_string(),
+        ];
+        let err = parse_record_tag(&tag_fc00, &[], true, 0).unwrap_err();
+        assert!(err.to_string().contains("private IP address blocked"));
+
+        let tag_loopback: Vec<String> = vec![
+            "record".to_string(),
+            "AAAA".to_string(),
+            "@".to_string(),
+            "3600".to_string(),
+            "::1".to_string(),
+        ];
+        let err = parse_record_tag(&tag_loopback, &[], true, 0).unwrap_err();
+        assert!(err.to_string().contains("private IP address blocked"));
+    }
+
+    #[test]
+    fn test_parse_record_tag_aaaa_allows_public_ipv6() {
+        let tag: Vec<String> = vec![
+            "record".to_string(),
+            "AAAA".to_string(),
+            "@".to_string(),
+            "3600".to_string(),
+            "2001:db8::1".to_string(),
+        ];
+        let rec = parse_record_tag(&tag, &[], true, 0).unwrap();
+        assert_eq!(rec.record_type, "AAAA");
+        assert_eq!(rec.rdata, "2001:db8::1");
+    }
+
+    #[test]
+    fn test_parse_record_tag_invalid_a_ip_format() {
+        let tag: Vec<String> = vec![
+            "record".to_string(),
+            "A".to_string(),
+            "@".to_string(),
+            "3600".to_string(),
+            "not.an.ip".to_string(),
+        ];
+        let err = parse_record_tag(&tag, &[], false, 0).unwrap_err();
+        assert!(err.to_string().contains("invalid IPv4 address"));
+    }
+
+    #[test]
+    fn test_parse_record_tag_cname_invalid_domain() {
+        let tag: Vec<String> = vec![
+            "record".to_string(),
+            "CNAME".to_string(),
+            "@".to_string(),
+            "3600".to_string(),
+            "invalid..double..dot".to_string(),
+        ];
+        let err = parse_record_tag(&tag, &[], false, 0).unwrap_err();
+        assert!(err.to_string().contains("invalid CNAME domain name"));
+    }
+
+    #[test]
+    fn test_parse_record_tag_empty_rdata_a_rejected() {
+        let tag: Vec<String> = vec![
+            "record".to_string(),
+            "A".to_string(),
+            "@".to_string(),
+            "3600".to_string(),
+            "".to_string(),
+        ];
+        let err = parse_record_tag(&tag, &[], false, 0).unwrap_err();
+        assert!(err.to_string().contains("A record requires rdata"));
+    }
+
+    #[test]
+    fn test_parse_record_tag_empty_rdata_txt_ok() {
+        let tag: Vec<String> = vec![
+            "record".to_string(),
+            "TXT".to_string(),
+            "@".to_string(),
+            "3600".to_string(),
+            "".to_string(),
+        ];
+        let rec = parse_record_tag(&tag, &[], false, 0).unwrap();
+        assert_eq!(rec.record_type, "TXT");
+        assert!(rec.rdata.is_empty());
+    }
+
+    #[test]
+    fn test_validate_record_ns_valid() {
+        let rec = DnsRecord {
+            record_type: "NS".to_string(),
+            name: "@".to_string(),
+            ttl: 3600,
+            rdata: "ns1.example.com".to_string(),
+        };
+        assert!(validate_record(&rec, false, 0).is_ok());
+    }
+
+    #[test]
+    fn test_classify_event_multiple_a_records() {
+        let keys = Keys::generate();
+        let event = EventBuilder::new(Kind::Custom(11111), "")
+            .tags(vec![
+                Tag::parse(["record", "A", "@", "3600", "1.2.3.4"]).unwrap(),
+                Tag::parse(["record", "A", "www", "3600", "5.6.7.8"]).unwrap(),
+            ])
+            .sign_with_keys(&keys)
+            .unwrap();
+        let result = classify_event(&event, &[], false, 0).unwrap();
+        assert_eq!(result.records.len(), 2);
+        assert_eq!(result.records[0].name, "@");
+        assert_eq!(result.records[1].name, "www");
+    }
 }

@@ -842,4 +842,106 @@ tsig_key_secret = "secret1"
         assert_eq!(lease.grace_period_days, 30);
         assert_eq!(lease.max_lease_days, 365);
     }
+
+    #[test]
+    fn acme_config_defaults() {
+        let cfg = AcmeConfig::default();
+        assert!(!cfg.enabled);
+        assert_eq!(cfg.environment, "staging");
+        assert_eq!(cfg.ca, "letsencrypt-staging");
+        assert_eq!(cfg.directory_url, "");
+        assert_eq!(cfg.contact_email, "");
+        assert_eq!(cfg.challenge_ttl, 300);
+        assert!(cfg.encryption_key.is_none());
+    }
+
+    #[test]
+    fn acme_apply_defaults_staging() {
+        let toml = r#"
+[acme]
+environment = "staging"
+"#;
+        let mut cfg: Config = toml::from_str(toml).unwrap();
+        cfg.apply_defaults();
+        assert_eq!(
+            cfg.acme.directory_url,
+            "https://acme-staging-v02.api.letsencrypt.org/directory"
+        );
+    }
+
+    #[test]
+    fn acme_apply_defaults_production() {
+        let toml = r#"
+[acme]
+environment = "production"
+"#;
+        let mut cfg: Config = toml::from_str(toml).unwrap();
+        cfg.apply_defaults();
+        assert_eq!(
+            cfg.acme.directory_url,
+            "https://acme-v02.api.letsencrypt.org/directory"
+        );
+    }
+
+    #[test]
+    fn acme_apply_defaults_keeps_explicit_url() {
+        let toml = r#"
+[acme]
+environment = "staging"
+directory_url = "https://custom-acme.example.com/directory"
+"#;
+        let mut cfg: Config = toml::from_str(toml).unwrap();
+        cfg.apply_defaults();
+        assert_eq!(
+            cfg.acme.directory_url,
+            "https://custom-acme.example.com/directory"
+        );
+    }
+
+    #[test]
+    fn acme_apply_defaults_empty_environment_defaults_to_staging() {
+        let toml = r#"
+[acme]
+"#;
+        let mut cfg: Config = toml::from_str(toml).unwrap();
+        cfg.apply_defaults();
+        assert_eq!(cfg.acme.environment, "staging");
+        assert_eq!(
+            cfg.acme.directory_url,
+            "https://acme-staging-v02.api.letsencrypt.org/directory"
+        );
+    }
+
+    #[test]
+    fn policy_config_defaults() {
+        let cfg = PolicyConfig::default();
+        assert_eq!(cfg.max_records, 20);
+        assert_eq!(cfg.rate_limit, 5);
+        assert!(!cfg.block_private_ip);
+        assert_eq!(cfg.max_txt_length, 512);
+        assert!(cfg.allowed_types.contains(&"A".to_string()));
+        assert!(cfg.allowed_types.contains(&"AAAA".to_string()));
+        assert!(cfg.allowed_types.contains(&"CNAME".to_string()));
+        assert!(cfg.allowed_types.contains(&"TXT".to_string()));
+        assert!(cfg.allowed_types.contains(&"MX".to_string()));
+        assert_eq!(cfg.allowed_types.len(), 5);
+    }
+
+    #[test]
+    fn store_config_defaults() {
+        let cfg = StoreConfig::default();
+        assert_eq!(cfg.path, "records.db");
+    }
+
+    #[test]
+    fn validation_fails_with_empty_nostr_zone() {
+        let toml = r#"
+[nostr]
+relays = ["wss://relay.example.com"]
+"#;
+        let mut cfg: Config = toml::from_str(toml).unwrap();
+        cfg.apply_defaults();
+        let err = cfg.validate().unwrap_err();
+        assert!(err.to_string().contains("nostr.zone"));
+    }
 }

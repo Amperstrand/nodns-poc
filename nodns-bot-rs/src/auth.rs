@@ -709,4 +709,49 @@ mod tests {
             "deep subdomain of npub name should grant authority"
         );
     }
+
+    #[test]
+    fn test_validate_delegation_invalid_range() {
+        let store = setup_store();
+        let checker = AuthorityChecker::new(store, HashMap::new());
+        let delegation = Delegation {
+            domain: "alice.test.shop".to_string(),
+            npub: make_npub(),
+            valid_from: 100,
+            valid_until: 100,
+            renew_by: 100,
+        };
+        let result = checker.validate_delegation(&delegation, "test.shop", make_pubkey_hex());
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_get_registrar_pubkey_from_db() {
+        let store = setup_store();
+        let npub = make_npub();
+        store
+            .save_registrar_key("test.shop", make_pubkey_hex(), &npub, "test", "event1")
+            .unwrap();
+        let checker = AuthorityChecker::new(store, HashMap::new());
+        let result = checker.get_registrar_pubkey("test.shop");
+        assert_eq!(result, Some(make_pubkey_hex().to_string()));
+    }
+
+    #[test]
+    fn test_get_registrar_pubkey_from_config() {
+        let store = setup_store();
+        let mut config = HashMap::new();
+        config.insert("test.shop".to_string(), make_pubkey_hex().to_string());
+        let checker = AuthorityChecker::new(store, config);
+        let result = checker.get_registrar_pubkey("test.shop");
+        assert_eq!(result, Some(make_pubkey_hex().to_string()));
+    }
+
+    #[test]
+    fn test_get_registrar_pubkey_not_found() {
+        let store = setup_store();
+        let checker = AuthorityChecker::new(store, HashMap::new());
+        let result = checker.get_registrar_pubkey("test.shop");
+        assert_eq!(result, None);
+    }
 }

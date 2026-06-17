@@ -425,4 +425,58 @@ mod tests {
         assert_eq!(truncate_y("abc"), "abc");
         assert_eq!(truncate_y("a_very_long_string_here"), "a_very_long_...");
     }
+
+    #[test]
+    fn should_require_payment_matrix() {
+        let disabled_cfg = ZonePaymentConfig {
+            enabled: true,
+            create_price: 0,
+            ..ZonePaymentConfig::default()
+        };
+        let v_disabled = Verifier::from_zone_config(&disabled_cfg);
+        assert!(!v_disabled.should_require_payment(false));
+        assert!(!v_disabled.should_require_payment(true));
+
+        let free_update_cfg = ZonePaymentConfig {
+            enabled: true,
+            create_price: 100,
+            update_price: 0,
+            ..ZonePaymentConfig::default()
+        };
+        let v_free = Verifier::from_zone_config(&free_update_cfg);
+        assert!(v_free.should_require_payment(false));
+        assert!(!v_free.should_require_payment(true));
+
+        let paid_update_cfg = ZonePaymentConfig {
+            enabled: true,
+            create_price: 100,
+            update_price: 50,
+            ..ZonePaymentConfig::default()
+        };
+        let v_paid = Verifier::from_zone_config(&paid_update_cfg);
+        assert!(v_paid.should_require_payment(false));
+        assert!(v_paid.should_require_payment(true));
+    }
+
+    #[test]
+    fn create_price_returns_config_value() {
+        let cfg = ZonePaymentConfig {
+            enabled: true,
+            create_price: 42,
+            ..ZonePaymentConfig::default()
+        };
+        let v = Verifier::from_zone_config(&cfg);
+        assert_eq!(v.create_price(), 42);
+    }
+
+    #[test]
+    fn update_price_returns_config_value() {
+        let cfg = ZonePaymentConfig {
+            enabled: true,
+            update_price: 17,
+            ..ZonePaymentConfig::default()
+        };
+        let v = Verifier::from_zone_config(&cfg);
+        assert_eq!(v.update_price(), 17);
+    }
 }

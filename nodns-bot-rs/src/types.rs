@@ -273,4 +273,99 @@ mod tests {
         assert_ne!(DelegationState::Active, DelegationState::Grace);
         assert_ne!(DelegationState::Grace, DelegationState::Expired);
     }
+
+    #[test]
+    fn build_fqdn_apex_name() {
+        let fqdn = build_fqdn("npub1abc", "@", "nodns.shop");
+        assert_eq!(fqdn, "npub1abc.nodns.shop.");
+    }
+
+    #[test]
+    fn build_fqdn_empty_name() {
+        let fqdn = build_fqdn("npub1abc", "", "nodns.shop");
+        assert_eq!(fqdn, "npub1abc.nodns.shop.");
+    }
+
+    #[test]
+    fn build_fqdn_subdomain_name() {
+        let fqdn = build_fqdn("npub1abc", "www", "nodns.shop");
+        assert_eq!(fqdn, "www.npub1abc.nodns.shop.");
+    }
+
+    #[test]
+    fn build_fqdn_deep_subdomain() {
+        let fqdn = build_fqdn("npub1abc", "blog.api", "nodns.shop");
+        assert_eq!(fqdn, "blog.api.npub1abc.nodns.shop.");
+    }
+
+    #[test]
+    fn build_fqdn_different_zone() {
+        let fqdn = build_fqdn("npub1xyz", "@", "test.shop");
+        assert_eq!(fqdn, "npub1xyz.test.shop.");
+    }
+
+    #[test]
+    fn record_type_to_u16_all_known_types() {
+        assert_eq!(record_type_to_u16("A"), 1);
+        assert_eq!(record_type_to_u16("NS"), 2);
+        assert_eq!(record_type_to_u16("CNAME"), 5);
+        assert_eq!(record_type_to_u16("PTR"), 12);
+        assert_eq!(record_type_to_u16("MX"), 15);
+        assert_eq!(record_type_to_u16("TXT"), 16);
+        assert_eq!(record_type_to_u16("AAAA"), 28);
+        assert_eq!(record_type_to_u16("SRV"), 33);
+    }
+
+    #[test]
+    fn record_type_to_u16_unknown_type() {
+        assert_eq!(record_type_to_u16("UNKNOWN"), 0);
+        assert_eq!(record_type_to_u16("LOC"), 0);
+        assert_eq!(record_type_to_u16("DNSKEY"), 0);
+    }
+
+    #[test]
+    fn record_type_to_u16_case_sensitive() {
+        assert_eq!(record_type_to_u16("a"), 0);
+        assert_eq!(record_type_to_u16("txt"), 0);
+        assert_eq!(record_type_to_u16("aaaa"), 0);
+    }
+
+    #[test]
+    fn dns_record_display_a_record() {
+        let record = DnsRecord {
+            record_type: "A".to_string(),
+            name: "@".to_string(),
+            ttl: 3600,
+            rdata: "1.2.3.4".to_string(),
+        };
+        assert_eq!(format!("{record}"), "@ 3600 IN A 1.2.3.4");
+    }
+
+    #[test]
+    fn dns_record_display_txt_record() {
+        let record = DnsRecord {
+            record_type: "TXT".to_string(),
+            name: "@".to_string(),
+            ttl: 300,
+            rdata: "hello world".to_string(),
+        };
+        assert_eq!(format!("{record}"), "@ 300 IN TXT hello world");
+    }
+
+    #[test]
+    fn dns_record_display_custom_name() {
+        let record = DnsRecord {
+            record_type: "AAAA".to_string(),
+            name: "www".to_string(),
+            ttl: 7200,
+            rdata: "::1".to_string(),
+        };
+        assert_eq!(format!("{record}"), "www 7200 IN AAAA ::1");
+    }
+
+    #[test]
+    fn constants_have_expected_values() {
+        assert_eq!(DEFAULT_TTL, 3600);
+        assert_eq!(KIND_DNS_RECORD, 11111);
+    }
 }
