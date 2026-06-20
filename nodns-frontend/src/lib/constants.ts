@@ -1,6 +1,7 @@
 export const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? '';
 
 export const RELAYS = [
+  'wss://relay.cashu.email',
   'wss://relay.damus.io',
   'wss://nos.lol',
   'wss://nostr.wine',
