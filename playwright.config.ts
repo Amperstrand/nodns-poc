@@ -55,5 +55,10 @@ export default defineConfig({
       testDir: "./tests",
       testMatch: "navigation.spec.ts",
     },
+    {
+      name: "security",
+      testDir: "./tests",
+      testMatch: "security.spec.ts",
+    },
   ],
 });

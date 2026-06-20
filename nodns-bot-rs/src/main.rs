@@ -11,6 +11,8 @@ mod handlers;
 mod nip05;
 mod parser;
 mod payment;
+#[cfg(test)]
+mod security_tests;
 mod store;
 mod subscriber;
 pub mod types;

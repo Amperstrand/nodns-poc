@@ -31,6 +31,16 @@ if echo "$STAGED" | grep -q '^nodns-bot-rs/.*\.rs$'; then
     echo "[pre-commit] Bot: running clippy..."
     (cd "$ROOT/nodns-bot-rs" && cargo clippy -- -D warnings)
     echo "[pre-commit] OK - bot clippy clean."
+
+    echo "[pre-commit] 🔒 Bot: running security regression tests..."
+    if ! (cd "$ROOT/nodns-bot-rs" && cargo test security_tests -- --nocapture 2>&1 | tail -10); then
+        echo ""
+        echo "[pre-commit] ❌ SECURITY TESTS FAILED — commit blocked"
+        echo "   A security regression test failed. Fix it before committing."
+        echo "   Run: cd nodns-bot-rs && cargo test security_tests"
+        exit 1
+    fi
+    echo "[pre-commit] ✅ Security tests passed"
 fi
 
 # ---------------------------------------------------------------------------
