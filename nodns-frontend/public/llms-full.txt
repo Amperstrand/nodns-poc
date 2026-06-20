@@ -1,0 +1,769 @@
+# nodns.shop — Full API Reference
+
+> nodns.shop is a Nostr-to-DNS bridge. Publish a cryptographically-signed Nostr event (kind 11111) to a relay, and a Rust bot creates a real, DNSSEC-signed DNS record at `<npub>.nodns.shop` within ~3 seconds. No API keys, no accounts, no control panels — your Nostr private key (nsec) IS your credential.
+
+This is the comprehensive reference for building a client against nodns.shop. For a shorter summary, see https://nodns.shop/llms.txt. Source code: https://github.com/Amperstrand/nodns-poc.
+
+Status: experimental proof-of-concept. Protocol is an experimental draft. Not production.
+
+---
+
+## Table of contents
+
+1. Architecture overview
+2. Authentication and identity
+3. Name classes (npub vs custom)
+4. Payment (Cashu)
+5. Kind 11111 event reference
+   - 5.1 Record tag (create/update)
+   - 5.2 Delete tag
+   - 5.3 Delegation tag
+   - 5.4 Registrar tag
+   - 5.5 Claim tag
+   - 5.6 Renewal tag
+   - 5.7 Cashu payment tag
+6. HTTP API reference
+   - 6.1 GET /api/records
+   - 6.2 GET /api/records/by-npub/{npub}
+   - 6.3 GET /api/records/by-prefix/{prefix}
+   - 6.4 GET /api/check
+   - 6.5 GET /api/zones/{zone}/pricing
+   - 6.6 GET /api/tls-check
+   - 6.7 GET /.well-known/nostr.json (NIP-05)
+   - 6.8 GET /health
+   - 6.9 POST /api/acme/order
+   - 6.10 GET /api/acme/order/{id}
+7. Nostr relays
+8. DNS resolution
+9. Validation rules
+10. Error handling
+11. Backwards-compatible APIs (DynDNS, acme-dns, RFC 2136)
+12. Worked examples (all record types)
+13. Client gotchas
+14. Spec coverage
+15. See also
+
+---
+
+## 1. Architecture overview
+
+```
+User publishes kind 11111 Nostr event to relay
+        |
+        v
+  nodns-bot (Rust, nostr-sdk) subscribes to relays
+        |
+        |- parser.rs      parse tags, validate record shape
+        |- auth.rs        verify npub owns the subdomain
+        |- payment.rs     verify Cashu token (CDK)
+        |- event_processor.rs  orchestrate full pipeline
+        |- store.rs       persist to SQLite
+        |- dns.rs         TSIG-signed DDNS UPDATE (RFC 2136)
+        |
+        v
+  Knot DNS 3.3.4 (authoritative, DNSSEC-signed, ECDSAP256SHA256)
+        |
+        v
+  Record live + globally resolvable (~3 seconds)
+
+  Caddy (reverse proxy):
+    /api/*          -> bot (127.0.0.1:9090)
+    *.nodns.shop    -> GitHub Pages (Next.js static frontend)
+```
+
+Components:
+
+| Component | Tech | Role |
+|-----------|------|------|
+| nodns-bot | Rust (nostr-sdk, hickory-dns, axum, CDK) | Subscribes to relays, validates events, pushes DDNS updates, serves REST API |
+| Knot DNS | 3.3.4 | Authoritative nameserver with DNSSEC online signing |
+| Frontend | Next.js 16 (static export) | Key generation, record publishing UI, Cashu wallet. Hosted on GitHub Pages. |
+| Caddy | 2.11 | Reverse proxy: /api/* to bot, everything else to GitHub Pages |
+| Database | SQLite (rusqlite, Mutex<Connection>) | Event log, delegations, ACME orders, registrar keys |
+
+---
+
+## 2. Authentication and identity
+
+There is no HTTP authentication. No API keys, no bearer tokens, no sessions, no cookies.
+
+**Your Nostr keypair is your identity and authorization.**
+
+- Every kind 11111 event is signature-verified by nostr-sdk before any processing.
+- Events with invalid signatures are dropped at the subscriber level — they never reach the processing pipeline.
+- The same key that signs events proves authority over the resulting DNS subdomain.
+- Key loss = identity loss. There is no recovery mechanism.
+
+The frontend generates an ephemeral keypair by default (stored in localStorage). Using a personal nsec ties your IP to your npub — ephemeral is the privacy-preserving default.
+
+---
+
+## 3. Name classes
+
+Two name classes with different authority rules:
+
+| Name type | Example | Authority | Cost |
+|-----------|---------|-----------|------|
+| npub-derived | `npub1abc...nodns.shop` | Event signer (always) | Free (if `npub_names_free`) |
+| custom | `alice.nodns.shop` | NIP-26 delegation tag or `claim` tag required | Paid (if pricing enabled) |
+
+**npub-derived names**: the event signer always owns the name `npub1<...>.<zone>`. No coordination needed. Free by default.
+
+**Custom names**: require either an active delegation event (signed by the zone registrar assigning the name to your npub) or a `claim` tag with Cashu payment. The delegation must be within its `valid_from`/`valid_until` window.
+
+All npubs derived from 32-byte x-only Nostr public keys are exactly 63 characters — always within DNS's 63-character label limit (RFC 1035).
+
+---
+
+## 4. Payment (Cashu)
+
+When zone payment is enabled, record creation requires a Cashu token embedded in the event.
+
+### Pricing (nodns.shop PoC)
+
+| Operation | Price |
+|-----------|-------|
+| Record creation | 2 sats |
+| Record update | 0 sats (free) |
+| Record deletion | 0 sats (free) |
+| npub-derived names | Free (`npub_names_free = true`) |
+| Lease (custom names) | 2 sats/month |
+
+Check live pricing:
+```bash
+curl -s https://nodns.shop/api/zones/nodns.shop/pricing
+```
+
+### Accepted mints
+
+- **Primary mint**: `https://testnut.cashu.space` (test tokens, no real value)
+- **Mint filter**: the bot accepts tokens only from mints with `testnut` in the hostname.
+  - `testnut.cashu.space` — accepted
+  - `nofees.testnut.cashu.space` — accepted
+  - `stablenut.cashu.network` — rejected (real value)
+  - `mint.minibits.cash` — rejected (real value)
+
+### Token format
+
+- V4 `cashuB` (CBOR-encoded): accepted
+- V3 `cashuA` (base64-encoded): accepted
+- Tokens start with `cashuB...` or `cashuA...`
+
+### Payment verification flow
+
+1. User publishes a kind 11111 event with a `["cashu", TOKEN, MINT_URL, AMOUNT]` tag.
+2. The bot decodes the token, verifies the mint URL matches the zone's `mint_filter`.
+3. The bot calls the mint's `/v1/checkstate` endpoint to confirm all proofs are unspent.
+4. The bot verifies the token amount covers the required price.
+5. If valid, the event is processed. If not, it is rejected.
+
+The payment proof is part of the public Nostr event — anyone can independently verify the payment was made, the amount was correct, and the mint confirmed unspent status.
+
+### Price locking
+
+The registration event IS the contract. It records the lease price, renewal price, lease duration, and maximum renewal date. The operator cannot change the renewal price after registration. Anyone can verify via the public Nostr event log.
+
+---
+
+## 5. Kind 11111 event reference
+
+All operations use kind 11111 events. The operation type is determined by the tags present. Kind 11111 is in the replaceable range (10000–20000 per NIP-01) — relays retain only the latest event per pubkey+kind.
+
+### 5.1 Record tag (create/update)
+
+Creates or updates a DNS record. Same npub + same name + same type = update (replace).
+
+**5-element format (recommended):**
+
+```
+["record", TYPE, NAME, TTL, RDATA]
+```
+
+| Position | Value | Description |
+|----------|-------|-------------|
+| 0 | `"record"` | Literal tag name |
+| 1 | TYPE | DNS record type: `A`, `AAAA`, `CNAME`, `TXT`, `MX` |
+| 2 | NAME | Subdomain label: `""` or `"@"` for apex, `"www"` for a sub-label |
+| 3 | TTL | TTL in seconds (string of uint32). Defaults to 3600 if empty or 0. |
+| 4 | RDATA | Record data: IP address, hostname, or text content |
+
+Example:
+```json
+["record", "A", "", "3600", "193.99.144.80"]
+```
+
+**11-element format (legacy, accepted for backward compat):**
+
+```
+["record", TYPE, NAME, "", "", "", "", "", "", "", TTL]
+```
+
+Positions 3–9 (indices 3..=9) are joined with spaces to form RDATA (non-empty values only). TTL is at index 10.
+
+Example (TXT "hello from nostr!", TTL 3600):
+```json
+["record", "TXT", "", "hello from nostr!", "", "", "", "", "", "", "3600"]
+```
+
+Multiple record tags may appear in one event — they are processed together.
+
+### 5.2 Delete tag
+
+Removes a specific DNS record. Only the pubkey that owns the subdomain can delete.
+
+```
+["delete", TYPE, NAME]
+```
+
+| Position | Value | Description |
+|----------|-------|-------------|
+| 0 | `"delete"` | Literal tag name |
+| 1 | TYPE | Record type to delete: `A`, `AAAA`, `CNAME`, `TXT`, `MX`, `SRV`, `NS`, `PTR` |
+| 2 | NAME | Subdomain label: `""` or `"@"` for apex, `"www"` for a sub-label |
+
+Example:
+```json
+["delete", "A", ""]
+```
+
+Multiple delete tags may appear in one event. Deletes are processed after records in the same event (enabling atomic replace semantics). NIP-09 (kind 5) deletion events are NOT processed — only `["delete", ...]` tags in kind 11111 events work.
+
+### 5.3 Delegation tag
+
+A registrar delegates a custom domain name to a Nostr pubkey. **Irrevocable** once signed.
+
+```
+["delegation", DOMAIN, NPUB, VALID_FROM, VALID_UNTIL, RENEW_BY]
+```
+
+| Position | Value | Description |
+|----------|-------|-------------|
+| 0 | `"delegation"` | Literal tag name |
+| 1 | DOMAIN | FQDN being delegated (e.g. `"alice.nodns.shop"`) |
+| 2 | NPUB | Nostr pubkey (npub) receiving the delegation |
+| 3 | VALID_FROM | Unix timestamp (string) — delegation starts |
+| 4 | VALID_UNTIL | Unix timestamp (string) — delegation expires |
+| 5 | RENEW_BY | Unix timestamp (string) — renewal deadline |
+
+Must be signed by the zone's authorized registrar pubkey. Only one delegation tag per event.
+
+### 5.4 Registrar tag
+
+Publishes the Nostr pubkey authorized to sign delegations for a zone.
+
+```
+["registrar", ZONE, PUBKEY_HEX]
+```
+
+| Position | Value | Description |
+|----------|-------|-------------|
+| 0 | `"registrar"` | Literal tag name |
+| 1 | ZONE | Zone name (e.g. `"nodns.shop"`) |
+| 2 | PUBKEY_HEX | Nostr pubkey (hex) authorized to sign delegations |
+
+### 5.5 Claim tag
+
+Claim a custom name with payment.
+
+```
+["claim", NAME, ZONE, VALID_UNTIL]
+```
+
+| Position | Value | Description |
+|----------|-------|-------------|
+| 0 | `"claim"` | Literal tag name |
+| 1 | NAME | DNS label to claim (lowercase alphanumeric + hyphens, 1–63 chars) |
+| 2 | ZONE | Zone name (e.g. `"nodns.shop"`) |
+| 3 | VALID_UNTIL | Unix timestamp (string) — claim expiry |
+
+Must be accompanied by a Cashu payment tag if pricing is enabled.
+
+### 5.6 Renewal tag
+
+Renew a custom name before expiry.
+
+```
+["renewal", NAME, ZONE, NEW_VALID_UNTIL]
+```
+
+Accompanied by a Cashu payment tag. Renewal price is locked at the original registration (operator cannot raise it).
+
+### 5.7 Cashu payment tag
+
+```
+["cashu", TOKEN, MINT_URL, AMOUNT]
+```
+
+| Position | Value | Description |
+|----------|-------|-------------|
+| 0 | `"cashu"` | Literal tag name |
+| 1 | TOKEN | Cashu token string (`cashuB...` or `cashuA...`) |
+| 2 | MINT_URL | Mint URL that issued the token (e.g. `"https://testnut.cashu.space"`) |
+| 3 | AMOUNT | Amount in sats (string) |
+
+---
+
+## 6. HTTP API reference
+
+Base URL: `https://nodns.shop`. CORS: `Access-Control-Allow-Origin: *` on `/api/records`.
+
+### 6.1 GET /api/records
+
+List DNS records. Public, no auth.
+
+**Query parameters:**
+
+| Param | Type | Description |
+|-------|------|-------------|
+| `pubkey` | string (optional) | Filter by Nostr pubkey (hex) |
+| `domain` | string (optional) | Filter by FQDN |
+
+If no params, returns all records.
+
+**Response (200):**
+
+```json
+{
+  "records": [
+    {
+      "npub": "npub1ykal28...",
+      "name": "",
+      "fqdn": "npub1ykal28....nodns.shop",
+      "type": "TXT",
+      "ttl": 3600,
+      "rdata": "hello from nostr!",
+      "created_at": 1718900000
+    }
+  ],
+  "count": 1
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `records[].npub` | string | Nostr pubkey owning the record |
+| `records[].name` | string | Subdomain label (empty string = apex) |
+| `records[].fqdn` | string | Fully qualified domain name |
+| `records[].type` | string | DNS record type |
+| `records[].ttl` | number | TTL in seconds |
+| `records[].rdata` | string | Record data |
+| `records[].created_at` | number | Unix timestamp (seconds) of record creation |
+| `count` | number | Number of records returned |
+
+### 6.2 GET /api/records/by-npub/{npub}
+
+Records for an exact npub.
+
+**Path parameter:** `npub` — the bech32 npub string.
+
+**Response (200):** Same shape as GET /api/records.
+
+### 6.3 GET /api/records/by-prefix/{prefix}
+
+Records matching an npub prefix (useful for partial lookups).
+
+**Path parameter:** `prefix` — leading characters of an npub.
+
+**Response (200):** Same shape as GET /api/records.
+
+### 6.4 GET /api/check
+
+Check whether a name is registered, via both the API database and live DNS.
+
+**Query parameter:** `name` — the subdomain label to check (without zone suffix).
+
+**Response (200):**
+
+```json
+{
+  "name": "alice",
+  "zone": "nodns.shop",
+  "api": {
+    "registered": false,
+    "records": []
+  },
+  "dns": {
+    "registered": false,
+    "records": []
+  }
+}
+```
+
+`api.registered` reflects the bot's SQLite database. `dns.registered` reflects a live DNS TXT query against Knot DNS. Both fields use the same record object shape as /api/records (dns records may have empty `npub` and `created_at: 0`).
+
+### 6.5 GET /api/zones/{zone}/pricing
+
+Zone pricing configuration.
+
+**Path parameter:** `zone` — zone name (e.g. `nodns.shop`).
+
+**Response (200):**
+
+```json
+{
+  "zone": "nodns.shop",
+  "enabled": true,
+  "create_price": 2,
+  "update_price": 0,
+  "delete_price": 0,
+  "npub_names_free": true,
+  "mint_url": "https://testnut.cashu.space",
+  "mint_filter": "testnut"
+}
+```
+
+**Response (404):** `{"error": "zone not found"}`
+
+### 6.6 GET /api/tls-check
+
+Check TLS certificate status for a domain.
+
+**Query parameter:** `domain` — FQDN to check.
+
+### 6.7 GET /.well-known/nostr.json (NIP-05)
+
+NIP-05 identity verification. Returns `{"names": {}}` for unknown names (correct per NIP-05 — no fake pubkeys).
+
+**Query parameter:** `name` — the local part of a NIP-05 identifier.
+
+**Response (200):** `{"names": {"alice": "hex-pubkey"}}` for known names, or `{"names": {}}` for unknown.
+
+### 6.8 GET /health
+
+Bot health check.
+
+**Response (200):** JSON with `status: "ok"`, uptime, and event counters.
+
+### 6.9 POST /api/acme/order
+
+Order a TLS certificate via DNS-01 challenge. The bot publishes `_acme-challenge` TXT records automatically.
+
+**Header:** `X-Nostr-Npub: npub1...` — identifies the requesting user.
+
+**Request body:**
+```json
+{
+  "domain": "alice.nodns.shop",
+  "csr_der": "base64-encoded-CSR (optional)",
+  "environment": "production",
+  "ca": "letsencrypt-production"
+}
+```
+
+Rate-limited (governor: burst size 3). Supported CAs: Let's Encrypt (staging + production), ZeroSSL (EAB).
+
+### 6.10 GET /api/acme/order/{id}
+
+Poll ACME order status or fetch an issued certificate.
+
+**Path parameter:** `id` — order ID from the POST response.
+
+**Response:** status progression: `pending` → `challenge_published` → `verifying` → `issued` | `failed`. When `issued`, includes `certificate_pem` and `private_key_pem` (private key encrypted at rest with AES-256-GCM, decrypted on fetch).
+
+---
+
+## 7. Nostr relays
+
+Publish kind 11111 events to any of these relays (the bot subscribes to all):
+
+- `wss://relay.damus.io`
+- `wss://nos.lol`
+- `wss://nostr.wine`
+- `wss://relay.ngit.dev`
+- `wss://relay.tollgate.me`
+
+The bot uses nostr-sdk's shared relay pool (single `Client` managing all connections). Events are zone-agnostic — publishing once works across all zones. Duplicate events from multiple relays are handled idempotently (SQLite `INSERT OR REPLACE`).
+
+---
+
+## 8. DNS resolution
+
+**Standard DNS:**
+```bash
+dig @8.8.8.8 npub1....nodns.shop TXT +short
+dig +dnssec @8.8.8.8 npub1....nodns.shop A
+```
+
+**DoH:** `https://dns.nodns.shop/dns-query` — **known issue**: currently returns a TLS internal error (SSL alert 80). Use standard DNS until fixed.
+
+**`.nostr` TLD:** `npub1...nostr` resolves via the DoH endpoint (when operational) or Arjen's nodns-nameserver local resolver. String names under `.nostr` return NXDOMAIN (npub-only by design — no consensus mechanism for string ownership).
+
+**DNSSEC:** zone signed with ECDSAP256SHA256 (algorithm 13), NSEC3 with 0 iterations (RFC 9276). DS record at the `.shop` registrar. Verify the chain: `dig +dnssec @8.8.8.8 nodns.shop SOA` (look for the `ad` flag = Authenticated Data).
+
+---
+
+## 9. Validation rules
+
+### Allowed DNS record types
+
+Default: `A`, `AAAA`, `CNAME`, `TXT`, `MX`. Delete tags also accept `SRV`, `NS`, `PTR`. Operator may extend via `policy.allowed_types` in config.
+
+### DNS label rules (NAME field)
+
+- Lowercase alphanumeric, hyphens, underscores.
+- Max 63 characters.
+- No leading or trailing hyphens.
+- `""` and `"@"` are reserved for the apex.
+- No dots (each label is a single DNS label).
+
+Examples: `www`, `api-v2`, `_acme-challenge`, `sub123`.
+
+### Blocked IP ranges (A/AAAA records)
+
+When `block_private_ip = true` (production default):
+
+- IPv4: `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `127.0.0.0/8`, `169.254.0.0/16`, `0.0.0.0/8`, `100.64.0.0/10`
+- IPv6: `fc00::/7`, `fe80::/10`, `::1/128`
+
+### TXT anti-spoofing
+
+The following TXT records are blocked to prevent email-infrastructure impersonation:
+- `_dmarc.*` — DMARC spoofing prevention
+- `_domainkey*` — DKIM spoofing prevention
+- Apex TXT starting with `v=spf1` — SPF spoofing prevention
+
+### CNAME rule
+
+CNAME cannot coexist with other record types at the same name (RFC 1912). Events containing a CNAME and another type at the same name are rejected.
+
+### TTL behavior
+
+TTL defaults to 3600 (1 hour) if empty or 0. Any positive integer accepted. No minimum enforcement currently.
+
+### Record limits
+
+- `max_records`: 20 per subdomain (configurable)
+- `rate_limit`: 5 events per npub per window
+- `max_txt_length`: 512 characters
+
+---
+
+## 10. Error handling
+
+Events that fail validation are silently dropped (the bot logs the rejection but does not send error responses over Nostr). There is no error channel — check bot logs via `journalctl -u nodns-bot` on the VPS if debugging.
+
+HTTP API errors:
+
+| Status | Meaning |
+|--------|---------|
+| 200 | Success |
+| 404 | Zone not found (pricing endpoint) or resource not found |
+| 405 | Method not allowed (e.g. POST /api/records — use Nostr relays instead) |
+| 429 | Rate limited (governor on ACME and API routes) |
+| 500 | Internal server error |
+
+---
+
+## 11. Backwards-compatible APIs
+
+nodns-bot implements several standard DNS APIs for compatibility with existing tools:
+
+### DynDNS v2 (`/nic/update`)
+
+For routers and ddclient. Configure:
+- Server: `nodns.shop`
+- Username: your npub
+- Password: your nsec
+
+Supports GET and POST.
+
+### acme-dns protocol (`/register`, `/update`)
+
+For certbot DNS-01 challenges using the acme-dns protocol. POST `/register` creates an account; POST `/update` publishes a TXT record.
+
+### RFC 2136 DNS UPDATE
+
+The bot can run an RFC 2136 dynamic update listener (UDP, configurable port) for `nsupdate` compatibility. Configured via `[dns_update]` in the bot's TOML config.
+
+See: https://github.com/Amperstrand/nodns-poc/blob/main/docs/34-backwards-compatible-apis.md
+
+---
+
+## 12. Worked examples (all record types)
+
+### A record (IPv4)
+
+```json
+{
+  "kind": 11111,
+  "content": "",
+  "tags": [
+    ["record", "A", "", "3600", "193.99.144.80"],
+    ["cashu", "cashuB...", "https://testnut.cashu.space", "2"]
+  ]
+}
+```
+Result: `npub1....nodns.shop A 193.99.144.80`
+
+### AAAA record (IPv6)
+
+```json
+{
+  "kind": 11111,
+  "content": "",
+  "tags": [
+    ["record", "AAAA", "", "3600", "2001:db8::1"],
+    ["cashu", "cashuB...", "https://testnut.cashu.space", "2"]
+  ]
+}
+```
+Result: `npub1....nodns.shop AAAA 2001:db8::1`
+
+### TXT record
+
+```json
+{
+  "kind": 11111,
+  "content": "",
+  "tags": [
+    ["record", "TXT", "", "3600", "v=spf1 include:_spf.google.com ~all"],
+    ["cashu", "cashuB...", "https://testnut.cashu.space", "2"]
+  ]
+}
+```
+Result: `npub1....nodns.shop TXT "v=spf1 include:_spf.google.com ~all"`
+
+Note: apex TXT starting with `v=spf1` is blocked by anti-spoofing. Use a subdomain name for SPF, or use a non-SPF TXT value at the apex.
+
+### CNAME record (subdomain)
+
+```json
+{
+  "kind": 11111,
+  "content": "",
+  "tags": [
+    ["record", "CNAME", "blog", "3600", "myblog.github.io."],
+    ["cashu", "cashuB...", "https://testnut.cashu.space", "2"]
+  ]
+}
+```
+Result: `blog.npub1....nodns.shop CNAME myblog.github.io.`
+
+### MX record
+
+```json
+{
+  "kind": 11111,
+  "content": "",
+  "tags": [
+    ["record", "MX", "", "3600", "10 mail.example.com."],
+    ["cashu", "cashuB...", "https://testnut.cashu.space", "2"]
+  ]
+}
+```
+Result: `npub1....nodns.shop MX 10 mail.example.com.`
+
+### Multiple records in one event
+
+```json
+{
+  "kind": 11111,
+  "content": "",
+  "tags": [
+    ["record", "A", "", "3600", "193.99.144.80"],
+    ["record", "TXT", "", "3600", "hello"],
+    ["record", "A", "www", "3600", "193.99.144.80"],
+    ["cashu", "cashuB...", "https://testnut.cashu.space", "6"]
+  ]
+}
+```
+
+### Update a record (same npub, same name+type)
+
+```json
+{
+  "kind": 11111,
+  "content": "",
+  "tags": [
+    ["record", "A", "", "3600", "203.0.113.42"]
+  ]
+}
+```
+Updates are free (no cashu tag needed if `update_price = 0`). Latest event wins by `created_at`.
+
+### Delete a record
+
+```json
+{
+  "kind": 11111,
+  "content": "",
+  "tags": [
+    ["delete", "A", ""]
+  ]
+}
+```
+Deletes are free.
+
+### Atomic replace (delete + record in one event)
+
+```json
+{
+  "kind": 11111,
+  "content": "",
+  "tags": [
+    ["delete", "A", "www"],
+    ["record", "A", "www", "3600", "203.0.113.99"]
+  ]
+}
+```
+Deletes run after records in the same event.
+
+---
+
+## 13. Client gotchas
+
+### nodns-specific
+
+1. **Use the 5-element record tag format** (`["record", TYPE, NAME, TTL, RDATA]`). The 11-element legacy format is accepted but deprecated. Some docs show the legacy format — use 5-element.
+2. **Do not include the zone in record tags.** Events are zone-agnostic. The bot maps events to zones based on its config.
+3. **NIP-09 (kind 5) deletion events are NOT processed.** Use `["delete", TYPE, NAME]` inside a kind 11111 event instead.
+4. **Publish via Nostr relays, not HTTP.** `POST /api/records` returns 405. There is no HTTP write API for records.
+5. **npubs are always 63 characters** — always fit a DNS label. No need to check or generate "short" keys.
+6. **TTL=0 defaults to 3600.** Do not set TTL=0 expecting instant propagation. The bot pushes to the authoritative server directly — propagation is already near-instant regardless of TTL.
+7. **Private IPs are blocked** in production. See the full blocked range list in section 9.
+8. **TXT anti-spoofing**: `_dmarc.*`, `_domainkey*`, and apex TXT starting with `v=spf1` are blocked.
+9. **CNAME cannot coexist** with other types at the same name (RFC 1912).
+10. **Cashu tokens are one-time-use bearer ecash**, not API keys. Each token is spent once during verification. The testnut mint charges ~1 sat fee per transaction (so a 2-sat payment nets ~1 sat to the operator).
+11. **Replaceable events**: kind 11111 is replaceable. Re-publishing replaces the previous event for that pubkey. To manage multiple records, include all current records in each event (the latest event is the source of truth).
+
+### Cashu client library gotchas
+
+The nodns frontend uses `coco-cashu-core`. If you build a client with `cashu-ts` instead:
+
+1. **cashu-ts v4 API drift**: use the `Wallet` class, not `CashuMint`/`CashuWallet`. Pin to `^4.5.1`.
+2. **`proof.amount` is a BigInt**: do not `JSON.stringify` proofs directly — BigInt is not JSON-serializable. Convert with `.toString()` or use a replacer.
+3. **`checkMintQuoteBolt11().paid` is undefined** even after payment. Check `state === 'PAID'` instead.
+4. **Mint fees**: `testnut.cashu.space` charges `input_fee_ppk: 100` (~1 sat per transaction). Mint extra to cover fees.
+
+---
+
+## 14. Spec coverage
+
+| Spec | Status | Notes |
+|------|--------|-------|
+| NIP-01 (event format) | Implemented | kind 11111 in replaceable range (10000–20000) |
+| NIP-05 (nostr.json) | Implemented | `/.well-known/nostr.json?name=` returns `{names:{}}` for unknown |
+| NIP-19 (npub/nsec) | Implemented | npub as DNS subdomain; nsec signs events |
+| NIP-26 (delegation) | Implemented | Custom names require delegation tags |
+| NUT-00 (Cashu tokens) | Implemented | V4 `cashuB` (CBOR); V3 `cashuA` accepted |
+| NUT-20 (mint quote bound to pubkey) | Supported | Prevents quote theft; documented in pricing docs |
+| RFC 2136 (DDNS) | Implemented | TSIG-signed updates to Knot DNS |
+| RFC 9116 (security.txt) | Implemented | `/.well-known/security.txt` |
+| RFC 9276 (NSEC3) | Implemented | 0 iterations per recommendation |
+
+---
+
+## 15. See also
+
+- Summary: https://nodns.shop/llms.txt
+- Source code: https://github.com/Amperstrand/nodns-poc
+- Protocol spec: https://github.com/Amperstrand/nodns-poc/blob/main/docs/11-protocol-experimental-draft.md
+- Pricing and payments: https://github.com/Amperstrand/nodns-poc/blob/main/docs/22-pricing-and-payments.md
+- Demo recipes (7 scripts with exact commands): https://github.com/Amperstrand/nodns-poc/blob/main/docs/14-demo-recipes.md
+- FAQ (gotchas, misconceptions): https://github.com/Amperstrand/nodns-poc/blob/main/docs/33-faq.md
+- Backwards-compatible APIs (DynDNS, acme-dns, RFC 2136): https://github.com/Amperstrand/nodns-poc/blob/main/docs/34-backwards-compatible-apis.md
+- Lease and renewal: https://github.com/Amperstrand/nodns-poc/blob/main/docs/23-lease-and-renewal.md
+- DNSSEC trust architecture: https://github.com/Amperstrand/nodns-poc/blob/main/docs/31-dnssec-trust-architecture.md
+- Sibling services in the Nostr+Cashu ecosystem:
+  - Blossom file storage (BUD-02): https://blossom.psbt.me/llms.txt
+  - nomail Nostr email: https://nomail.name/llms.txt

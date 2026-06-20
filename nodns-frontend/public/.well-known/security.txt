@@ -1,0 +1,11 @@
+# Security policy for nodns.shop
+# Per RFC 9116 (https://www.rfc-editor.org/rfc/rfc9116.html)
+
+Contact: mailto:cert@nodns.shop
+Contact: https://github.com/Amperstrand/nodns-poc/security/advisories/new
+Expires: 2027-06-20T00:00:00.000Z
+Preferred-Languages: en
+Canonical: https://nodns.shop/.well-known/security.txt
+
+# nodns.shop is an experimental proof-of-concept. The protocol (kind 11111)
+# is an experimental draft. Source code: https://github.com/Amperstrand/nodns-poc

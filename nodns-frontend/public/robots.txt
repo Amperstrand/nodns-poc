@@ -1,0 +1,15 @@
+# robots.txt for nodns.shop
+# Nostr-to-DNS bridge — DNS records from Nostr events.
+#
+# AI agents, crawlers, indexers, and LLMs are welcome to crawl this site.
+# The API at /api/* is public and CORS-enabled (Access-Control-Allow-Origin: *).
+#
+# Machine-readable documentation for AI agents:
+#   https://nodns.shop/llms.txt        (summary)
+#   https://nodns.shop/llms-full.txt   (full API reference)
+#   https://nodns.shop/.well-known/llms.txt
+#
+# Source code: https://github.com/Amperstrand/nodns-poc
+
+User-agent: *
+Allow: /
