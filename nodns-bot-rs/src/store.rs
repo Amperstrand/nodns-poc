@@ -286,6 +286,8 @@ impl Store {
             }
         }
 
+        run_migrations(&conn)?;
+
         info!("database initialized");
         Ok(())
     }
@@ -796,6 +798,36 @@ impl Store {
         Ok(records)
     }
 
+    /// Get test delegations whose `expires_at` has passed and are not yet expired.
+    ///
+    /// Returns rows where `test_mint = 1 AND expires_at IS NOT NULL AND
+    /// expires_at <= now AND status != 'expired'`. Used by the test record
+    /// cleanup cron to sweep `testing*` registrations past their TTL.
+    pub fn get_test_delegations_expired(&self) -> Result<Vec<DelegationRecord>, StoreError> {
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs() as i64;
+
+        let conn = self.conn();
+        let mut stmt = conn
+            .prepare(
+                "SELECT event_id, domain, zone, npub, pubkey, valid_from, valid_until, renew_by, registrar_pubkey, renewal_price, status, created_at, processed_at
+                 FROM delegations
+                 WHERE test_mint = 1 AND expires_at IS NOT NULL AND expires_at <= ?1 AND status != 'expired'
+                 ORDER BY expires_at ASC",
+            )
+            .map_err(StoreError::ListAllRecords)?;
+
+        let records = stmt
+            .query_map(params![now], scan_delegation_row)
+            .map_err(StoreError::ListAllRecords)?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(StoreError::ScanRecord)?;
+
+        Ok(records)
+    }
+
     /// Set a delegation's status to 'grace'.
     pub fn mark_delegation_grace(&self, domain: &str, zone: &str) -> Result<(), StoreError> {
         let conn = self.conn();
@@ -1113,6 +1145,36 @@ impl Store {
     }
 }
 
+fn run_migrations(conn: &Connection) -> Result<(), StoreError> {
+    let alter_statements = [
+        "ALTER TABLE delegations ADD COLUMN mint_url TEXT",
+        "ALTER TABLE delegations ADD COLUMN test_mint INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE delegations ADD COLUMN expires_at INTEGER",
+        "ALTER TABLE delegations ADD COLUMN epp_auth_info_encrypted BLOB",
+        "ALTER TABLE events ADD COLUMN mint_url TEXT",
+        "ALTER TABLE events ADD COLUMN test_mint INTEGER NOT NULL DEFAULT 0",
+    ];
+
+    for sql in &alter_statements {
+        match conn.execute(sql, []) {
+            Ok(_) => info!("migration applied: {}", sql),
+            Err(rusqlite::Error::ExecuteReturnedResults) => {}
+            Err(e) if e.to_string().contains("duplicate column") => {}
+            Err(e) if e.to_string().contains("already exists") => {}
+            Err(e) => return Err(StoreError::Schema(e)),
+        }
+    }
+
+    conn.execute_batch(
+        "CREATE INDEX IF NOT EXISTS idx_delegations_test_mint ON delegations(test_mint) WHERE test_mint = 1;
+         CREATE INDEX IF NOT EXISTS idx_delegations_expires ON delegations(expires_at) WHERE expires_at IS NOT NULL;
+         CREATE INDEX IF NOT EXISTS idx_events_test_mint ON events(test_mint) WHERE test_mint = 1;",
+    )
+    .map_err(StoreError::Schema)?;
+
+    Ok(())
+}
+
 // ---------------------------------------------------------------------------
 // Schema constant — matches Go exactly
 // ---------------------------------------------------------------------------
@@ -1215,6 +1277,25 @@ const SCHEMA: &str = r"
 
     CREATE INDEX IF NOT EXISTS idx_acme_dns_reg_username ON acme_dns_registrations(username);
     CREATE INDEX IF NOT EXISTS idx_acme_dns_reg_npub ON acme_dns_registrations(npub);
+
+    CREATE TABLE IF NOT EXISTS epp_orders (
+        id TEXT PRIMARY KEY,
+        delegation_domain TEXT NOT NULL,
+        delegation_zone TEXT NOT NULL,
+        operation TEXT NOT NULL,
+        epp_cltrid TEXT NOT NULL,
+        epp_svtrid TEXT,
+        epp_result_code INTEGER,
+        epp_result_msg TEXT,
+        request_xml TEXT,
+        response_xml TEXT,
+        created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+        completed_at INTEGER,
+        FOREIGN KEY (delegation_domain, delegation_zone) REFERENCES delegations(domain, zone)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_epp_orders_delegation ON epp_orders(delegation_domain, delegation_zone);
+    CREATE INDEX IF NOT EXISTS idx_epp_orders_cltrid ON epp_orders(epp_cltrid);
 ";
 
 // ---------------------------------------------------------------------------

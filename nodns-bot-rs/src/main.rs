@@ -2,10 +2,13 @@
 
 mod acme;
 mod auth;
+mod classify;
 mod config;
 mod dns;
 mod dns_update_server;
 mod dnssec_derivation;
+#[allow(dead_code)]
+mod epp;
 mod event_processor;
 mod handlers;
 mod nip05;
@@ -174,6 +177,113 @@ async fn lease_expiry_task(
 }
 
 // ---------------------------------------------------------------------------
+// Background test record cleanup task
+// ---------------------------------------------------------------------------
+
+async fn test_record_cleanup_task(
+    store: Arc<Store>,
+    updaters: Arc<HashMap<String, Updater>>,
+    epp_pool: Option<Arc<epp::EppPool>>,
+) {
+    let mut interval = tokio::time::interval(std::time::Duration::from_secs(3600));
+    loop {
+        interval.tick().await;
+
+        let delegations = match store.get_test_delegations_expired() {
+            Ok(d) => d,
+            Err(e) => {
+                tracing::error!(error = %e, "test cleanup: query failed");
+                continue;
+            }
+        };
+
+        if delegations.is_empty() {
+            continue;
+        }
+
+        tracing::info!(
+            count = delegations.len(),
+            "test cleanup: sweeping expired test records"
+        );
+
+        for del in &delegations {
+            let full_domain = format!("{}.{}", del.domain, del.zone);
+            if let Some(pool) = &epp_pool {
+                if pool.is_simulated() {
+                    tracing::info!(
+                        domain = %full_domain,
+                        "test cleanup: SIMULATED EPP domain:delete"
+                    );
+                } else {
+                    match pool.domain_delete(&full_domain).await {
+                        Ok(_) => {
+                            tracing::info!(domain = %full_domain, "test cleanup: EPP domain:delete succeeded")
+                        }
+                        Err(e) => tracing::warn!(
+                            domain = %full_domain, error = %e,
+                            "test cleanup: EPP domain:delete failed (continuing with local cleanup)"
+                        ),
+                    }
+                }
+            } else {
+                tracing::info!(
+                    domain = %full_domain,
+                    "test cleanup: no EPP pool — local cleanup only"
+                );
+            }
+
+            if let Some(updater) = updaters.get(&del.zone) {
+                let records = store
+                    .get_records_by_npub_exact(&del.npub)
+                    .unwrap_or_default()
+                    .into_iter()
+                    .filter(|r| r.zone == del.zone)
+                    .collect::<Vec<_>>();
+
+                let mut sent_fqdns: std::collections::HashSet<(String, u16)> =
+                    std::collections::HashSet::new();
+                for rec in &records {
+                    let fqdn = if rec.name == "@" || rec.name.is_empty() {
+                        format!("{}.{}.", del.domain, del.zone)
+                    } else {
+                        format!("{}.{}.{}.", rec.name, del.domain, del.zone)
+                    };
+                    let rt = crate::types::record_type_to_u16(&rec.record_type);
+                    if sent_fqdns.insert((fqdn.clone(), rt)) {
+                        if let Err(e) = updater.delete_record(&fqdn, rt).await {
+                            tracing::warn!(
+                                fqdn = %fqdn, error = %e,
+                                "test cleanup: DDNS delete failed (continuing)"
+                            );
+                        }
+                    }
+                }
+            }
+
+            if let Err(e) = store.soft_delete_records_by_npub_zone(&del.npub, &del.zone) {
+                tracing::error!(
+                    domain = %del.domain, zone = %del.zone, error = %e,
+                    "test cleanup: soft-delete DNS records failed"
+                );
+                continue;
+            }
+
+            if let Err(e) = store.mark_delegation_expired(&del.domain, &del.zone) {
+                tracing::error!(
+                    domain = %del.domain, zone = %del.zone, error = %e,
+                    "test cleanup: mark delegation expired failed"
+                );
+            } else {
+                tracing::info!(
+                    domain = %del.domain, zone = %del.zone,
+                    "test cleanup: test delegation expired and cleaned up"
+                );
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
 
@@ -204,6 +314,22 @@ async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
         dns_zones = cfg.dns.zones.len(),
         "nodns-bot starting"
     );
+
+    if cfg.epp.pool_size > 0 {
+        warn!(
+            host = %cfg.epp.host,
+            port = %cfg.epp.port,
+            "EPP module loaded — operations blocked pending registry IP allowlist"
+        );
+    }
+
+    let epp_pool: Option<Arc<epp::EppPool>> = if cfg.epp.pool_size > 0 {
+        let pool = Arc::new(epp::EppPool::new(cfg.epp.clone()).await?);
+        info!(host = %cfg.epp.host, simulated = cfg.epp.simulate, "EPP pool constructed");
+        Some(pool)
+    } else {
+        None
+    };
 
     // ── Registrar identity + DNSSEC derivation + Nostr attestation ──
     if !cfg.registrar.nsec_hex.is_empty() && cfg.dnssec_derivation.enabled {
@@ -458,6 +584,10 @@ async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
                 axum::routing::post(handlers::dyndns_update_handler),
             )
             .route(
+                "/api/client-log",
+                axum::routing::post(handlers::client_log_handler),
+            )
+            .route(
                 "/register",
                 axum::routing::post(handlers::acmedns_register_handler),
             )
@@ -520,6 +650,16 @@ async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
         });
     }
 
+    // ── Test record cleanup task ──
+    {
+        let tc_store = store.clone();
+        let tc_updaters = updaters.clone();
+        let tc_epp_pool = epp_pool.clone();
+        tokio::spawn(async move {
+            test_record_cleanup_task(tc_store, tc_updaters, tc_epp_pool).await;
+        });
+    }
+
     // ── Event loop ──
     let ev_store = store.clone();
     let ev_auth = authority;
@@ -527,6 +667,7 @@ async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
     let ev_zone_verifiers = zone_verifiers;
     let ev_cfg = cfg;
     let ev_metrics = app_state.clone();
+    let ev_epp_pool = epp_pool.clone();
 
     tokio::spawn(async move {
         loop {
@@ -539,6 +680,7 @@ async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
                     &ev_auth,
                     &ev_zone_verifiers,
                     &ev_metrics.metrics,
+                    ev_epp_pool.as_deref(),
                 )
                 .await;
             } else {

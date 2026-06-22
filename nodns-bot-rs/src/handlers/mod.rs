@@ -1,6 +1,7 @@
 mod acme_dns;
 mod acme_order;
 mod api;
+mod client_log;
 mod dyndns;
 mod health;
 mod tls_check;
@@ -12,6 +13,7 @@ pub use api::{
     check_handler, records_by_npub_handler, records_by_prefix_handler, records_handler,
     zone_pricing_handler,
 };
+pub use client_log::client_log_handler;
 pub use dyndns::dyndns_update_handler;
 pub use health::health_handler;
 pub use tls_check::tls_check_handler;

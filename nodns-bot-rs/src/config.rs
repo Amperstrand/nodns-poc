@@ -75,6 +75,9 @@ pub struct Config {
 
     #[serde(default)]
     pub dns_update: DnsUpdateConfig,
+
+    #[serde(default)]
+    pub epp: crate::epp::EppConfig,
 }
 
 // ---------------------------------------------------------------------------
@@ -943,5 +946,56 @@ relays = ["wss://relay.example.com"]
         cfg.apply_defaults();
         let err = cfg.validate().unwrap_err();
         assert!(err.to_string().contains("nostr.zone"));
+    }
+
+    #[test]
+    fn epp_config_defaults_when_section_absent() {
+        let toml = r#"
+[nostr]
+relays = ["wss://relay.example.com"]
+zone = "nodns.shop"
+
+[[dns.zones]]
+knot_address = "127.0.0.1:5353"
+zone = "nodns.shop"
+tsig_key_name = "key1."
+tsig_key_secret = "secret1"
+"#;
+        let mut cfg: Config = toml::from_str(toml).unwrap();
+        cfg.apply_defaults();
+        assert_eq!(cfg.epp.host, "registry.ola.cv");
+        assert_eq!(cfg.epp.port, 700);
+        assert_eq!(cfg.epp.pool_size, 8);
+        assert_eq!(cfg.epp.timeout_secs, 90);
+        assert_eq!(cfg.epp.password_env_var, "CV_EPP_PASSWORD");
+    }
+
+    #[test]
+    fn epp_config_custom_values() {
+        let toml = r#"
+[nostr]
+relays = ["wss://relay.example.com"]
+zone = "nodns.shop"
+
+[[dns.zones]]
+knot_address = "127.0.0.1:5353"
+zone = "nodns.shop"
+tsig_key_name = "key1."
+tsig_key_secret = "secret1"
+
+[epp]
+host = "custom.registry.cv"
+port = 8443
+username = "bridge"
+pool_size = 4
+timeout_secs = 60
+"#;
+        let mut cfg: Config = toml::from_str(toml).unwrap();
+        cfg.apply_defaults();
+        assert_eq!(cfg.epp.host, "custom.registry.cv");
+        assert_eq!(cfg.epp.port, 8443);
+        assert_eq!(cfg.epp.username, "bridge");
+        assert_eq!(cfg.epp.pool_size, 4);
+        assert_eq!(cfg.epp.timeout_secs, 60);
     }
 }

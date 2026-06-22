@@ -5,7 +5,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use nostr_sdk::nips::nip19::ToBech32;
 use nostr_sdk::Event;
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
 
 use crate::auth;
 use crate::config::Config;
@@ -81,6 +81,7 @@ pub async fn process_nostr_event(
     authority: &auth::AuthorityChecker,
     zone_verifiers: &HashMap<String, Verifier>,
     metrics: &Metrics,
+    epp_pool: Option<&crate::epp::EppPool>,
 ) {
     let event_id = evt.id.to_hex();
     let pubkey_hex = evt.pubkey.to_hex();
@@ -186,6 +187,7 @@ pub async fn process_nostr_event(
             authority,
             zone_verifiers,
             metrics,
+            epp_pool,
         )
         .await;
     }
@@ -718,6 +720,7 @@ async fn process_dns_update(
     authority: &auth::AuthorityChecker,
     zone_verifiers: &HashMap<String, Verifier>,
     metrics: &Metrics,
+    epp_pool: Option<&crate::epp::EppPool>,
 ) {
     if parsed.records.is_empty() {
         return;
@@ -776,12 +779,82 @@ async fn process_dns_update(
             }
         }
 
+        if zone_name == "cv" || zone_name.ends_with(".cv") {
+            let domain = format!("{npub}.{zone_name}");
+            if let Some(pool) = epp_pool {
+                if pool.is_simulated() {
+                    info!(
+                        event_id = %event_id, domain = %domain, zone = %zone_name,
+                        "SIMULATED: would send EPP domain:create — skipping Cashu claim"
+                    );
+                } else {
+                    match pool.domain_create(&domain, 1, &[], "", "").await {
+                        Ok(_) => {
+                            info!(event_id = %event_id, domain = %domain, "EPP domain:create succeeded");
+                            if let Some(p) = parsed.payments.first() {
+                                if let Err(e) =
+                                    crate::payment::claim_payment(&p.token, &p.mint_url).await
+                                {
+                                    warn!(
+                                        event_id = %event_id, domain = %domain, error = %e,
+                                        "Cashu claim failed — domain registered but payment not collected (manual reconciliation)"
+                                    );
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            warn!(
+                                event_id = %event_id, domain = %domain, error = %e,
+                                "EPP domain:create failed — NOT claiming Cashu (user keeps tokens), skipping zone"
+                            );
+                            metrics.events_rejected.fetch_add(1, Ordering::Relaxed);
+                            all_ok = false;
+                            continue;
+                        }
+                    }
+                }
+            }
+        }
+
         for rec in &parsed.records {
             let fqdn = resolve_fqdn(npub, &rec.name, zone_name, store);
+
+            if zone_name == "cv" || zone_name.ends_with(".cv") {
+                let clean = fqdn.trim_end_matches('.');
+                let name_class = crate::classify::classify_name(clean);
+                if matches!(name_class, crate::classify::NameClass::Custom) {
+                    warn!(event_id = %event_id, fqdn = %fqdn, "cv zone: pilot gate rejected — custom names not yet allowed");
+                    metrics.events_rejected.fetch_add(1, Ordering::Relaxed);
+                    all_ok = false;
+                    continue;
+                }
+                let mint_url = parsed
+                    .payments
+                    .first()
+                    .map(|p| p.mint_url.as_str())
+                    .unwrap_or("");
+                let mint_class = crate::classify::classify_payment(mint_url, &[], &[]);
+                if !crate::classify::allowed_combination(name_class, mint_class) {
+                    warn!(
+                        event_id = %event_id, fqdn = %fqdn,
+                        name_class = %name_class.as_str(), mint_class = %mint_class.as_str(),
+                        "cv zone: disallowed name+payment combination"
+                    );
+                    metrics.events_rejected.fetch_add(1, Ordering::Relaxed);
+                    all_ok = false;
+                    continue;
+                }
+            }
 
             if let Err(e) = authority.check_authority(&fqdn, zone_name, pubkey_hex) {
                 warn!(event_id = %event_id, fqdn = %fqdn, error = %e, "authority check failed");
                 all_ok = false;
+                continue;
+            }
+
+            let is_cv = zone_name == "cv" || zone_name.ends_with(".cv");
+            if is_cv && epp_pool.is_some_and(|p| p.is_simulated()) {
+                debug!(event_id = %event_id, fqdn = %fqdn, "cv zone in simulate mode — skipping DDNS (no per-domain zone in Knot)");
                 continue;
             }
 

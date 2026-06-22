@@ -58,6 +58,9 @@ pkcs8 = { version = "0.10", features = ["pem"] }
 # ACME (Let's Encrypt DNS-01)
 instant-acme = { version = "0.8", default-features = false, features = ["hyper-rustls", "ring"] }
 
+# EPP (.cv registry bridge — RFC 5730-5734)
+instant-epp = "0.4"
+
 # Encryption at rest for ACME private keys
 aes-gcm = "0.10"
 
@@ -77,3 +80,5 @@ tower_governor = { version = "0.8", features = ["axum"] }
 tower-http = { version = "0.6", features = ["set-header", "cors"] }
 humantime = "2"
 hex = "0.4"
+url = "2"
+regex = "1"

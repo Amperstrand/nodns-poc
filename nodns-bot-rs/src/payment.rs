@@ -60,6 +60,10 @@ pub enum PaymentError {
         needed: i64,
         count: usize,
     },
+
+    #[error("cashu claim (receive) failed: {0}")]
+    #[allow(dead_code)]
+    ClaimFailed(String),
 }
 
 // ---------------------------------------------------------------------------
@@ -306,6 +310,24 @@ pub async fn check_event_payment(
         needed: total_required_i64,
         count: records.len(),
     })
+}
+
+// ---------------------------------------------------------------------------
+// Cashu claim (hold) — best-effort, called after EPP success
+// ---------------------------------------------------------------------------
+
+pub async fn claim_payment(token: &str, mint_url: &str) -> Result<u64, PaymentError> {
+    let preview = if token.len() > 40 {
+        &token[..40]
+    } else {
+        token
+    };
+    tracing::info!(
+        mint_url = %mint_url,
+        token_preview = %preview,
+        "Cashu payment held for reconciliation (pilot Option A: bot holds, operator settles)"
+    );
+    Ok(0)
 }
 
 // ---------------------------------------------------------------------------
