@@ -1,0 +1,40 @@
+# nodns-registrar
+
+> BETA — Experimental. Use test sats only (testnut.cashu.space). Do not use real Cashu tokens.
+
+## What this is
+
+A user-friendly DNS registrar for NoDNS — decentralized DNS records from Nostr events.
+Search for a name, pay with Cashu test sats, your record is live globally in seconds.
+
+## Key URLs
+
+- Bot API: https://nodns.shop
+- Source: https://github.com/Amperstrand/nodns-poc (nodns-registrar/ directory)
+- Docs: https://github.com/Amperstrand/nodns-poc/tree/main/docs
+
+## Protocol
+
+Publishes Nostr kind 11111 events with DNS record tags + Cashu payment tags.
+The bot (Rust) subscribes to relays, validates signatures, verifies Cashu tokens, pushes TSIG-signed DDNS updates to Knot DNS.
+
+## Supported zones
+
+- nodns.shop (beta)
+- .cv (pilot — simulate mode, not yet live)
+
+## Cashu
+
+Test sats only from https://testnut.cashu.space
+NUT-18 payment requests supported for wallet-to-wallet scanning.
+
+## Relays
+
+- wss://relay.cashu.email
+- wss://relay.tollgate.me
+
+## Identity
+
+- NIP-07 browser extension (preferred)
+- Paste nsec (with security warning)
+- Ephemeral key (privacy default)

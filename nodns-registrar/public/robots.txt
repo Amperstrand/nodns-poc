@@ -1,0 +1,3 @@
+# robots.txt — nodns-registrar
+User-agent: *
+Allow: /

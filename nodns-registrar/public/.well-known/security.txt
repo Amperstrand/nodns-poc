@@ -1,0 +1,4 @@
+Contact: mailto:admin@nodns.shop
+Expires: 2027-06-04T00:00:00Z
+Preferred-Languages: en
+Canonical: https://nodns.shop/.well-known/security.txt

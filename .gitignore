@@ -46,3 +46,7 @@ screenshots/
 # OpenCode plans
 .omo/
 nodns-nameserver/
+
+# Pilot work (CV registry integration, EPP credentials, test scripts)
+# Never commit: contains registry credentials, scratch configs, test keys
+pilot/
