@@ -42,6 +42,40 @@ enabled = false
 required_sats = 250
 update_free = true
 
+# cv (pilot — bridge to .cv registry via EPP)
+# All registrations are simulate=true until IP allowlist is confirmed.
+[[dns.zones]]
+zone = "cv"
+knot_address = "127.0.0.1:5353"
+tsig_key_name = "nodns-bot."
+tsig_key_secret = "REPLACE_WITH_REAL_SECRET"
+tsig_algorithm = "hmac-sha256"
+
+[dns.zones.payment]
+enabled = true
+create_price = 30000
+update_price = 15000
+delete_price = 0
+npub_names_free = false
+mint_url = "https://testnut.cashu.space"
+mint_filter = "testnut"
+
+[dns.zones.lease]
+grace_period_days = 7
+max_lease_days = 3650
+
+# EPP bridge to .cv registry (CoCCA)
+# simulate=true: logs EPP intent, returns mock results.
+# Flip simulate=false once registry IP allowlist is confirmed.
+[epp]
+host = "registry.ola.cv"
+port = 700
+username = "nostreppbridge"
+password_env_var = "CV_EPP_PASSWORD"
+pool_size = 1
+timeout_secs = 90
+simulate = true
+
 # Registrar keys (bootstrap trust before any events are seen)
 # zone → nostr pubkey hex
 [registrar_keys]

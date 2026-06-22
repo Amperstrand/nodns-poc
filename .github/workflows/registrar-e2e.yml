@@ -1,0 +1,55 @@
+name: Registrar E2E Tests
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "nodns-registrar/**"
+      - ".github/workflows/registrar-e2e.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "nodns-registrar/**"
+      - ".github/workflows/registrar-e2e.yml"
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        working-directory: nodns-registrar
+        run: npm ci
+
+      - name: Install Playwright browsers
+        working-directory: nodns-registrar
+        run: npx playwright install --with-deps chromium
+
+      - name: Run E2E tests
+        working-directory: nodns-registrar
+        env:
+          CI: "true"
+        run: npx playwright test --project="Desktop Chrome"
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: nodns-registrar/playwright-report/
+          retention-days: 30
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: nodns-registrar/test-results/
+          retention-days: 30

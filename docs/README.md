@@ -77,6 +77,7 @@ These docs are the authoritative source for reasoning. `content/consensus.json` 
 | [08-implementation-plan.md](08-implementation-plan.md) | SUPERSEDED by [27](27-implementation-plan.md) | Earlier implementation plan |
 | [09-custom-names.md](09-custom-names.md) | DRAFT | Custom name registration research |
 | [14-demo-recipes.md](14-demo-recipes.md) | ACTIVE | 7 demo scripts with exact commands |
+| [36-anti-spam-research.md](36-anti-spam-research.md) | DRAFT | NIP-13 PoW, Proof of Burn (ThomasV/origami74), Cashu micro-payment, comparison table — tabled |
 
 ### Competitive
 

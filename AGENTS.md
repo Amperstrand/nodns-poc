@@ -320,6 +320,8 @@ nodns-bot-rs/src/
   tls_derivation.rs          TLSA (DANE) record derivation
   nip05.rs                   NIP-05 identity verification endpoint
   acme.rs                    ACME client: Let's Encrypt staging/production, ZeroSSL EAB, DNS-01 challenge
+  epp.rs                    EPP bridge to ccTLD registry (instant-epp 0.4, simulate mode, domain create/delete)
+  classify.rs               Name/mint classification + enforcement matrix (Npub/Testing/Custom × Real/Test)
   subscriber.rs              Nostr relay subscription (nostr-sdk), reconnect backoff
   security_tests.rs          Security regression tests
   handlers/
@@ -327,6 +329,7 @@ nodns-bot-rs/src/
     api.rs                   REST API: /api/check, /api/acme/order, pricing, availability
     acme_dns.rs              ACME DNS-01 challenge TXT handler
     acme_order.rs            ACME certificate ordering endpoint
+    client_log.rs            Client-side error log receiver (POST /api/client-log)
     dyndns.rs                Dynamic DNS update endpoints
     health.rs                Health check endpoint (/api/health)
     tls_check.rs             TLS certificate verification endpoint
@@ -405,6 +408,48 @@ nodns-frontend/src/
     roadmap.tsx              Roadmap timeline
     faq.tsx                  FAQ accordion
     ui/                      shadcn primitives (button, card, dialog, input, etc. — built on @base-ui/react)
+
+nodns-registrar/
+  next.config.ts             Static export (output: 'export'), no basePath
+  package.json               Next.js 16, React 19, Tailwind v4, coco-cashu-core, @cashu/cashu-ts, nostr-tools
+  deploy.sh                  Build + wrangler pages deploy
+  playwright.config.ts       E2E test config (baseURL: nodns-registrar.pages.dev)
+  tests/                     Playwright E2E specs (5 spec files: landing, login, dashboard, domain-detail, wallet)
+  src/
+    app/
+      layout.tsx             Root layout: Geist fonts, Providers, SiteHeader, ErrorBoundary
+      page.tsx               Landing page: domain search, availability, registration flow
+      dashboard/page.tsx     User dashboard: domain list, stats, empty state
+      domain/page.tsx        Domain detail: record CRUD form, validation, payment
+      wallet/page.tsx        Cashu wallet: top-up, send, receive, NUT-18 payment requests
+      globals.css            Design tokens (dark-only), Tailwind v4
+      icon.svg               Favicon
+    contexts/
+      IdentityContext.tsx    NIP-07 + nsec + ephemeral login, saved accounts
+      WalletContext.tsx      coco-cashu Manager, IndexedDB, NUT-18 creqA generation
+    lib/
+      api.ts                 API client: checkAvailability, fetchRecords (response mapping), safeFetch
+      nostr.ts               Event signing (extension + local), buildRecordTag, buildCashuTag, subscribeToRecords
+      identity.ts            Key management: getAccounts, nsecToSeed, getWalletSeed (64-byte)
+      wallet.ts              coco-cashu Manager factory (IndexedDB, ConsoleLogger)
+      constants.ts           API_BASE, RELAYS (relay.cashu.email, tollgate), DEFAULT_ZONE, MINT_URL
+      validation.ts          A/AAAA/CNAME/TXT/MX validation, private IP blocking
+      pricing.ts             Name-length-based pricing
+      types.ts               Shared types
+      utils.ts               cn() class merge
+    components/
+      providers.tsx          ErrorBoundary + IdentityProvider + WalletProvider
+      site-header.tsx        Beta banner, nav (Dashboard, Wallet, npub, Logout)
+      login-modal.tsx        4-method login: ephemeral, extension, nsec paste, generate new
+      error-boundary.tsx     React ErrorBoundary + global error handlers + localStorage queue + bot flush
+      ui/                    Button, Card, Input, Badge (shadcn-style)
+
+pilot/                       .cv EPP bridge pilot (gitignored)
+  epp-integration.md         EPP bridge design
+  namespace-policy.md        Enforcement matrix, pricing
+  knot-cv.conf               Knot DNS config for .cv preview mirror
+  knot-zone-management.md    Per-domain zone creation/deletion workflow
+  epp-probe/                 Rust binary for EPP connectivity testing
 
 deploy/
   deploy.sh                  Cross-compile (cargo zigbuild), scp, swap binary, restart systemd
