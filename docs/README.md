@@ -79,6 +79,8 @@ These docs are the authoritative source for reasoning. `content/consensus.json` 
 | [14-demo-recipes.md](14-demo-recipes.md) | ACTIVE | 7 demo scripts with exact commands |
 | [36-anti-spam-research.md](36-anti-spam-research.md) | DRAFT | NIP-13 PoW, Proof of Burn (ThomasV/origami74), Cashu micro-payment, comparison table — tabled |
 | [37-cv-trust-model.md](37-cv-trust-model.md) | DRAFT | .cv front-running protection: testnut-only, TXT attestation, P2PK locking, pledge mirroring |
+| [38-nostr-alignment-research.md](38-nostr-alignment-research.md) | DRAFT | NIP-89 service discovery, kind 11111 vs 31111, alt tags, self-referential DNS↔Nostr trust, P2PK locking |
+| [39-protocol-v2-design.md](39-protocol-v2-design.md) | DRAFT | Protocol v2: zone attestation, Nostr discovery, P2PK locking, testnet flag, known limitations, versioning |
 
 ### Competitive
 
