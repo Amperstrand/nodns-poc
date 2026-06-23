@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useIdentity } from "@/contexts/IdentityContext";
+import { useWallet } from "@/contexts/WalletContext";
 import { Button } from "@/components/ui/button";
 import { LoginModal } from "@/components/login-modal";
 
@@ -40,6 +41,7 @@ function BetaBanner() {
 
 export function SiteHeader() {
   const { session, npub, logout } = useIdentity();
+  const { balance, ready } = useWallet();
   const [loginOpen, setLoginOpen] = useState(false);
 
   const shortNpub = npub
@@ -75,6 +77,11 @@ export function SiteHeader() {
                   <Button variant="ghost" size="sm">
                     Wallet
                   </Button>
+                </Link>
+                <Link href="/wallet" className="hidden sm:block">
+                  <span className="rounded-md bg-secondary px-2 py-1 font-mono text-xs text-primary">
+                    {ready ? balance : "..."} sats
+                  </span>
                 </Link>
                 <div className="flex items-center gap-2">
                   <code className="hidden text-xs text-muted-foreground sm:block">

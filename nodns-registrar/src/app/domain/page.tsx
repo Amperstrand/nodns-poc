@@ -486,23 +486,25 @@ function DomainDetailContent() {
               </thead>
               <tbody>
                 {loading ? (
-                  <tr>
-                    <td
-                      colSpan={5}
-                      className="py-12 text-center text-muted-foreground"
-                    >
-                      Loading records...
-                    </td>
-                  </tr>
+                  [0, 1, 2].map((n) => (
+                    <tr key={n} className="border-b border-border/30">
+                      <td className="py-3 pr-3"><div className="h-5 w-12 animate-pulse rounded bg-secondary" /></td>
+                      <td className="py-3 pr-3"><div className="h-5 w-20 animate-pulse rounded bg-secondary" /></td>
+                      <td className="py-3 pr-3"><div className="h-5 w-40 animate-pulse rounded bg-secondary" /></td>
+                      <td className="py-3 pr-3"><div className="h-5 w-16 animate-pulse rounded bg-secondary" /></td>
+                      <td className="py-3" />
+                    </tr>
+                  ))
                 ) : filteredRecords.length === 0 ? (
                   <tr>
-                    <td
-                      colSpan={5}
-                      className="py-12 text-center text-muted-foreground"
-                    >
-                      {records.length === 0
-                        ? "No records yet. Add your first record below."
-                        : "No records match your search."}
+                    <td colSpan={5} className="py-16 text-center">
+                      <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-secondary text-muted-foreground text-xl font-bold">+</div>
+                      <p className="text-sm font-medium text-foreground">
+                        {records.length === 0 ? "No DNS records yet" : "No matching records"}
+                      </p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {records.length === 0 ? "Add your first record using the form below." : "Try a different search term."}
+                      </p>
                     </td>
                   </tr>
                 ) : (
@@ -546,7 +548,7 @@ function DomainDetailContent() {
                             />
                           ) : (
                             <span className="font-mono text-xs text-muted-foreground">
-                              {record.ttl}s
+                              {TTL_OPTIONS.find((o) => o.value === record.ttl)?.label ?? `${record.ttl}s`}
                             </span>
                           )}
                         </td>
@@ -595,8 +597,8 @@ function DomainDetailContent() {
                     );
                   })
                 )}
-                <tr className="border-t-2 border-border bg-secondary/20">
-                  <td className="py-2.5 pr-3">
+                <tr className="border-t-2 border-border/60 bg-muted/30">
+                  <td className="py-3 pr-3">
                     <select
                       value={formType}
                       onChange={(e) => setFormType(e.target.value)}
