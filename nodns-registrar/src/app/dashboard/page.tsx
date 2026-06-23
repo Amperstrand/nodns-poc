@@ -207,14 +207,20 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <Card className="border-primary/20">
+        <Card className={ready ? "border-primary/20" : ""}>
           <CardHeader className="pb-2">
             <CardDescription>Wallet Balance</CardDescription>
             <CardTitle className="text-2xl">
-              <span className="text-primary">{ready ? balance : "..."}</span>
-              <span className="text-sm font-normal text-muted-foreground ml-1.5">
-                sats
-              </span>
+              {ready ? (
+                <>
+                  <span className="text-primary">{balance}</span>
+                  <span className="text-sm font-normal text-muted-foreground ml-1.5">
+                    sats
+                  </span>
+                </>
+              ) : (
+                <span className="inline-block h-7 w-20 animate-pulse rounded bg-secondary" />
+              )}
             </CardTitle>
           </CardHeader>
           <CardContent className="pt-0">
@@ -231,7 +237,11 @@ export default function DashboardPage() {
           <CardHeader className="pb-2">
             <CardDescription>Domains</CardDescription>
             <CardTitle className="text-2xl">
-              {fetching && domains.length === 0 ? "..." : domains.length}
+              {fetching && domains.length === 0 ? (
+                <span className="inline-block h-7 w-8 animate-pulse rounded bg-secondary" />
+              ) : (
+                domains.length
+              )}
             </CardTitle>
           </CardHeader>
           <CardContent className="pt-0">
@@ -245,7 +255,11 @@ export default function DashboardPage() {
           <CardHeader className="pb-2">
             <CardDescription>Total Records</CardDescription>
             <CardTitle className="text-2xl">
-              {fetching && records.length === 0 ? "..." : totalRecords}
+              {fetching && records.length === 0 ? (
+                <span className="inline-block h-7 w-8 animate-pulse rounded bg-secondary" />
+              ) : (
+                totalRecords
+              )}
             </CardTitle>
           </CardHeader>
           <CardContent className="pt-0">
@@ -274,11 +288,15 @@ export default function DashboardPage() {
 
         {!error && !fetching && domains.length === 0 && (
           <Card className="border-dashed">
-            <CardContent className="py-16 text-center space-y-3">
-              <p className="text-muted-foreground">
-                No domains yet. Register your first name.
+            <CardContent className="py-16 text-center">
+              <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-secondary text-muted-foreground text-xl font-bold">+</div>
+              <p className="text-sm font-medium text-foreground">
+                No domains yet
               </p>
-              <Link href="/">
+              <p className="mt-1 text-xs text-muted-foreground">
+                Search for a name and register it to get started.
+              </p>
+              <Link href="/" className="mt-4 inline-block">
                 <Button variant="outline">Register a Domain</Button>
               </Link>
             </CardContent>

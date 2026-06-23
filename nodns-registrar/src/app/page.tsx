@@ -305,27 +305,38 @@ export default function HomePage() {
 
           {registeredFqdn && (
             <Card className="mx-auto mt-6 max-w-2xl border-green-500/30 text-left">
-              <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center">
-                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-green-500/10 text-lg font-bold text-green-400">
-                  {"\u2713"}
+              <CardContent className="p-6 space-y-4">
+                <div className="flex items-start gap-4">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-green-500/10 text-lg font-bold text-green-400">
+                    {"\u2713"}
+                  </div>
+                  <div className="flex-1 space-y-1">
+                    <p className="font-medium text-green-400">
+                      Registration broadcast!
+                    </p>
+                    <p className="font-mono text-sm break-all">
+                      {registeredFqdn}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Your Nostr event is published. The bot will process it and your record will be live globally within seconds.
+                    </p>
+                  </div>
                 </div>
-                <div className="flex-1">
-                  <p className="font-medium text-green-400">
-                    Registration broadcast!
-                  </p>
-                  <p className="font-mono text-sm text-muted-foreground">
-                    {registeredFqdn}
-                  </p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Your record will be live globally within a few seconds.
-                  </p>
-                </div>
-                <div className="flex shrink-0 gap-2">
+                <div className="flex flex-wrap gap-2 pt-2 border-t border-border">
                   <Link href="/dashboard">
-                    <Button variant="outline" size="sm">
-                      Dashboard
+                    <Button size="sm">
+                      View Dashboard
                     </Button>
                   </Link>
+                  <a
+                    href={`https://dns.google/query?name=${encodeURIComponent(registeredFqdn)}&type=TXT`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <Button variant="outline" size="sm">
+                      Verify in DNS
+                    </Button>
+                  </a>
                   <Button variant="ghost" size="sm" onClick={resetSearch}>
                     Search again
                   </Button>
