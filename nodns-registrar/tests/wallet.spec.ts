@@ -139,7 +139,7 @@ test.describe("Wallet page", () => {
     ).toBeVisible();
   });
 
-  test.fixme("[HAPPY] NUT-18 payment request section renders", async ({ page }) => {
+  test("[HAPPY] NUT-18 payment request section renders", async ({ page }) => {
     await loginEphemeral(page);
 
     await page.goto("/wallet");

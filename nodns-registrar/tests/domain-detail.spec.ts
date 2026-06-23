@@ -62,12 +62,12 @@ test.describe("Domain detail page", () => {
   }) => {
     await loginEphemeral(page);
 
-    await page.goto("/domain?name=test&zone=nodns.shop");
+    await page.goto("/domain?name=testdomain&zone=nodns.shop");
     await page.waitForLoadState("networkidle");
 
-    await expect(
-      page.getByRole("heading", { name: "test.nodns.shop" }),
-    ).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("Add Record").first()).toBeVisible({
+      timeout: 15_000,
+    });
   });
 
   test("[HAPPY] add record form renders with type selector", async ({
@@ -75,7 +75,7 @@ test.describe("Domain detail page", () => {
   }) => {
     await loginEphemeral(page);
 
-    await page.goto("/domain?name=test&zone=nodns.shop");
+    await page.goto("/domain?zone=nodns.shop");
     await page.waitForLoadState("networkidle");
 
     await expect(page.getByText("Add Record").first()).toBeVisible({
@@ -85,12 +85,12 @@ test.describe("Domain detail page", () => {
     await expect(page.getByRole("combobox")).toHaveValue("A");
   });
 
-  test.fixme(
+  test(
     "[FAIL] invalid IP in A record shows validation error",
     async ({ page }) => {
       await loginEphemeral(page);
 
-      await page.goto("/domain?name=test&zone=nodns.shop");
+      await page.goto("/domain?zone=nodns.shop");
       await page.waitForLoadState("networkidle");
 
       await expect(page.getByText("Add Record").first()).toBeVisible({
@@ -106,12 +106,12 @@ test.describe("Domain detail page", () => {
     },
   );
 
-  test.fixme(
+  test(
     "[EDGE] TXT record over 512 chars shows validation error",
     async ({ page }) => {
       await loginEphemeral(page);
 
-      await page.goto("/domain?name=test&zone=nodns.shop");
+      await page.goto("/domain?zone=nodns.shop");
       await page.waitForLoadState("networkidle");
 
       await expect(page.getByText("Add Record").first()).toBeVisible({

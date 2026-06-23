@@ -91,7 +91,7 @@ test.describe("Full registration flow integration", () => {
     const testValue = `npub-integration-${Date.now().toString(36)}`;
 
     execSync(
-      `nak event -k 11111 -c "" -t 'record=TXT;;3600;${testValue}' wss://nos.lol`,
+      `nak event -k 11111 -c "" -t 'record=TXT;;3600;${testValue}' wss://relay.cashu.email wss://nos.lol`,
       { timeout: 15_000 },
     );
 
