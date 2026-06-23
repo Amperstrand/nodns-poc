@@ -78,6 +78,7 @@ These docs are the authoritative source for reasoning. `content/consensus.json` 
 | [09-custom-names.md](09-custom-names.md) | DRAFT | Custom name registration research |
 | [14-demo-recipes.md](14-demo-recipes.md) | ACTIVE | 7 demo scripts with exact commands |
 | [36-anti-spam-research.md](36-anti-spam-research.md) | DRAFT | NIP-13 PoW, Proof of Burn (ThomasV/origami74), Cashu micro-payment, comparison table — tabled |
+| [37-cv-trust-model.md](37-cv-trust-model.md) | DRAFT | .cv front-running protection: testnut-only, TXT attestation, P2PK locking, pledge mirroring |
 
 ### Competitive
 
