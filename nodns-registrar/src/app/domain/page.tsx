@@ -35,8 +35,97 @@ const VALUE_PLACEHOLDERS: Record<string, string> = {
   MX: "10 mail.example.com.",
 };
 
-const selectClass =
-  "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring cursor-pointer";
+const TTL_OPTIONS = [
+  { label: "Auto", value: 3600 },
+  { label: "5 min", value: 300 },
+  { label: "30 min", value: 1800 },
+  { label: "1 hour", value: 3600 },
+  { label: "12 hours", value: 43200 },
+  { label: "24 hours", value: 86400 },
+];
+
+const TYPE_BADGE_CLASSES: Record<string, string> = {
+  A: "bg-blue-500/15 text-blue-400 border-blue-500/30",
+  AAAA: "bg-purple-500/15 text-purple-400 border-purple-500/30",
+  CNAME: "bg-cyan-500/15 text-cyan-400 border-cyan-500/30",
+  TXT: "bg-orange-500/15 text-orange-400 border-orange-500/30",
+  MX: "bg-green-500/15 text-green-400 border-green-500/30",
+};
+
+const compactSelectClass =
+  "flex h-8 w-full rounded-md border border-input bg-background px-2 py-1 text-xs ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring cursor-pointer";
+
+function TtlSelect({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: number;
+  onChange: (v: number) => void;
+  disabled?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const current = TTL_OPTIONS.find((o) => o.value === value);
+  const label = current ? `${current.label} (${current.value})` : `${value}s`;
+
+  return (
+    <div className="relative inline-block">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        disabled={disabled}
+        className="flex h-8 w-full items-center justify-between gap-1 rounded-md border border-input bg-background px-2 text-xs text-foreground hover:bg-secondary/50 disabled:opacity-50 cursor-pointer whitespace-nowrap min-w-[120px]"
+      >
+        <span className="truncate">{label}</span>
+        <svg
+          width="10"
+          height="10"
+          viewBox="0 0 10 10"
+          fill="none"
+          className="shrink-0 opacity-60"
+        >
+          <path
+            d="M2.5 3.75L5 6.25L7.5 3.75"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      </button>
+      {open && (
+        <>
+          <div
+            className="fixed inset-0 z-10"
+            onClick={() => setOpen(false)}
+          />
+          <div className="absolute right-0 top-full z-20 mt-1 min-w-[150px] rounded-md border border-border bg-card py-1 shadow-xl">
+            {TTL_OPTIONS.map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => {
+                  onChange(opt.value);
+                  setOpen(false);
+                }}
+                className={`flex w-full items-center justify-between px-3 py-1.5 text-xs hover:bg-secondary cursor-pointer ${
+                  opt.value === value
+                    ? "text-primary font-medium"
+                    : "text-foreground"
+                }`}
+              >
+                <span>{opt.label}</span>
+                <span className="text-muted-foreground ml-2">
+                  ({opt.value})
+                </span>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
 
 function DomainDetailContent() {
   const searchParams = useSearchParams();
@@ -71,6 +160,7 @@ function DomainDetailContent() {
   const [editTtl, setEditTtl] = useState(3600);
 
   const [deleteTarget, setDeleteTarget] = useState<DnsRecord | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
     setFormName(effectiveName);
@@ -127,6 +217,17 @@ function DomainDetailContent() {
 
   const insufficientFunds =
     createCost > 0 && walletReady && balance < createCost;
+
+  const filteredRecords = useMemo(() => {
+    if (!searchQuery.trim()) return records;
+    const q = searchQuery.toLowerCase();
+    return records.filter(
+      (r) =>
+        r.record_type.toLowerCase().includes(q) ||
+        (r.name || "").toLowerCase().includes(q) ||
+        r.rdata.toLowerCase().includes(q),
+    );
+  }, [records, searchQuery]);
 
   async function handlePublish(tags: string[][], cost: number) {
     if (!session?.pubkey) throw new Error("Not authenticated");
@@ -311,137 +412,89 @@ function DomainDetailContent() {
       )}
 
       <Card>
-        <CardHeader>
-          <CardTitle>Add Record</CardTitle>
-          <CardDescription>
-            Publish a new DNS record via a signed Nostr event.
-            {createCost > 0 && ` This operation costs ${formatSats(createCost)}.`}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-[100px_1fr] gap-4">
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-muted-foreground">
-                Type
-              </label>
-              <select
-                value={formType}
-                onChange={(e) => setFormType(e.target.value)}
-                className={selectClass}
-              >
-                {DNS_TYPES.map((t) => (
-                  <option key={t} value={t}>
-                    {t}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-muted-foreground">
-                Name
-              </label>
-              <Input
-                value={formName}
-                onChange={(e) => setFormName(e.target.value)}
-                placeholder={
-                  isNpubDomain ? "Empty = your npub apex" : queryName
-                }
-                className="font-mono"
-              />
-            </div>
+        <CardHeader className="flex-row items-center justify-between space-y-0">
+          <div className="space-y-1">
+            <CardTitle>DNS Records</CardTitle>
+            <CardDescription>
+              {loading
+                ? "Loading..."
+                : `${filteredRecords.length}${searchQuery ? ` of ${records.length}` : ""} record${filteredRecords.length !== 1 ? "s" : ""} for ${fqdn}`}
+            </CardDescription>
           </div>
-
-          <div className="space-y-1.5">
-            <label className="text-xs font-medium text-muted-foreground">
-              Value
-            </label>
+          <div className="relative w-full max-w-[220px]">
+            <svg
+              className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none"
+              viewBox="0 0 16 16"
+              fill="none"
+            >
+              <circle
+                cx="7"
+                cy="7"
+                r="5"
+                stroke="currentColor"
+                strokeWidth="1.5"
+              />
+              <path
+                d="M11 11L14 14"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+              />
+            </svg>
             <Input
-              value={formValue}
-              onChange={(e) => setFormValue(e.target.value)}
-              placeholder={VALUE_PLACEHOLDERS[formType] || ""}
-              className="font-mono"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search records..."
+              aria-label="Search records"
+              className="h-8 pl-8 text-xs"
             />
-            {formType === "MX" && (
-              <p className="text-xs text-muted-foreground">
-                Format: priority followed by mail host (e.g.{" "}
-                <code className="font-mono">10 mail.example.com.</code>)
-              </p>
-            )}
           </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-[140px_1fr] gap-4">
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-muted-foreground">
-                TTL (seconds)
-              </label>
-              <Input
-                type="number"
-                value={formTtl}
-                onChange={(e) => setFormTtl(parseInt(e.target.value) || 3600)}
-                min={60}
-                max={86400}
-              />
-            </div>
-            <div className="flex items-end">
-              <Button
-                onClick={handleAddRecord}
-                disabled={busy || !formValue.trim() || insufficientFunds}
-                className="w-full md:w-auto"
-              >
-                {busy
-                  ? "Publishing..."
-                  : createCost > 0
-                    ? `Add Record (${formatSats(createCost)})`
-                    : "Add Record"}
-              </Button>
-            </div>
-          </div>
-
-          {insufficientFunds && (
-            <div className="flex items-center gap-3">
-              <p className="text-xs text-destructive">
-                Need {createCost} sats, have {balance} sats.
-              </p>
-              <Link href="/wallet">
-                <Button variant="outline" size="sm">
-                  Top up wallet
-                </Button>
-              </Link>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Records</CardTitle>
-          <CardDescription>
-            {records.length} record{records.length !== 1 ? "s" : ""} for {fqdn}
-          </CardDescription>
         </CardHeader>
         <CardContent>
-          {loading ? (
-            <div className="py-12 text-center text-muted-foreground">
-              Loading records...
-            </div>
-          ) : records.length === 0 ? (
-            <div className="py-12 text-center text-muted-foreground">
-              No records yet. Add your first record above.
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border text-left text-muted-foreground">
-                    <th className="pb-2 pr-4 font-medium">Type</th>
-                    <th className="pb-2 pr-4 font-medium">Name</th>
-                    <th className="pb-2 pr-4 font-medium">Value</th>
-                    <th className="pb-2 pr-4 font-medium">TTL</th>
-                    <th className="pb-2 font-medium text-right">Actions</th>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border">
+                  <th className="pb-2 pr-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Type
+                  </th>
+                  <th className="pb-2 pr-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Name
+                  </th>
+                  <th className="pb-2 pr-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Content
+                  </th>
+                  <th className="pb-2 pr-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    TTL
+                  </th>
+                  <th className="pb-2 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr>
+                    <td
+                      colSpan={5}
+                      className="py-12 text-center text-muted-foreground"
+                    >
+                      Loading records...
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {records.map((record, i) => {
+                ) : filteredRecords.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={5}
+                      className="py-12 text-center text-muted-foreground"
+                    >
+                      {records.length === 0
+                        ? "No records yet. Add your first record below."
+                        : "No records match your search."}
+                    </td>
+                  </tr>
+                ) : (
+                  filteredRecords.map((record, i) => {
                     const rid =
                       record.id ||
                       `${record.record_type}-${record.name}-${record.rdata}-${record.ttl}-${i}`;
@@ -449,44 +502,45 @@ function DomainDetailContent() {
                     return (
                       <tr
                         key={rid}
-                        className="border-b border-border/50 last:border-0"
+                        className="border-b border-border/50 last:border-0 group hover:bg-secondary/30 transition-colors"
                       >
-                        <td className="py-3 pr-4">
-                          <Badge className="font-mono">
+                        <td className="py-2.5 pr-3">
+                          <Badge
+                            className={`font-mono border ${TYPE_BADGE_CLASSES[record.record_type] || "border-border"}`}
+                          >
                             {record.record_type}
                           </Badge>
                         </td>
-                        <td className="py-3 pr-4 font-mono text-muted-foreground whitespace-nowrap">
+                        <td className="py-2.5 pr-3 font-mono text-xs text-muted-foreground whitespace-nowrap">
                           {record.name || "@ (apex)"}
                         </td>
-                        <td className="py-3 pr-4 font-mono break-all max-w-md">
+                        <td className="py-2.5 pr-3 font-mono text-xs break-all max-w-md">
                           {isEditing ? (
                             <Input
                               value={editValue}
                               onChange={(e) => setEditValue(e.target.value)}
-                              className="h-8 font-mono"
+                              className="h-8 font-mono text-xs"
                             />
                           ) : (
                             record.rdata
                           )}
                         </td>
-                        <td className="py-3 pr-4 font-mono text-muted-foreground whitespace-nowrap">
+                        <td className="py-2.5 pr-3 whitespace-nowrap">
                           {isEditing ? (
-                            <Input
-                              type="number"
+                            <TtlSelect
                               value={editTtl}
-                              onChange={(e) =>
-                                setEditTtl(parseInt(e.target.value) || 3600)
-                              }
-                              className="h-8 w-24"
+                              onChange={setEditTtl}
+                              disabled={busy}
                             />
                           ) : (
-                            `${record.ttl}s`
+                            <span className="font-mono text-xs text-muted-foreground">
+                              {record.ttl}s
+                            </span>
                           )}
                         </td>
-                        <td className="py-3 text-right whitespace-nowrap">
+                        <td className="py-2.5 text-right whitespace-nowrap">
                           {isEditing ? (
-                            <div className="flex gap-2 justify-end">
+                            <div className="flex gap-1 justify-end">
                               <Button
                                 size="sm"
                                 onClick={() => handleSaveEdit(record)}
@@ -504,7 +558,7 @@ function DomainDetailContent() {
                               </Button>
                             </div>
                           ) : (
-                            <div className="flex gap-2 justify-end">
+                            <div className="flex gap-1 justify-end">
                               <Button
                                 size="sm"
                                 variant="ghost"
@@ -515,7 +569,8 @@ function DomainDetailContent() {
                               </Button>
                               <Button
                                 size="sm"
-                                variant="destructive"
+                                variant="ghost"
+                                className="text-destructive hover:text-destructive"
                                 onClick={() => setDeleteTarget(record)}
                                 disabled={busy}
                               >
@@ -526,9 +581,79 @@ function DomainDetailContent() {
                         </td>
                       </tr>
                     );
-                  })}
-                </tbody>
-              </table>
+                  })
+                )}
+                <tr className="border-t-2 border-border bg-secondary/20">
+                  <td className="py-2.5 pr-3">
+                    <select
+                      value={formType}
+                      onChange={(e) => setFormType(e.target.value)}
+                      className={compactSelectClass}
+                      aria-label="Record type"
+                    >
+                      {DNS_TYPES.map((t) => (
+                        <option key={t} value={t}>
+                          {t}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                  <td className="py-2.5 pr-3">
+                    <Input
+                      value={formName}
+                      onChange={(e) => setFormName(e.target.value)}
+                      placeholder={isNpubDomain ? "(apex)" : queryName}
+                      className="h-8 font-mono text-xs min-w-[100px]"
+                    />
+                  </td>
+                  <td className="py-2.5 pr-3">
+                    <Input
+                      value={formValue}
+                      onChange={(e) => setFormValue(e.target.value)}
+                      placeholder={VALUE_PLACEHOLDERS[formType] || ""}
+                      title={
+                        formType === "MX"
+                          ? "Format: priority followed by mail host (e.g. 10 mail.example.com.)"
+                          : undefined
+                      }
+                      className="h-8 font-mono text-xs"
+                    />
+                  </td>
+                  <td className="py-2.5 pr-3">
+                    <TtlSelect
+                      value={formTtl}
+                      onChange={setFormTtl}
+                      disabled={busy}
+                    />
+                  </td>
+                  <td className="py-2.5 text-right">
+                    <Button
+                      size="sm"
+                      onClick={handleAddRecord}
+                      disabled={busy || !formValue.trim() || insufficientFunds}
+                    >
+                      {busy
+                        ? "Publishing..."
+                        : createCost > 0
+                          ? `Add Record (${formatSats(createCost)})`
+                          : "Add Record"}
+                    </Button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          {insufficientFunds && (
+            <div className="mt-3 flex items-center gap-3 text-xs">
+              <span className="text-destructive">
+                Insufficient balance: need {createCost} sats, have {balance}{" "}
+                sats.
+              </span>
+              <Link href="/wallet">
+                <Button variant="outline" size="sm">
+                  Top up wallet
+                </Button>
+              </Link>
             </div>
           )}
         </CardContent>
@@ -566,7 +691,9 @@ function DomainDetailContent() {
               <div className="rounded-md border border-border bg-secondary/50 p-3 space-y-2 text-sm">
                 <div className="flex justify-between gap-4">
                   <span className="text-muted-foreground shrink-0">Type</span>
-                  <Badge className="font-mono">
+                  <Badge
+                    className={`font-mono border ${TYPE_BADGE_CLASSES[deleteTarget.record_type] || "border-border"}`}
+                  >
                     {deleteTarget.record_type}
                   </Badge>
                 </div>
