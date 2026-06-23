@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState, useEffect, useCallback, useMemo } from "react";
+import { Suspense, useState, useEffect, useCallback, useMemo, useRef } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useIdentity } from "@/contexts/IdentityContext";
@@ -67,9 +67,28 @@ function TtlSelect({
   const [open, setOpen] = useState(false);
   const current = TTL_OPTIONS.find((o) => o.value === value);
   const label = current ? `${current.label} (${current.value})` : `${value}s`;
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleClick = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", handleClick);
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      document.removeEventListener("mousedown", handleClick);
+      document.removeEventListener("keydown", handleKey);
+    };
+  }, [open]);
 
   return (
-    <div className="relative inline-block">
+    <div className="relative inline-block" ref={ref}>
       <button
         type="button"
         onClick={() => setOpen(!open)}
@@ -94,34 +113,28 @@ function TtlSelect({
         </svg>
       </button>
       {open && (
-        <>
-          <div
-            className="fixed inset-0 z-10"
-            onClick={() => setOpen(false)}
-          />
-          <div className="absolute right-0 top-full z-20 mt-1 min-w-[150px] rounded-md border border-border bg-card py-1 shadow-xl">
-            {TTL_OPTIONS.map((opt) => (
-              <button
-                key={opt.value}
-                type="button"
-                onClick={() => {
-                  onChange(opt.value);
-                  setOpen(false);
-                }}
-                className={`flex w-full items-center justify-between px-3 py-1.5 text-xs hover:bg-secondary cursor-pointer ${
-                  opt.value === value
-                    ? "text-primary font-medium"
-                    : "text-foreground"
-                }`}
-              >
-                <span>{opt.label}</span>
-                <span className="text-muted-foreground ml-2">
-                  ({opt.value})
-                </span>
-              </button>
-            ))}
-          </div>
-        </>
+        <div className="absolute right-0 top-full z-30 mt-1 min-w-[150px] rounded-md border border-border bg-card py-1 shadow-xl">
+          {TTL_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => {
+                onChange(opt.value);
+                setOpen(false);
+              }}
+              className={`flex w-full items-center justify-between px-3 py-1.5 text-xs hover:bg-secondary cursor-pointer ${
+                opt.value === value
+                  ? "text-primary font-medium"
+                  : "text-foreground"
+              }`}
+            >
+              <span>{opt.label}</span>
+              <span className="text-muted-foreground ml-2">
+                ({opt.value})
+              </span>
+            </button>
+          ))}
+        </div>
       )}
     </div>
   );
@@ -451,8 +464,7 @@ function DomainDetailContent() {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+          <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border">
                   <th className="pb-2 pr-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -642,7 +654,6 @@ function DomainDetailContent() {
                 </tr>
               </tbody>
             </table>
-          </div>
           {insufficientFunds && (
             <div className="mt-3 flex items-center gap-3 text-xs">
               <span className="text-destructive">
