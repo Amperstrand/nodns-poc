@@ -1,5 +1,3 @@
-"use client";
-
 import { useState, useCallback } from "react";
 import { useIdentity } from "@/contexts/IdentityContext";
 import { Button } from "@/components/ui/button";

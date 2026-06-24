@@ -58,7 +58,7 @@ test.describe("Full registration flow integration", () => {
     await clearState(page);
     await loginEphemeral(page);
 
-    await page.goto(`${BASE_URL}/wallet`);
+    await page.goto(`${BASE_URL}/#/wallet`);
     await page.getByRole("heading", { name: "Wallet" }).waitFor({ timeout: 30_000 });
 
     await page.getByPlaceholder("Amount to top up").fill("10");
@@ -68,7 +68,7 @@ test.describe("Full registration flow integration", () => {
       timeout: 60_000,
     });
 
-    await page.goto(`${BASE_URL}/dashboard`);
+    await page.goto(`${BASE_URL}/#/dashboard`);
     await page.waitForLoadState("networkidle");
 
     await expect(page.getByText(/Wallet Balance/i)).toBeVisible({

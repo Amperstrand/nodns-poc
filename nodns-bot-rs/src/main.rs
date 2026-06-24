@@ -576,6 +576,14 @@ async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
                 axum::routing::get(handlers::zone_pricing_handler),
             )
             .route(
+                "/api/zone/{zone}/export",
+                axum::routing::get(handlers::zone_export),
+            )
+            .route(
+                "/api/zone/{zone}/records",
+                axum::routing::get(handlers::zone_records),
+            )
+            .route(
                 "/nic/update",
                 axum::routing::get(handlers::dyndns_update_handler),
             )

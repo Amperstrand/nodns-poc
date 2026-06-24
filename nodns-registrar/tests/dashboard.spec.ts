@@ -58,7 +58,7 @@ test.describe("Dashboard", () => {
   test("[FAIL] not logged in shows sign-in prompt with Generate Identity button", async ({
     page,
   }) => {
-    await page.goto("/dashboard");
+    await page.goto("/#/dashboard");
     await page.waitForLoadState("networkidle");
 
     await expect(
@@ -74,7 +74,7 @@ test.describe("Dashboard", () => {
   }) => {
     await loginEphemeral(page);
 
-    await page.goto("/dashboard");
+    await page.goto("/#/dashboard");
     await page.waitForLoadState("networkidle");
 
     await expect(page.getByText("No domains yet")).toBeVisible({
@@ -87,7 +87,7 @@ test.describe("Dashboard", () => {
   }) => {
     await loginEphemeral(page);
 
-    await page.goto("/dashboard");
+    await page.goto("/#/dashboard");
     await page.waitForLoadState("networkidle");
 
     await expect(page.getByText("Wallet Balance")).toBeVisible({
@@ -102,7 +102,7 @@ test.describe("Dashboard", () => {
   }) => {
     await loginEphemeral(page);
 
-    await page.goto("/dashboard");
+    await page.goto("/#/dashboard");
     await page.waitForLoadState("networkidle");
 
     const registerButton = page.getByRole("link", {

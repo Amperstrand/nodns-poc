@@ -1,6 +1,5 @@
-"use client";
-
 import { useEffect, type ReactNode } from "react";
+import { ZoneProvider } from "@/contexts/ZoneContext";
 import { IdentityProvider } from "@/contexts/IdentityContext";
 import { WalletProvider } from "@/contexts/WalletContext";
 import { ErrorBoundary, initGlobalErrorHandler } from "@/components/error-boundary";
@@ -12,9 +11,11 @@ export function Providers({ children }: { children: ReactNode }) {
 
   return (
     <ErrorBoundary>
-      <IdentityProvider>
-        <WalletProvider>{children}</WalletProvider>
-      </IdentityProvider>
+      <ZoneProvider>
+        <IdentityProvider>
+          <WalletProvider>{children}</WalletProvider>
+        </IdentityProvider>
+      </ZoneProvider>
     </ErrorBoundary>
   );
 }

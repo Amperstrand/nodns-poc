@@ -1,4 +1,4 @@
-name: Registrar E2E Tests
+name: Registrar CI
 
 on:
   push:
@@ -13,7 +13,7 @@ on:
       - ".github/workflows/registrar-e2e.yml"
 
 jobs:
-  e2e:
+  build-and-test:
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -27,6 +27,14 @@ jobs:
       - name: Install dependencies
         working-directory: nodns-registrar
         run: npm ci
+
+      - name: Typecheck
+        working-directory: nodns-registrar
+        run: npm run typecheck
+
+      - name: Build
+        working-directory: nodns-registrar
+        run: npm run build
 
       - name: Install Playwright browsers
         working-directory: nodns-registrar
@@ -53,3 +61,31 @@ jobs:
           name: test-results
           path: nodns-registrar/test-results/
           retention-days: 30
+
+  deploy:
+    needs: build-and-test
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        working-directory: nodns-registrar
+        run: npm ci
+
+      - name: Build
+        working-directory: nodns-registrar
+        run: npm run build
+
+      - name: Deploy to Cloudflare Pages
+        working-directory: nodns-registrar
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx wrangler pages deploy dist --project-name nodns-registrar

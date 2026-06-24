@@ -198,6 +198,7 @@ pub async fn process_nostr_event(
             &event_id,
             &pubkey_hex,
             &npub,
+            cfg,
             updaters,
             store,
             authority,
@@ -666,42 +667,26 @@ async fn process_renewal(
 }
 
 // ---------------------------------------------------------------------------
-// Compact Nostr event TXT embedding
+// Proof-of-record TXT builder
 // ---------------------------------------------------------------------------
 
-/// Build a compact Nostr event string for embedding in DNS TXT records.
-///
-/// Tries full format (with signature) first, then falls back to omitting the
-/// signature, then to minimal (just event ID + pubkey). Returns `None` only
-/// if even the minimal form exceeds 255 bytes (should never happen).
-fn build_compact_event_txt(
+fn build_proof_txt(
     event_id: &str,
     pubkey_hex: &str,
     sig: &str,
-    raw_tags: &[Vec<String>],
-) -> Option<String> {
-    let tags_compact: String = raw_tags
-        .iter()
-        .map(|tag| tag.join(","))
-        .collect::<Vec<_>>()
-        .join("|");
-
-    let full = format!("nostr:k=11111;i={event_id};p={pubkey_hex};s={sig};t={tags_compact}");
-    if full.len() <= 255 {
-        return Some(full);
-    }
-
-    let without_sig = format!("nostr:k=11111;i={event_id};p={pubkey_hex};t={tags_compact}");
-    if without_sig.len() <= 255 {
-        return Some(without_sig);
-    }
-
-    let minimal = format!("nostr:k=11111;i={event_id};p={pubkey_hex}");
-    if minimal.len() <= 255 {
-        return Some(minimal);
-    }
-
-    None
+    created_at: i64,
+    record_type: &str,
+    record_name: &str,
+    record_rdata: &str,
+) -> Vec<String> {
+    let proof = format!(
+        "nostr:v=1;k=11111;p={pubkey_hex};s={sig};i={event_id};ts={created_at};rt={record_type};rn={record_name};rd={record_rdata}"
+    );
+    proof
+        .as_bytes()
+        .chunks(255)
+        .map(|chunk| String::from_utf8_lossy(chunk).to_string())
+        .collect()
 }
 
 // ---------------------------------------------------------------------------
@@ -869,14 +854,29 @@ async fn process_dns_update(
 
             metrics.ddns_successes.fetch_add(1, Ordering::Relaxed);
 
-            // Embed compact Nostr event as additional TXT record (DNS-as-relay-cache)
-            if rt == 16 {
-                if let Some(compact) =
-                    build_compact_event_txt(event_id, pubkey_hex, &parsed.sig, &parsed.raw_tags)
+            let store_proofs = cfg
+                .dns
+                .zones
+                .iter()
+                .find(|z| z.zone == *zone_name)
+                .map(|z| z.store_proofs)
+                .unwrap_or(true);
+            if store_proofs {
+                let proof_fqdn = format!("_nodns.{fqdn}");
+                let proof_segments = build_proof_txt(
+                    event_id,
+                    pubkey_hex,
+                    &parsed.sig,
+                    created_at,
+                    &rec.record_type,
+                    &rec.name,
+                    &rec.rdata,
+                );
+                if let Err(e) = updater
+                    .update_txt_multi(&proof_fqdn, rec.ttl, &proof_segments)
+                    .await
                 {
-                    if let Err(e) = updater.append_record(&fqdn, rec.ttl, 16, &compact).await {
-                        warn!(event_id = %event_id, fqdn = %fqdn, error = %e, "compact event TXT append failed (non-fatal)");
-                    }
+                    warn!(event_id = %event_id, fqdn = %proof_fqdn, error = %e, "proof TXT update failed (non-fatal)");
                 }
             }
 
@@ -987,12 +987,21 @@ async fn process_dns_deletes(
     event_id: &str,
     pubkey_hex: &str,
     npub: &str,
+    cfg: &Config,
     updaters: &Arc<HashMap<String, Updater>>,
     store: &Arc<Store>,
     authority: &auth::AuthorityChecker,
     metrics: &Metrics,
 ) {
     for (zone_name, updater) in updaters.iter() {
+        let store_proofs = cfg
+            .dns
+            .zones
+            .iter()
+            .find(|z| z.zone == *zone_name)
+            .map(|z| z.store_proofs)
+            .unwrap_or(true);
+
         for del in &parsed.deletes {
             let fqdn = resolve_fqdn(npub, &del.name, zone_name, store);
 
@@ -1011,6 +1020,13 @@ async fn process_dns_deletes(
 
             info!(event_id = %event_id, fqdn = %fqdn, r#type = %del.record_type, "DDNS delete applied");
             metrics.ddns_successes.fetch_add(1, Ordering::Relaxed);
+
+            if store_proofs {
+                let proof_fqdn = format!("_nodns.{fqdn}");
+                if let Err(e) = updater.delete_record(&proof_fqdn, 16).await {
+                    warn!(fqdn = %proof_fqdn, error = %e, "proof TXT delete failed (non-fatal)");
+                }
+            }
 
             if let Err(e) =
                 store.delete_records_by_key(npub, &del.record_type, &del.name, zone_name)

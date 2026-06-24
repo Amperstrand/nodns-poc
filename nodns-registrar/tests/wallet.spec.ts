@@ -55,14 +55,14 @@ test.afterEach(() => {
 });
 
 test.describe("Wallet page", () => {
-  test("[FAIL] not logged in shows initializing state or redirect", async ({
+  test("[FAIL] not logged in still renders wallet (no identity gate)", async ({
     page,
   }) => {
-    await page.goto("/wallet");
+    await page.goto("/#/wallet");
 
     await expect(
-      page.getByText("Initializing wallet"),
-    ).toBeVisible({ timeout: 10_000 });
+      page.getByRole("heading", { name: "Wallet" }),
+    ).toBeVisible({ timeout: 20_000 });
   });
 
   test("[HAPPY] logged in shows balance of 0 for new wallet", async ({
@@ -70,7 +70,7 @@ test.describe("Wallet page", () => {
   }) => {
     await loginEphemeral(page);
 
-    await page.goto("/wallet");
+    await page.goto("/#/wallet");
 
     await expect(
       page.getByRole("heading", { name: "Wallet" }),
@@ -83,7 +83,7 @@ test.describe("Wallet page", () => {
   test("[HAPPY] shows testnut.cashu.space mint URL", async ({ page }) => {
     await loginEphemeral(page);
 
-    await page.goto("/wallet");
+    await page.goto("/#/wallet");
 
     await expect(
       page.getByRole("heading", { name: "Wallet" }),
@@ -97,7 +97,7 @@ test.describe("Wallet page", () => {
   }) => {
     await loginEphemeral(page);
 
-    await page.goto("/wallet");
+    await page.goto("/#/wallet");
 
     await expect(
       page.getByRole("heading", { name: "Wallet" }),
@@ -112,7 +112,7 @@ test.describe("Wallet page", () => {
   test("[HAPPY] send tokens section renders", async ({ page }) => {
     await loginEphemeral(page);
 
-    await page.goto("/wallet");
+    await page.goto("/#/wallet");
 
     await expect(
       page.getByRole("heading", { name: "Wallet" }),
@@ -127,7 +127,7 @@ test.describe("Wallet page", () => {
   test("[HAPPY] receive tokens section renders", async ({ page }) => {
     await loginEphemeral(page);
 
-    await page.goto("/wallet");
+    await page.goto("/#/wallet");
 
     await expect(
       page.getByRole("heading", { name: "Wallet" }),
@@ -142,7 +142,7 @@ test.describe("Wallet page", () => {
   test("[HAPPY] NUT-18 payment request section renders", async ({ page }) => {
     await loginEphemeral(page);
 
-    await page.goto("/wallet");
+    await page.goto("/#/wallet");
 
     await expect(
       page.getByRole("heading", { name: "Wallet" }),

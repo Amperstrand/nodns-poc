@@ -447,6 +447,51 @@ impl Updater {
         Ok(())
     }
 
+    /// Set a TXT record with multiple character-strings (for proof records).
+    ///
+    /// Atomically removes any existing TXT RRset at `fqdn`, then inserts the
+    /// new multi-string TXT record.  Each string must be ≤255 bytes (RFC 1035).
+    pub async fn update_txt_multi(&self, fqdn: &str, ttl: u32, segments: &[String]) -> Result<()> {
+        let fqdn = ensure_fqdn(fqdn);
+        let fqdn_name = Name::from_str(&fqdn).map_err(|e| DnsError::UpdateFailed {
+            fqdn: fqdn.clone(),
+            error: format!("invalid name: {e}"),
+        })?;
+
+        let txt = TXT::new(segments.to_vec());
+        let insert_rr = Record::from_rdata(fqdn_name, ttl, RData::TXT(txt));
+        let remove_rr = Self::make_remove_rrset(&insert_rr);
+
+        let mut msg = self.build_update_message();
+        msg.add_name_server(remove_rr);
+        msg.add_name_server(insert_rr);
+
+        debug!(
+            fqdn = %fqdn,
+            ttl,
+            segments = segments.len(),
+            "sending DDNS proof TXT update",
+        );
+
+        let resp = self
+            .send_tcp(&mut msg, true)
+            .await
+            .map_err(|e| DnsError::UpdateFailed {
+                fqdn: fqdn.clone(),
+                error: e.to_string(),
+            })?;
+
+        if resp.response_code() != ResponseCode::NoError {
+            return Err(DnsError::UpdateFailed {
+                fqdn,
+                error: format!("server rejected: {}", resp.response_code()),
+            });
+        }
+
+        info!(fqdn = %fqdn, "DDNS proof TXT update applied");
+        Ok(())
+    }
+
     /// Append a single record to an existing `RRset` without removing existing
     /// records.  Sends a bare DDNS INSERT (RFC 2136 §2.5.1).
     pub async fn append_record(

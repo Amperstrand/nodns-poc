@@ -1,0 +1,23 @@
+{
+  "$schema": "https://nsyte.run/schemas/config.schema.json",
+  "profile": {
+    "name": "nodns-registrar",
+    "about": "Decentralized DNS registrar — manage DNS records with Nostr and Cashu. EXPERIMENTAL. Test sats only."
+  },
+  "fallback": "/index.html",
+  "publishAppHandler": true,
+  "appHandler": {
+    "id": "nodns-registrar",
+    "name": "nodns-registrar",
+    "description": "Decentralized DNS registrar powered by Nostr and Cashu.",
+    "kinds": [11111]
+  },
+  "relays": [
+    "wss://relay.cashu.email"
+  ],
+  "servers": [
+    "https://blossom.psbt.me",
+    "https://cdn.hzrd149.com",
+    "https://cdn.sovbit.host"
+  ]
+}

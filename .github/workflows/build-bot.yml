@@ -1,4 +1,4 @@
-name: Build Binaries
+name: Build + Deploy
 
 on:
   push:
@@ -6,7 +6,15 @@ on:
     paths:
       - 'nodns-bot-rs/**'
       - 'nodns-cli/**'
+      - 'nodns-registrar/**'
+      - 'nodns-explorer/**'
+      - '.github/workflows/build-bot.yml'
   workflow_dispatch:
+    inputs:
+      deploy_bot:
+        description: 'Deploy bot to VPS after build'
+        required: false
+        default: 'false'
 
 permissions:
   contents: read
@@ -14,6 +22,7 @@ permissions:
 jobs:
   build-bot:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
@@ -58,57 +67,115 @@ jobs:
         with:
           name: nodns-bot-linux-x86_64
           path: nodns-bot-rs/target/release/nodns-bot
-          retention-days: 5
+          retention-days: 30
 
-  build-cli:
+  deploy-bot:
+    needs: build-bot
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_bot == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: nodns-bot-linux-x86_64
+          path: ./bot-binary
+
+      - name: Deploy to VPS
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: root
+          key: ${{ secrets.VPS_SSH_KEY }}
+          source: "bot-binary/nodns-bot"
+          target: "/opt/nodns-bot/"
+          overwrite: true
+
+      - name: Swap and restart
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: root
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            mv /opt/nodns-bot/bot-binary/nodns-bot /opt/nodns-bot/nodns-bot.new
+            mv /opt/nodns-bot/nodns-bot /opt/nodns-bot/nodns-bot.old
+            mv /opt/nodns-bot/nodns-bot.new /opt/nodns-bot/nodns-bot
+            chmod +x /opt/nodns-bot/nodns-bot
+            rmdir /opt/nodns-bot/bot-binary 2>/dev/null || true
+            systemctl restart nodns-bot
+            sleep 2
+            systemctl is-active nodns-bot && echo "Bot deployed successfully" || (echo "Bot failed to start" && journalctl -u nodns-bot --no-pager -n 20)
+
+  build-ts-cli:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
-      - uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache cargo registry
-        uses: actions/cache@v4
+      - uses: actions/setup-node@v4
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            nodns-cli/target
-          key: ${{ runner.os }}-cargo-cli-${{ hashFiles('nodns-cli/Cargo.lock') }}
-          restore-keys: ${{ runner.os }}-cargo-cli-
+          node-version: 20
 
-      - name: Build release binary
+      - name: Install dependencies
         working-directory: nodns-cli
-        run: cargo build --release
+        run: npm ci
 
-      - name: Run clippy
+      - name: Typecheck
         working-directory: nodns-cli
-        run: cargo clippy -- -D warnings
+        run: npm run typecheck
 
       - name: Smoke test — key generate
         working-directory: nodns-cli
-        run: ./target/release/nodns key generate | grep -q 'nsec1'
+        run: |
+          OUTPUT=$(npx tsx src/index.ts key generate)
+          echo "$OUTPUT" | grep -q 'nsec1'
+          echo "$OUTPUT" | grep -q 'npub1'
 
-      - name: Smoke test — key derive roundtrip
+      - name: Smoke test — zone-check (dry, no relay needed)
         working-directory: nodns-cli
         run: |
-          OUTPUT=$(./target/release/nodns key generate)
-          NSEC=$(echo "$OUTPUT" | grep -o 'nsec1[a-z0-9]*' | head -1)
-          NPUB=$(echo "$OUTPUT" | grep -o 'npub1[a-z0-9]*' | head -1)
-          DERIVED=$(./target/release/nodns key derive "$NSEC")
-          [ "$NPUB" = "$DERIVED" ]
+          npx tsx src/index.ts zone-check example.com 2>&1 | grep -q 'NOT opted in'
 
-      - name: Smoke test — add --dry-run
-        working-directory: nodns-cli
-        run: |
-          OUTPUT=$(./target/release/nodns --sec nsec14churx82dcet4sj0j7r27zql0km994f2jglfds3v9304r8gusyysmy50zt add --type TXT --data "ci test" --dry-run 2>/dev/null)
-          echo "$OUTPUT" | grep -q '"kind": 11111'
-          echo "$OUTPUT" | grep -q '"record"'
-          echo "$OUTPUT" | grep -q '"TXT"'
+  build-registrar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
 
-      - name: Upload binary
-        uses: actions/upload-artifact@v4
+      - uses: actions/setup-node@v4
         with:
-          name: nodns-cli-linux-x86_64
-          path: nodns-cli/target/release/nodns
-          retention-days: 5
+          node-version: 20
+
+      - name: Install dependencies
+        working-directory: nodns-registrar
+        run: npm ci
+
+      - name: Typecheck
+        working-directory: nodns-registrar
+        run: npm run typecheck
+
+      - name: Build
+        working-directory: nodns-registrar
+        run: npm run build
+
+  build-explorer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        working-directory: nodns-explorer
+        run: npm ci
+
+      - name: Typecheck
+        working-directory: nodns-explorer
+        run: npx tsc --noEmit
+
+      - name: Build
+        working-directory: nodns-explorer
+        run: npm run build

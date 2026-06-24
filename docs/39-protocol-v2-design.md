@@ -47,6 +47,7 @@ Published by the zone's npub:
     ["pricing", "create=2", "update=0", "delete=0"],
     ["mint", "testnut.cashu.space"],
     ["testnet"],
+    ["status", "testing", "Best-effort pilot - not yet fully implemented"],
     ["web", "https://nodns-registrar.pages.dev/"]
   ]
 }
@@ -56,7 +57,23 @@ This is a NIP-89 handler event that simultaneously:
 1. Announces the service to Nostr clients (standard NIP-89)
 2. Cross-attests the DNS key via `dnskey_hash`
 3. Publishes pricing and policy
-4. Flags testnet status
+4. Flags testnet status and granular service status
+
+### Status Tag
+
+The `["status", VALUE, REASON?]` tag signals the zone's operational maturity:
+
+| Value | Meaning | Client Behavior |
+|---|---|---|
+| `testing` | Best-effort pilot, not fully implemented, records may be temporary | Show amber "TESTING MODE" banner prominently |
+| `preview` | Feature-complete but pre-launch, expect breaking changes | Show "PREVIEW" badge |
+| `production` | Fully live and operational | Normal display |
+
+The `REASON` field (index 2) is optional human-readable context shown in the UI.
+
+Relay-filterable: `{"#status": ["production"]}` queries return only production zones.
+
+When transitioning from testing to production: publish a new kind:31990 event (same `d` tag) with `["status", "production"]` and remove the `["testnet"]` tag. The old event is auto-superseded (parameterized replaceable).
 
 ### Self-Referential Verification
 
@@ -154,14 +171,14 @@ The zone operator unlocks by providing a Schnorr signature on the proof secret u
 
 ## Testnet Flag
 
-Zones that are testing nodns without full commitment include `testnet=1` in their TXT record and a `testnet` tag in their NIP-89 event.
+Zones that are testing nodns without full commitment include `testnet=1` in their TXT record and a `testnet` tag in their NIP-89 event. The `["status", "testing", ...]` tag provides additional granularity (see [Status Tag](#status-tag) above).
 
 Client behavior:
 - Display a "TESTNET" badge next to the zone name
 - Show warning: "This zone is testing nodns. Registrations may be temporary."
 - Do NOT display testnet zones in production mode (configurable)
 
-nodns.shop is currently `testnet=1`.
+nodns.shop is currently `testnet=1` with `["status", "testing"]`.
 
 ## Protocol Versioning
 

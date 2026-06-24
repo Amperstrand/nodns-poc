@@ -11,7 +11,7 @@ pub use acme_dns::{acmedns_register_handler, acmedns_update_handler};
 pub use acme_order::{acme_cert_handler, acme_order_handler};
 pub use api::{
     check_handler, records_by_npub_handler, records_by_prefix_handler, records_handler,
-    zone_pricing_handler,
+    zone_export, zone_pricing_handler, zone_records,
 };
 pub use client_log::client_log_handler;
 pub use dyndns::dyndns_update_handler;

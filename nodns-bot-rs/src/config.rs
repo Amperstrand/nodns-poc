@@ -159,6 +159,10 @@ impl Default for ZoneLeaseConfig {
     }
 }
 
+fn default_true() -> bool {
+    true
+}
+
 /// DNS connection details for a single zone.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
@@ -170,6 +174,8 @@ pub struct ZoneConfig {
     pub tsig_algorithm: String,
     pub default_ttl: u32,
     pub negative_ttl: u32,
+    #[serde(default = "default_true")]
+    pub store_proofs: bool,
     #[serde(default)]
     pub payment: ZonePaymentConfig,
     #[serde(default)]
@@ -186,6 +192,7 @@ impl Default for ZoneConfig {
             tsig_algorithm: "hmac-sha256".to_string(),
             default_ttl: 3600,
             negative_ttl: 60,
+            store_proofs: true,
             payment: ZonePaymentConfig::default(),
             lease: ZoneLeaseConfig::default(),
         }
@@ -399,6 +406,7 @@ impl Config {
                 tsig_algorithm: self.dns.tsig_algorithm.clone(),
                 default_ttl: self.dns.default_ttl,
                 negative_ttl: self.dns.negative_ttl,
+                store_proofs: true,
                 payment: ZonePaymentConfig::default(),
                 lease: ZoneLeaseConfig::default(),
             });

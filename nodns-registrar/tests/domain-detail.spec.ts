@@ -62,7 +62,7 @@ test.describe("Domain detail page", () => {
   }) => {
     await loginEphemeral(page);
 
-    await page.goto("/domain?name=testdomain&zone=nodns.shop");
+    await page.goto("/#/domain?name=testdomain&zone=nodns.shop");
     await page.waitForLoadState("networkidle");
 
     await expect(page.getByText("Add Record").first()).toBeVisible({
@@ -75,7 +75,7 @@ test.describe("Domain detail page", () => {
   }) => {
     await loginEphemeral(page);
 
-    await page.goto("/domain?zone=nodns.shop");
+    await page.goto("/#/domain?zone=nodns.shop");
     await page.waitForLoadState("networkidle");
 
     await expect(page.getByText("Add Record").first()).toBeVisible({
@@ -90,7 +90,7 @@ test.describe("Domain detail page", () => {
     async ({ page }) => {
       await loginEphemeral(page);
 
-      await page.goto("/domain?zone=nodns.shop");
+      await page.goto("/#/domain?zone=nodns.shop");
       await page.waitForLoadState("networkidle");
 
       await expect(page.getByText("Add Record").first()).toBeVisible({
@@ -111,7 +111,7 @@ test.describe("Domain detail page", () => {
     async ({ page }) => {
       await loginEphemeral(page);
 
-      await page.goto("/domain?zone=nodns.shop");
+      await page.goto("/#/domain?zone=nodns.shop");
       await page.waitForLoadState("networkidle");
 
       await expect(page.getByText("Add Record").first()).toBeVisible({

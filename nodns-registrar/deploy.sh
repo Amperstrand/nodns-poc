@@ -8,14 +8,14 @@ echo "Building nodns-registrar..."
 cd "$PROJECT_DIR"
 npm run build
 
-if [ ! -d "out" ]; then
-  echo "ERROR: Build output 'out/' not found"
+if [ ! -d "dist" ]; then
+  echo "ERROR: Build output 'dist/' not found"
   exit 1
 fi
 
 echo "Deploying to Cloudflare Pages..."
 if [ "${1:-}" = "--deploy" ]; then
-  npx wrangler pages deploy out --project-name nodns-registrar
+  npx wrangler pages deploy dist --project-name nodns-registrar
 else
   echo "Built successfully. Deploy with: ./deploy.sh --deploy"
   echo "Or connect this repo to Cloudflare Pages for automatic deploys."

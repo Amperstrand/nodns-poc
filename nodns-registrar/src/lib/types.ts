@@ -56,3 +56,5 @@ export interface WalletState {
   mintUrl: string;
   ready: boolean;
 }
+
+export type { DiscoveredZone } from "./zones";

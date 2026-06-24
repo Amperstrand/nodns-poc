@@ -551,6 +551,26 @@ impl Store {
         Ok(records)
     }
 
+    /// Return all non-deleted records for a specific zone, ordered by name then type.
+    pub fn list_zone_records(&self, zone: &str) -> Result<Vec<EventRecord>, StoreError> {
+        let conn = self.conn();
+        let mut stmt = conn
+            .prepare(
+                "SELECT event_id, npub, pubkey, name, record_type, ttl, rdata, zone, created_at, processed_at, deleted
+                 FROM events WHERE zone = ?1 AND deleted = 0
+                 ORDER BY name, record_type",
+            )
+            .map_err(StoreError::ListAllRecords)?;
+
+        let records = stmt
+            .query_map(params![zone], scan_event_row)
+            .map_err(StoreError::ListAllRecords)?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(StoreError::ScanRecord)?;
+
+        Ok(records)
+    }
+
     pub fn get_records_by_domain(&self, domain: &str) -> Result<Vec<EventRecord>, StoreError> {
         let conn = self.conn();
         let pattern = format!("{domain}.%");

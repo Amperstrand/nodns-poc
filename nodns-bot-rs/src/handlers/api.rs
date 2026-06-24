@@ -1,11 +1,13 @@
 use std::sync::Arc;
 
 use axum::extract::{Path, Query, State as AxumState};
+use axum::http::header;
 use axum::response::{IntoResponse, Json, Response};
 use serde::{Deserialize, Serialize};
 
 use crate::dns::query_txt_records;
 use crate::event_processor::resolve_fqdn;
+use crate::types::EventRecord;
 use crate::AppState;
 
 // ---------------------------------------------------------------------------
@@ -298,4 +300,122 @@ pub async fn check_handler(
         api: api_source,
         dns: dns_source,
     })
+}
+
+// ---------------------------------------------------------------------------
+// Zone export & zone-scoped records
+// ---------------------------------------------------------------------------
+
+pub async fn zone_export(
+    AxumState(state): AxumState<Arc<AppState>>,
+    Path(zone): Path<String>,
+) -> Response {
+    let records: Vec<EventRecord> = state
+        .store
+        .list_zone_records(&zone)
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|r| !r.deleted)
+        .collect();
+
+    let default_ttl = state
+        .dns_zones
+        .iter()
+        .find(|z| z.zone == zone)
+        .map(|z| z.default_ttl)
+        .unwrap_or(3600);
+
+    let body = format_zone_file(&records, &zone, default_ttl);
+
+    (
+        axum::http::StatusCode::OK,
+        [(header::CONTENT_TYPE, "text/plain; charset=utf-8")],
+        body,
+    )
+        .into_response()
+}
+
+pub async fn zone_records(
+    AxumState(state): AxumState<Arc<AppState>>,
+    Path(zone): Path<String>,
+) -> Response {
+    let records = state.store.list_zone_records(&zone).unwrap_or_default();
+
+    let out: Vec<ApiRecord> = records
+        .into_iter()
+        .map(|r| {
+            let name = if r.name == "@" || r.name.is_empty() {
+                String::new()
+            } else {
+                r.name.clone()
+            };
+            ApiRecord {
+                npub: r.npub.clone(),
+                name,
+                fqdn: resolve_fqdn(&r.npub, &r.name, &r.zone, &state.store),
+                record_type: r.record_type,
+                ttl: r.ttl,
+                rdata: r.rdata,
+                created_at: r.created_at,
+            }
+        })
+        .collect();
+    let count = out.len();
+    Json(RecordsResponse {
+        records: out,
+        count,
+    })
+    .into_response()
+}
+
+fn record_type_sort_key(rt: &str) -> u8 {
+    match rt {
+        "A" => 0,
+        "AAAA" => 1,
+        "CNAME" => 2,
+        "MX" => 3,
+        "TXT" => 4,
+        _ => 5,
+    }
+}
+
+fn zone_file_owner_name(record: &EventRecord) -> String {
+    if record.name == "@" || record.name.is_empty() {
+        record.npub.clone()
+    } else {
+        format!("{}.{}", record.name, record.npub)
+    }
+}
+
+fn format_zone_file(records: &[EventRecord], zone: &str, default_ttl: u32) -> String {
+    let mut sorted: Vec<&EventRecord> = records.iter().collect();
+    sorted.sort_by(|a, b| {
+        let owner_a = zone_file_owner_name(a);
+        let owner_b = zone_file_owner_name(b);
+        let cmp = owner_a.to_lowercase().cmp(&owner_b.to_lowercase());
+        if cmp != std::cmp::Ordering::Equal {
+            return cmp;
+        }
+        record_type_sort_key(&a.record_type).cmp(&record_type_sort_key(&b.record_type))
+    });
+
+    let mut out = String::with_capacity(256 + sorted.len() * 64);
+    out.push_str(&format!("$ORIGIN {zone}.\n"));
+    out.push_str(&format!("$TTL {default_ttl}\n\n"));
+
+    for r in &sorted {
+        let owner = zone_file_owner_name(r);
+        let ttl = if r.ttl > 0 { r.ttl } else { default_ttl };
+        let rdata = if r.record_type == "TXT" {
+            format!("\"{}\"", r.rdata.replace('\\', "\\\\").replace('"', "\\\""))
+        } else {
+            r.rdata.clone()
+        };
+        out.push_str(&format!(
+            "{owner}\tIN\t{rtype}\t{ttl}\t{rdata}\n",
+            rtype = r.record_type,
+        ));
+    }
+
+    out
 }
