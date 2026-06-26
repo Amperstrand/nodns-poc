@@ -8,6 +8,7 @@ import { keyCommand } from "./commands/key.js";
 import { zoneCheckCommand } from "./commands/zone-check.js";
 import { zoneExportCommand } from "./commands/zone-export.js";
 import { conformanceCommand } from "./commands/conformance.js";
+import { refundCommand } from "./commands/refund.js";
 
 const program = new Command();
 
@@ -28,5 +29,6 @@ program.addCommand(keyCommand);
 program.addCommand(zoneCheckCommand);
 program.addCommand(zoneExportCommand);
 program.addCommand(conformanceCommand);
+program.addCommand(refundCommand);
 
 program.parse();

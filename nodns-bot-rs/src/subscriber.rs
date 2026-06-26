@@ -1,4 +1,4 @@
-//! Nostr relay subscriber — connects to multiple relays and forwards kind 11111 events.
+//! Nostr relay subscriber — connects to multiple relays and forwards kind 11111/31111 events.
 //!
 //! Ported 1:1 from `nodns-bot/internal/nostr/subscriber.go`.
 //!
@@ -15,7 +15,7 @@ use tokio::task::JoinHandle;
 
 use crate::config::NostrConfig;
 use crate::store::Store;
-use crate::types::KIND_DNS_RECORD;
+use crate::types::{KIND_DNS_RECORD, KIND_DNS_REPLACEABLE};
 
 // ---------------------------------------------------------------------------
 // Error type
@@ -29,7 +29,7 @@ pub enum SubscriberError {}
 // ---------------------------------------------------------------------------
 
 /// Manages persistent connections to Nostr relays and forwards verified
-/// kind 11111 (DNS record) events through an [`mpsc`] channel.
+/// kind 11111/31111 (DNS record) events through an [`mpsc`] channel.
 pub struct Subscriber {
     client: Client,
     relays: Vec<String>,
@@ -62,7 +62,10 @@ impl Subscriber {
             }
         };
 
-        let mut filter = Filter::new().kinds(vec![Kind::Custom(KIND_DNS_RECORD as u16)]);
+        let mut filter = Filter::new().kinds(vec![
+            Kind::Custom(KIND_DNS_RECORD as u16),
+            Kind::Custom(KIND_DNS_REPLACEABLE as u16),
+        ]);
         if last_seen > 0 {
             filter = filter.since(Timestamp::from_secs(last_seen as u64));
         }

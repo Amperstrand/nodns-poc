@@ -193,6 +193,7 @@ pub async fn dyndns_update_handler(
         &ip_str,
         &zone,
         now,
+        0,
     ) {
         error!(error = %e, "dyndns: failed to save event to store");
     }

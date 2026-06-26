@@ -21,7 +21,7 @@ use hickory_client::proto::serialize::binary::BinEncodable;
 use tokio::net::UdpSocket;
 use tracing::{debug, error, info, warn};
 
-use crate::dns::Updater;
+use crate::cloudflare_backend::DnsBackend;
 use crate::store::Store;
 
 // ---------------------------------------------------------------------------
@@ -148,20 +148,16 @@ fn is_allowed_record_type(rt: RecordType) -> bool {
 pub struct DnsUpdateServer {
     listen_addr: SocketAddr,
     store: Arc<Store>,
-    updaters: Arc<HashMap<String, Updater>>,
+    updaters: Arc<HashMap<String, DnsBackend>>,
     zones: Vec<String>,
     tsig_signer: TSigner,
 }
 
 impl DnsUpdateServer {
-    /// Create a new DNS UPDATE server.
-    ///
-    /// `tsig_key_name` is the DNS name of the TSIG key (e.g. `"nodns-update."`).
-    /// `tsig_key_secret` is the base64-encoded HMAC-SHA256 shared secret.
     pub fn new(
         listen_addr: SocketAddr,
         store: Arc<Store>,
-        updaters: Arc<HashMap<String, Updater>>,
+        updaters: Arc<HashMap<String, DnsBackend>>,
         zones: Vec<String>,
         tsig_key_name: &str,
         tsig_key_secret: &str,
@@ -357,6 +353,7 @@ impl DnsUpdateServer {
                         &rdata_str,
                         &zone,
                         now,
+                        0,
                     ) {
                         warn!(error = %e, "failed to persist RFC 2136 update to store");
                     }

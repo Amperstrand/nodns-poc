@@ -13,8 +13,11 @@ The [GitHub Pages site](https://amperstrand.github.io/nodns-poc/) explains the t
 | Component | Tech | Purpose |
 |---|---|---|
 | **nodns-bot** | Rust (nostr-sdk, hickory, axum) | Subscribes to Nostr relays, validates events, pushes DDNS updates |
+| **nodns-cli** | TypeScript (commander, nostr-tools) | Local record management: add, delete, list, resolve, conformance, zone ops |
+| **nodns-frontend** | Next.js (static export) | Key generation, record publishing, live feed — deployed to GitHub Pages |
+| **nodns-registrar** | Vite + Preact (static) | Domain registration UI with Cashu wallet — deployed to Cloudflare Pages |
+| **nodns-explorer** | Vite + Preact (static) | DNS event explorer: live feed, zone monitoring, DNS lookups |
 | **Knot DNS** | 3.3.4 | Authoritative nameserver with DNSSEC signing (ECDSAP256SHA256) |
-| **Frontend** | Next.js (static export) | Key generation, record publishing, live feed |
 | **Caddy** | Reverse proxy | Proxies `/api/*` to bot, redirects `*.nodns.shop` to GitHub Pages |
 
 ```
@@ -92,40 +95,52 @@ nodns-poc/
 │   ├── README.md           # Doc index with status badges (ACTIVE/DRAFT/ARCHIVED)
 │   ├── 11-protocol-experimental-draft.md  # Protocol specification
 │   ├── 20-26               # Design philosophy series (consensus, naming, payments...)
-│   ├── 27-30               # Implementation plans
-│   └── competitive/        # Competitive analysis (ENS, Handshake, etc.)
+│   ├── 27-43               # Implementation plans, research, architecture
+│   ├── competitive/        # Competitive analysis (ENS, Handshake, NIP-97)
+│   └── examples/           # Integration scripts (certbot, nsupdate, ddclient)
 ├── nodns-bot-rs/           # Rust bot
 │   └── src/
 │       ├── main.rs         # Entry point, event loop
 │       ├── auth.rs         # Authority/delegation checking
 │       ├── acme.rs         # ACME (Let's Encrypt) certificate management
+│       ├── classify.rs     # Name/mint classification + enforcement matrix
+│       ├── cloudflare_backend.rs  # Cloudflare API DNS backend (DnsBackend enum)
 │       ├── config.rs       # TOML config with multi-zone, per-zone payment
 │       ├── dns.rs          # DDNS updater (RFC 2136 + TSIG)
+│       ├── dns_cache.rs    # Experimental Nostr-over-DNS event caching
 │       ├── dns_update_server.rs  # RFC 2136 dynamic update listener
 │       ├── dnssec_derivation.rs  # DNSSEC key derivation
+│       ├── epp.rs          # EPP bridge to ccTLD registry (.cv pilot)
 │       ├── event_processor.rs    # Event validation pipeline
-│       ├── handlers/       # HTTP handlers (split from monolithic handlers.rs)
-│       │   ├── mod.rs      # Module exports
-│       │   ├── api.rs      # REST API: records, pricing, availability
+│       ├── handlers/       # HTTP handlers
+│       │   ├── mod.rs      # Module exports + route registration
+│       │   ├── api.rs      # REST API: records, pricing, availability, zone export
 │       │   ├── acme_dns.rs # ACME DNS-01 challenge handler
 │       │   ├── acme_order.rs    # ACME certificate ordering
-│       │   ├── dyndns.rs   # DDNS update endpoints
+│       │   ├── client_log.rs    # Client-side error log receiver
+│       │   ├── dyndns.rs   # DynDNS v2 update endpoint
 │       │   ├── health.rs   # Health check endpoint
 │       │   └── tls_check.rs# TLS certificate verification
 │       ├── nip05.rs        # NIP-05 verification
 │       ├── parser.rs       # Nostr event parsing & validation
 │       ├── payment.rs      # Cashu token verification (CDK), npub_names_free
-│       ├── store.rs        # SQLite persistence
+│       ├── security_tests.rs    # Security regression tests
+│       ├── store.rs        # SQLite persistence, AES-256-GCM for ACME keys
 │       ├── subscriber.rs   # Nostr relay subscription
 │       ├── tls_derivation.rs    # TLS key derivation
 │       └── types.rs        # Shared types
-├── nodns-cli/              # Rust CLI tool
+├── nodns-cli/              # TypeScript CLI tool
 │   └── src/
-│       ├── main.rs         # Entry point, clap command parsing
-│       ├── commands/       # Subcommands (key, add, resolve)
-│       └── config.rs       # CLI config from env/file
+│       ├── index.ts        # Entry point, commander command parsing
+│       ├── commands/       # key, add, delete, list, resolve, refund,
+│       │                   # conformance, zone-check, zone-export
+│       └── lib/            # nostr, p2pk, cashu, dns, zones, validation
 ├── nodns-frontend/         # Next.js frontend (static export to GitHub Pages)
-├── tests/                  # Playwright E2E tests
+├── nodns-registrar/        # Vite + Preact registrar UI (Cloudflare Pages)
+├── nodns-explorer/         # Vite + Preact DNS event explorer
+├── nodns-nameserver/       # Go reference impl ($npub.nostr via Khatru, Arjen)
+├── pilot/                  # .cv EPP bridge pilot (gitignored)
+├── tests/                  # Playwright E2E tests (10 specs)
 └── .githooks/              # Pre-commit hooks (gitleaks, fmt, clippy)
 ```
 
@@ -133,8 +148,8 @@ nodns-poc/
 
 ### Prerequisites
 
-- Rust 1.95+ (for nodns-bot-rs and nodns-cli)
-- Node.js 18+ (for frontend and Playwright tests)
+- Rust 1.95+ (for nodns-bot-rs)
+- Node.js 18+ (for frontend, CLI, registrar, explorer, and Playwright tests)
 
 ### Build the bot
 
@@ -150,6 +165,16 @@ cd nodns-frontend
 npm install
 npm run build
 # Static output in out/
+```
+
+### Build the CLI
+
+```bash
+cd nodns-cli
+npm install
+npm run build
+# Output: dist/index.js
+npm link  # optional — makes `nodns` available globally
 ```
 
 ### Run tests

@@ -70,6 +70,9 @@ uuid = { version = "1", features = ["v4"] }
 # JSON (for serializing ACME credentials to meta table)
 serde_json = "1"
 
+# HTTP client (Cloudflare API backend)
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+
 # TLS crypto provider (required by rustls used by instant-acme and nostr-sdk)
 rustls = { version = "0.23", default-features = false, features = ["ring", "logging", "std", "tls12"] }
 

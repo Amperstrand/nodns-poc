@@ -163,6 +163,10 @@ fn default_true() -> bool {
     true
 }
 
+fn default_backend() -> String {
+    "ddns".to_string()
+}
+
 /// DNS connection details for a single zone.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
@@ -180,6 +184,14 @@ pub struct ZoneConfig {
     pub payment: ZonePaymentConfig,
     #[serde(default)]
     pub lease: ZoneLeaseConfig,
+    #[serde(default = "default_backend")]
+    pub backend: String,
+    #[serde(default)]
+    pub cloudflare_api_token: Option<String>,
+    #[serde(default)]
+    pub cloudflare_zone_id: Option<String>,
+    #[serde(default)]
+    pub dns_cache_events: bool,
 }
 
 impl Default for ZoneConfig {
@@ -195,6 +207,10 @@ impl Default for ZoneConfig {
             store_proofs: true,
             payment: ZonePaymentConfig::default(),
             lease: ZoneLeaseConfig::default(),
+            backend: "ddns".to_string(),
+            cloudflare_api_token: None,
+            cloudflare_zone_id: None,
+            dns_cache_events: false,
         }
     }
 }
@@ -409,6 +425,10 @@ impl Config {
                 store_proofs: true,
                 payment: ZonePaymentConfig::default(),
                 lease: ZoneLeaseConfig::default(),
+                backend: "ddns".to_string(),
+                cloudflare_api_token: None,
+                cloudflare_zone_id: None,
+                dns_cache_events: false,
             });
         }
 
@@ -518,20 +538,34 @@ impl Config {
                     "dns.zones[{i}].zone is required"
                 )));
             }
-            if z.knot_address.is_empty() {
-                return Err(ConfigError::Validation(format!(
-                    "dns.zones[{i}].knot_address is required"
-                )));
-            }
-            if z.tsig_key_name.is_empty() {
-                return Err(ConfigError::Validation(format!(
-                    "dns.zones[{i}].tsig_key_name is required"
-                )));
-            }
-            if z.tsig_key_secret.is_empty() {
-                return Err(ConfigError::Validation(format!(
-                    "dns.zones[{i}].tsig_key_secret is required"
-                )));
+            let is_cloudflare = z.backend == "cloudflare";
+            if !is_cloudflare {
+                if z.knot_address.is_empty() {
+                    return Err(ConfigError::Validation(format!(
+                        "dns.zones[{i}].knot_address is required"
+                    )));
+                }
+                if z.tsig_key_name.is_empty() {
+                    return Err(ConfigError::Validation(format!(
+                        "dns.zones[{i}].tsig_key_name is required"
+                    )));
+                }
+                if z.tsig_key_secret.is_empty() {
+                    return Err(ConfigError::Validation(format!(
+                        "dns.zones[{i}].tsig_key_secret is required"
+                    )));
+                }
+            } else {
+                if z.cloudflare_api_token.as_deref().unwrap_or("").is_empty() {
+                    return Err(ConfigError::Validation(format!(
+                        "dns.zones[{i}].cloudflare_api_token is required when backend = \"cloudflare\""
+                    )));
+                }
+                if z.cloudflare_zone_id.as_deref().unwrap_or("").is_empty() {
+                    return Err(ConfigError::Validation(format!(
+                        "dns.zones[{i}].cloudflare_zone_id is required when backend = \"cloudflare\""
+                    )));
+                }
             }
         }
         Ok(())
@@ -1005,5 +1039,142 @@ timeout_secs = 60
         assert_eq!(cfg.epp.username, "bridge");
         assert_eq!(cfg.epp.pool_size, 4);
         assert_eq!(cfg.epp.timeout_secs, 60);
+    }
+
+    #[test]
+    fn zone_backend_defaults_to_ddns() {
+        let cfg = ZoneConfig::default();
+        assert_eq!(cfg.backend, "ddns");
+        assert!(!cfg.dns_cache_events);
+        assert!(cfg.cloudflare_api_token.is_none());
+        assert!(cfg.cloudflare_zone_id.is_none());
+    }
+
+    #[test]
+    fn cloudflare_backend_config_parsing() {
+        let toml = r#"
+[nostr]
+relays = ["wss://relay.example.com"]
+zone = "dns4sats.xyz"
+
+[[dns.zones]]
+zone = "dns4sats.xyz"
+backend = "cloudflare"
+cloudflare_api_token = "secret-token"
+cloudflare_zone_id = "abc123zoneid"
+dns_cache_events = true
+"#;
+        let mut cfg: Config = toml::from_str(toml).unwrap();
+        cfg.apply_defaults();
+        cfg.validate().unwrap();
+
+        let z = &cfg.dns.zones[0];
+        assert_eq!(z.backend, "cloudflare");
+        assert_eq!(z.cloudflare_api_token.as_deref(), Some("secret-token"));
+        assert_eq!(z.cloudflare_zone_id.as_deref(), Some("abc123zoneid"));
+        assert!(z.dns_cache_events);
+    }
+
+    #[test]
+    fn cloudflare_backend_validation_missing_token() {
+        let toml = r#"
+[nostr]
+relays = ["wss://relay.example.com"]
+zone = "dns4sats.xyz"
+
+[[dns.zones]]
+zone = "dns4sats.xyz"
+backend = "cloudflare"
+cloudflare_zone_id = "abc123"
+"#;
+        let mut cfg: Config = toml::from_str(toml).unwrap();
+        cfg.apply_defaults();
+        let err = cfg.validate().unwrap_err();
+        assert!(err.to_string().contains("cloudflare_api_token"));
+    }
+
+    #[test]
+    fn cloudflare_backend_validation_missing_zone_id() {
+        let toml = r#"
+[nostr]
+relays = ["wss://relay.example.com"]
+zone = "dns4sats.xyz"
+
+[[dns.zones]]
+zone = "dns4sats.xyz"
+backend = "cloudflare"
+cloudflare_api_token = "token"
+"#;
+        let mut cfg: Config = toml::from_str(toml).unwrap();
+        cfg.apply_defaults();
+        let err = cfg.validate().unwrap_err();
+        assert!(err.to_string().contains("cloudflare_zone_id"));
+    }
+
+    #[test]
+    fn cloudflare_backend_skips_ddns_validation() {
+        let toml = r#"
+[nostr]
+relays = ["wss://relay.example.com"]
+zone = "dns4sats.xyz"
+
+[[dns.zones]]
+zone = "dns4sats.xyz"
+backend = "cloudflare"
+cloudflare_api_token = "token"
+cloudflare_zone_id = "zoneid"
+"#;
+        let mut cfg: Config = toml::from_str(toml).unwrap();
+        cfg.apply_defaults();
+        cfg.validate().unwrap();
+    }
+
+    #[test]
+    fn dns_cache_events_defaults_false() {
+        let toml = r#"
+[nostr]
+relays = ["wss://relay.example.com"]
+zone = "nodns.shop"
+
+[[dns.zones]]
+knot_address = "127.0.0.1:5353"
+zone = "nodns.shop"
+tsig_key_name = "key1."
+tsig_key_secret = "secret1"
+"#;
+        let mut cfg: Config = toml::from_str(toml).unwrap();
+        cfg.apply_defaults();
+        cfg.validate().unwrap();
+        assert!(!cfg.dns.zones[0].dns_cache_events);
+    }
+
+    #[test]
+    fn mixed_backend_multi_zone_config() {
+        let toml = r#"
+[nostr]
+relays = ["wss://relay.example.com"]
+zone = "multi"
+
+[[dns.zones]]
+knot_address = "127.0.0.1:5353"
+zone = "nodns.shop"
+tsig_key_name = "key1."
+tsig_key_secret = "secret1"
+
+[[dns.zones]]
+zone = "dns4sats.xyz"
+backend = "cloudflare"
+cloudflare_api_token = "token"
+cloudflare_zone_id = "zoneid"
+dns_cache_events = true
+"#;
+        let mut cfg: Config = toml::from_str(toml).unwrap();
+        cfg.apply_defaults();
+        cfg.validate().unwrap();
+
+        assert_eq!(cfg.dns.zones.len(), 2);
+        assert_eq!(cfg.dns.zones[0].backend, "ddns");
+        assert_eq!(cfg.dns.zones[1].backend, "cloudflare");
+        assert!(cfg.dns.zones[1].dns_cache_events);
     }
 }

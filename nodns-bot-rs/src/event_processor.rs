@@ -8,8 +8,9 @@ use nostr_sdk::Event;
 use tracing::{debug, error, info, warn};
 
 use crate::auth;
+use crate::cloudflare_backend::DnsBackend;
 use crate::config::Config;
-use crate::dns::Updater;
+use crate::dns_cache::DnsEventCache;
 use crate::parser;
 use crate::payment;
 use crate::payment::Verifier;
@@ -76,7 +77,7 @@ fn parse_operator_expiry(date_str: &Option<String>) -> Option<i64> {
 pub async fn process_nostr_event(
     evt: &Event,
     cfg: &Config,
-    updaters: &Arc<HashMap<String, Updater>>,
+    updaters: &Arc<HashMap<String, DnsBackend>>,
     store: &Arc<Store>,
     authority: &auth::AuthorityChecker,
     zone_verifiers: &HashMap<String, Verifier>,
@@ -115,6 +116,16 @@ pub async fn process_nostr_event(
             return;
         }
     };
+
+    let event_kind = u64::from(evt.kind.as_u16());
+    if let Some(ref d) = parsed.d_tag {
+        debug!(
+            event_id = %event_id,
+            kind = event_kind,
+            d_tag = %d,
+            "parameterized replaceable event received"
+        );
+    }
 
     if let Some(ref claim) = parsed.claim {
         process_claim(
@@ -181,6 +192,7 @@ pub async fn process_nostr_event(
             &pubkey_hex,
             &npub,
             created_at,
+            event_kind,
             cfg,
             updaters,
             store,
@@ -205,6 +217,12 @@ pub async fn process_nostr_event(
             metrics,
         )
         .await;
+    }
+
+    if let Some(zone_config) = cfg.dns.zones.iter().find(|z| z.dns_cache_events) {
+        if let Some(backend) = updaters.get(&zone_config.zone) {
+            DnsEventCache::try_cache(backend, evt, &zone_config.zone).await;
+        }
     }
 
     if let Err(e) = store.set_last_seen(created_at) {
@@ -675,12 +693,13 @@ fn build_proof_txt(
     pubkey_hex: &str,
     sig: &str,
     created_at: i64,
+    event_kind: u64,
     record_type: &str,
     record_name: &str,
     record_rdata: &str,
 ) -> Vec<String> {
     let proof = format!(
-        "nostr:v=1;k=11111;p={pubkey_hex};s={sig};i={event_id};ts={created_at};rt={record_type};rn={record_name};rd={record_rdata}"
+        "nostr:v=1;k={event_kind};p={pubkey_hex};s={sig};i={event_id};ts={created_at};rt={record_type};rn={record_name};rd={record_rdata}"
     );
     proof
         .as_bytes()
@@ -699,8 +718,9 @@ async fn process_dns_update(
     pubkey_hex: &str,
     npub: &str,
     created_at: i64,
+    event_kind: u64,
     cfg: &Config,
-    updaters: &Arc<HashMap<String, Updater>>,
+    updaters: &Arc<HashMap<String, DnsBackend>>,
     store: &Arc<Store>,
     authority: &auth::AuthorityChecker,
     zone_verifiers: &HashMap<String, Verifier>,
@@ -868,6 +888,7 @@ async fn process_dns_update(
                     pubkey_hex,
                     &parsed.sig,
                     created_at,
+                    event_kind,
                     &rec.record_type,
                     &rec.name,
                     &rec.rdata,
@@ -890,6 +911,7 @@ async fn process_dns_update(
                 &rec.rdata,
                 zone_name,
                 created_at,
+                event_kind,
             ) {
                 error!(event_id = %event_id, error = %e, "failed to save event");
             }
@@ -988,7 +1010,7 @@ async fn process_dns_deletes(
     pubkey_hex: &str,
     npub: &str,
     cfg: &Config,
-    updaters: &Arc<HashMap<String, Updater>>,
+    updaters: &Arc<HashMap<String, DnsBackend>>,
     store: &Arc<Store>,
     authority: &auth::AuthorityChecker,
     metrics: &Metrics,

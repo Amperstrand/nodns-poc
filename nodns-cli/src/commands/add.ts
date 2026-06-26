@@ -2,7 +2,7 @@ import { Command } from "commander";
 import { signAndPublish, buildRecordTag, buildCashuTag, decodeSec } from "../lib/nostr.js";
 import { checkZone } from "../lib/zones.js";
 import { validateRecord } from "../lib/validation.js";
-import { createPaymentToken } from "../lib/cashu.js";
+import { createP2pkTokenWithRefund } from "../lib/p2pk.js";
 import { DEFAULT_MINT_URL } from "../lib/constants.js";
 import type { ZoneInfo } from "../lib/types.js";
 
@@ -60,6 +60,7 @@ export const addCommand = new Command("add")
   .option("--ttl <seconds>", "TTL in seconds", "3600")
   .option("--dry-run", "Print event without publishing")
   .option("--force", "Skip testnet warning delay")
+  .option("--refund-days <days>", "Days until Cashu refund is available", "7")
   .action(async (opts, cmd: Command) => {
     const o = cmd.optsWithGlobals();
     const relay = o.relay ?? "wss://relay.cashu.email";
@@ -74,12 +75,20 @@ export const addCommand = new Command("add")
     const ttl = parseInt(opts.ttl as string, 10) || 3600;
     const dryRun: boolean = opts.dryRun ?? false;
     const force: boolean = opts.force ?? false;
+    const refundDays: number = parseInt(opts.refundDays as string, 10) || 7;
 
     const validationError = validateRecord(recordType, name, data);
     if (validationError) {
       console.error(`Error: ${validationError}`);
       process.exit(1);
     }
+
+    if (!sec) {
+      console.error("Error: no secret key provided. Use --sec, NODNS_SECRET_KEY, or config file");
+      process.exit(1);
+    }
+
+    const kp = decodeSec(sec);
 
     let zoneInfo: ZoneInfo | null = null;
     if (!dryRun && !skipZoneCheck) {
@@ -99,17 +108,28 @@ export const addCommand = new Command("add")
         const mintUrl = zoneInfo.mintUrl ?? DEFAULT_MINT_URL;
         const price = zoneInfo.pricing!.createPrice;
         console.error(`\nCustom name requires ${price} sats payment via Cashu.`);
-        const token = await createPaymentToken(mintUrl, price);
+        console.error(`Creating P2PK-locked token with ${refundDays}-day refund condition.`);
+        console.error(`Zone owner must claim within ${refundDays} days to confirm registration.`);
+
+        const { token, refundDate, p2pk } = await createP2pkTokenWithRefund({
+          zonePubkeyHex: zoneInfo.npub,
+          userPubkeyHex: kp.pubkey,
+          refundAfterDays: refundDays,
+          amountSats: price,
+          mintUrl,
+        });
+
+        if (p2pk) {
+          console.error(`✓ P2PK token created. Refund eligible after: ${refundDate.toISOString()}`);
+        } else {
+          console.error(`✓ Token created (unlocked — mint lacks P2PK support).`);
+        }
+        console.error();
+
         tags.push(buildCashuTag(token, mintUrl, price));
       }
     }
 
-    if (!sec) {
-      console.error("Error: no secret key provided. Use --sec, NODNS_SECRET_KEY, or config file");
-      process.exit(1);
-    }
-
-    const kp = decodeSec(sec);
     await signAndPublish(kp.secretKey, relays, tags, "", dryRun);
     if (!dryRun) {
       console.error(`\nRecord live at ${kp.npub}.${zone}`);

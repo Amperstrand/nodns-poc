@@ -12,14 +12,14 @@ use nostr_sdk::prelude::*;
 use thiserror::Error;
 
 use crate::types::{
-    ClaimRequest, Delegation, DeleteRequest, DnsRecord, ParsedEvent, Payment, RegistrarKey,
-    RenewalRequest, DEFAULT_TTL, KIND_DNS_RECORD,
+    is_dns_kind, ClaimRequest, Delegation, DeleteRequest, DnsRecord, ParsedEvent, Payment,
+    RegistrarKey, RenewalRequest, DEFAULT_TTL,
 };
 
 #[derive(Error, Debug)]
 pub enum ParserError {
-    #[error("expected kind {expected}, got {got}")]
-    WrongKind { expected: u64, got: u64 },
+    #[error("expected kind 11111 or 31111, got {got}")]
+    WrongKind { got: u64 },
     #[error("tag {index}: {message}")]
     TagError { index: usize, message: String },
     #[error("{0}")]
@@ -61,12 +61,19 @@ pub fn classify_event(
     block_private_ip: bool,
     max_txt_length: usize,
 ) -> Result<ParsedEvent, ParserError> {
-    if u64::from(event.kind.as_u16()) != KIND_DNS_RECORD {
-        return Err(ParserError::WrongKind {
-            expected: KIND_DNS_RECORD,
-            got: u64::from(event.kind.as_u16()),
-        });
+    let kind = u64::from(event.kind.as_u16());
+    if !is_dns_kind(kind) {
+        return Err(ParserError::WrongKind { got: kind });
     }
+
+    let d_tag = event
+        .tags
+        .iter()
+        .find(|t| {
+            let s = t.as_slice();
+            !s.is_empty() && s[0] == "d"
+        })
+        .and_then(|t| t.as_slice().get(1).cloned());
 
     let mut result = ParsedEvent {
         records: Vec::new(),
@@ -78,6 +85,7 @@ pub fn classify_event(
         renewal: None,
         sig: hex::encode(event.sig.serialize()),
         raw_tags: event.tags.iter().map(|t| t.as_slice().to_vec()).collect(),
+        d_tag,
     };
 
     for (i, tag) in event.tags.iter().enumerate() {
@@ -1671,5 +1679,62 @@ mod tests {
         assert_eq!(result.records.len(), 2);
         assert_eq!(result.records[0].name, "@");
         assert_eq!(result.records[1].name, "www");
+    }
+
+    #[test]
+    fn test_classify_event_accepts_kind_31111() {
+        let keys = Keys::generate();
+        let event = EventBuilder::new(Kind::Custom(31111), "")
+            .tags(vec![
+                Tag::parse(["d", "A:@.nodns.shop"]).unwrap(),
+                Tag::parse(["record", "A", "@", "3600", "1.2.3.4"]).unwrap(),
+            ])
+            .sign_with_keys(&keys)
+            .unwrap();
+        let result = classify_event(&event, &[], false, 0).unwrap();
+        assert_eq!(result.records.len(), 1);
+        assert_eq!(result.records[0].record_type, "A");
+        assert_eq!(result.records[0].rdata, "1.2.3.4");
+    }
+
+    #[test]
+    fn test_classify_event_31111_extracts_d_tag() {
+        let keys = Keys::generate();
+        let event = EventBuilder::new(Kind::Custom(31111), "")
+            .tags(vec![
+                Tag::parse(["d", "TXT:hello.nodns.shop"]).unwrap(),
+                Tag::parse(["record", "TXT", "hello", "3600", "world"]).unwrap(),
+            ])
+            .sign_with_keys(&keys)
+            .unwrap();
+        let result = classify_event(&event, &[], false, 0).unwrap();
+        assert_eq!(result.d_tag.as_deref(), Some("TXT:hello.nodns.shop"));
+    }
+
+    #[test]
+    fn test_classify_event_11111_d_tag_none_when_absent() {
+        let keys = Keys::generate();
+        let event = EventBuilder::new(Kind::Custom(11111), "")
+            .tags(vec![
+                Tag::parse(["record", "A", "@", "3600", "1.2.3.4"]).unwrap()
+            ])
+            .sign_with_keys(&keys)
+            .unwrap();
+        let result = classify_event(&event, &[], false, 0).unwrap();
+        assert!(result.d_tag.is_none());
+    }
+
+    #[test]
+    fn test_classify_event_rejects_unrelated_kind() {
+        let keys = Keys::generate();
+        let event = EventBuilder::new(Kind::Custom(22222), "")
+            .tags(vec![
+                Tag::parse(["record", "A", "@", "3600", "1.2.3.4"]).unwrap()
+            ])
+            .sign_with_keys(&keys)
+            .unwrap();
+        let err = classify_event(&event, &[], false, 0).unwrap_err();
+        assert!(err.to_string().contains("expected kind 11111 or 31111"));
+        assert!(err.to_string().contains("22222"));
     }
 }

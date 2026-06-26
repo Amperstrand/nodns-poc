@@ -3,8 +3,10 @@
 mod acme;
 mod auth;
 mod classify;
+mod cloudflare_backend;
 mod config;
 mod dns;
+mod dns_cache;
 mod dns_update_server;
 mod dnssec_derivation;
 #[allow(dead_code)]
@@ -37,6 +39,7 @@ use tokio::signal;
 use tower_http::set_header::SetResponseHeaderLayer;
 use tracing::{info, warn};
 
+use cloudflare_backend::{CloudflareBackend, DnsBackend};
 use config::{Config, ZoneConfig};
 use dns::Updater;
 use payment::Verifier;
@@ -70,7 +73,7 @@ pub struct AppState {
     pub metrics: Metrics,
     pub start_time: Instant,
     pub dns_zones: Vec<config::ZoneConfig>,
-    pub updaters: Arc<HashMap<String, dns::Updater>>,
+    pub updaters: Arc<HashMap<String, DnsBackend>>,
     pub nostr_client: nostr_sdk::Client,
     pub relay_urls: Vec<String>,
     pub db_path: std::path::PathBuf,
@@ -83,7 +86,7 @@ pub struct AppState {
 async fn lease_expiry_task(
     store: Arc<Store>,
     zone_configs: Vec<ZoneConfig>,
-    updaters: Arc<HashMap<String, Updater>>,
+    updaters: Arc<HashMap<String, DnsBackend>>,
 ) {
     let mut interval = tokio::time::interval(std::time::Duration::from_secs(3600));
     loop {
@@ -182,7 +185,7 @@ async fn lease_expiry_task(
 
 async fn test_record_cleanup_task(
     store: Arc<Store>,
-    updaters: Arc<HashMap<String, Updater>>,
+    updaters: Arc<HashMap<String, DnsBackend>>,
     epp_pool: Option<Arc<epp::EppPool>>,
 ) {
     let mut interval = tokio::time::interval(std::time::Duration::from_secs(3600));
@@ -432,16 +435,24 @@ async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    // ── DNS updaters ──
-    let mut updaters: HashMap<String, Updater> = HashMap::new();
+    // ── DNS backends ──
+    let mut updaters: HashMap<String, DnsBackend> = HashMap::new();
     for zc in &cfg.dns.zones {
-        let u = Updater::new(zc)?;
-        if let Err(e) = u.test_connection().await {
-            warn!(zone = %zc.zone, error = %e, "Knot DNS connection test failed (will retry on updates)");
+        let backend = if zc.backend == "cloudflare" {
+            let token = zc.cloudflare_api_token.clone().unwrap_or_default();
+            let zone_id = zc.cloudflare_zone_id.clone().unwrap_or_default();
+            let cf = CloudflareBackend::new(token, zone_id);
+            DnsBackend::Cloudflare(cf)
         } else {
-            info!(zone = %zc.zone, "Knot DNS connection test passed");
+            let u = Updater::new(zc)?;
+            DnsBackend::Ddns(u)
+        };
+        if let Err(e) = backend.test_connection().await {
+            warn!(zone = %zc.zone, backend = %zc.backend, error = %e, "DNS backend connection test failed (will retry on updates)");
+        } else {
+            info!(zone = %zc.zone, backend = %zc.backend, "DNS backend connection test passed");
         }
-        updaters.insert(zc.zone.clone(), u);
+        updaters.insert(zc.zone.clone(), backend);
     }
     let updaters = Arc::new(updaters);
 

@@ -7,9 +7,11 @@ import {
 } from "nostr-tools/pure";
 import { npubEncode, nsecEncode, decode as nip19Decode } from "nostr-tools/nip19";
 import { SimplePool } from "nostr-tools/pool";
-import { hexToBytes } from "nostr-tools/utils";
+import { hexToBytes, bytesToHex } from "nostr-tools/utils";
 import { RECORD_KIND } from "./constants.js";
 import type { Keypair } from "./types.js";
+
+export { bytesToHex };
 
 export function generateKeypair(): Keypair {
   const sk = generateSecretKey();

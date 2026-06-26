@@ -973,7 +973,7 @@ fn rejects_event_with_wrong_kind() {
         .sign_with_keys(&keys)
         .unwrap();
     let err = parser::classify_event(&event, &[], false, 0).unwrap_err();
-    assert!(err.to_string().contains("expected kind 11111"));
+    assert!(err.to_string().contains("expected kind 11111 or 31111"));
 }
 
 // ===========================================================================

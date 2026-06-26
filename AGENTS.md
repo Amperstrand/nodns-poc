@@ -22,6 +22,7 @@ User publishes kind 11111 Nostr event to relay
         │
         ▼
   dns.rs + dns_update_server.rs ── DDNS UPDATE (RFC 2136 + TSIG)
+  cloudflare_backend.rs ── alternative: Cloudflare API (DnsBackend enum)
         │
         ▼
   Knot DNS 3.3.4 ── authoritative, DNSSEC-signed (ECDSAP256SHA256)
@@ -324,6 +325,8 @@ nodns-bot-rs/src/
   classify.rs               Name/mint classification + enforcement matrix (Npub/Testing/Custom × Real/Test)
   subscriber.rs              Nostr relay subscription (nostr-sdk), reconnect backoff
   security_tests.rs          Security regression tests
+  cloudflare_backend.rs      Cloudflare API DNS backend (DnsBackend enum: Knot | Cloudflare)
+  dns_cache.rs               Experimental Nostr-over-DNS event caching (warn-only)
   handlers/
     mod.rs                   Module exports + route registration
     api.rs                   REST API: /api/check, /api/acme/order, pricing, availability
@@ -334,17 +337,28 @@ nodns-bot-rs/src/
     health.rs                Health check endpoint (/api/health)
     tls_check.rs             TLS certificate verification endpoint
 
-nodns-cli/src/
-  main.rs                    CLI entry point, clap command parsing
-  config.rs                  CLI config from env/file
-  event.rs                   Event construction helpers
+nodns-cli/src/                 TypeScript CLI (commander, nostr-tools, @cashu/cashu-ts)
+  index.ts                    CLI entry point, commander command parsing
   commands/
-    mod.rs                   Subcommand module exports
-    add.rs                   Add a DNS record (publish kind 11111)
-    delete.rs                Delete a DNS record
-    list.rs                  List records for an npub
-    resolve.rs               Resolve a name via DNS
-    key.rs                   Generate/manage Nostr keys
+    key.ts                    Generate/manage Nostr keys
+    add.ts                    Add a DNS record (publish kind 11111)
+    delete.ts                 Delete a DNS record
+    list.ts                   List records for an npub
+    resolve.ts                Resolve a name via DNS
+    refund.ts                 P2PK refund command (experimental)
+    conformance.ts            Protocol conformance testing
+    zone-check.ts             Zone health check
+    zone-export.ts            Export zone records to file
+  lib/
+    nostr.ts                  Nostr event construction helpers
+    p2pk.ts                   P2PK (Pay-to-Public-Key) utilities
+    cashu.ts                  Cashu token helpers
+    dns.ts                    DNS lookup utilities
+    zones.ts                  Zone discovery and management
+    zone-file.ts              Zone file generation
+    constants.ts              CLI constants (relays, defaults)
+    types.ts                  Shared TypeScript types
+    validation.ts             Input validation
 
 nodns-frontend/src/
   app/
@@ -360,6 +374,7 @@ nodns-frontend/src/
     profile/page.tsx         Nostr profile
     learn/page.tsx           Protocol docs / FAQ
     discoveries/page.tsx     Feature discoveries
+    ecosystem/page.tsx       Ecosystem info, related projects
   contexts/
     IdentityContext.tsx      Ephemeral keypair provider (npub, nsec, pk)
     WalletContext.tsx        Cashu wallet provider (coco-cashu Manager)
@@ -407,23 +422,17 @@ nodns-frontend/src/
     discoveries.tsx          Discoveries section
     roadmap.tsx              Roadmap timeline
     faq.tsx                  FAQ accordion
+    try-it.tsx               Interactive try-it section
     ui/                      shadcn primitives (button, card, dialog, input, etc. — built on @base-ui/react)
 
 nodns-registrar/
-  next.config.ts             Static export (output: 'export'), no basePath
-  package.json               Next.js 16, React 19, Tailwind v4, coco-cashu-core, @cashu/cashu-ts, nostr-tools
+  vite.config.ts             Vite + Preact config (vite-plugin-pwa), no basePath
+  package.json               Vite 6, React 19 (via Preact compat), Tailwind v4, coco-cashu-core, @cashu/cashu-ts, nostr-tools
   deploy.sh                  Build + wrangler pages deploy
   playwright.config.ts       E2E test config (baseURL: nodns-registrar.pages.dev)
-  tests/                     Playwright E2E specs (5 spec files: landing, login, dashboard, domain-detail, wallet)
+  tests/                     Playwright E2E specs (13 spec files: landing, login, dashboard, domain-detail, domain-forms, integration-registration, landing-flows, navigation, persistence, responsive, wallet-forms, wallet, zone-discovery)
   src/
-    app/
-      layout.tsx             Root layout: Geist fonts, Providers, SiteHeader, ErrorBoundary
-      page.tsx               Landing page: domain search, availability, registration flow
-      dashboard/page.tsx     User dashboard: domain list, stats, empty state
-      domain/page.tsx        Domain detail: record CRUD form, validation, payment
-      wallet/page.tsx        Cashu wallet: top-up, send, receive, NUT-18 payment requests
-      globals.css            Design tokens (dark-only), Tailwind v4
-      icon.svg               Favicon
+    app/                     Vite SPA entry (index.html → main render)
     contexts/
       IdentityContext.tsx    NIP-07 + nsec + ephemeral login, saved accounts
       WalletContext.tsx      coco-cashu Manager, IndexedDB, NUT-18 creqA generation
@@ -444,25 +453,40 @@ nodns-registrar/
       error-boundary.tsx     React ErrorBoundary + global error handlers + localStorage queue + bot flush
       ui/                    Button, Card, Input, Badge (shadcn-style)
 
+nodns-explorer/
+  vite.config.ts             Vite + Preact config
+  package.json               Vite 6, React 19 (via Preact compat), Tailwind v4, nostr-tools
+  playwright.config.ts       E2E test config
+  tests/                     Playwright E2E specs (explorer, auth-gate, responsive, persistence)
+  src/
+    lib/
+      zones.ts               Zone management and discovery
+    components/               Event feed, zone monitor, DNS lookup, event analysis
+
 pilot/                       .cv EPP bridge pilot (gitignored)
   epp-integration.md         EPP bridge design
   namespace-policy.md        Enforcement matrix, pricing
   knot-cv.conf               Knot DNS config for .cv preview mirror
   knot-zone-management.md    Per-domain zone creation/deletion workflow
   epp-probe/                 Rust binary for EPP connectivity testing
+  ecash-provenance.md        Ecash provenance tracking
+  open-questions.md          Open .cv pilot questions
+  registrar-meeting.md       Registrar meeting notes
 
 deploy/
   deploy.sh                  Cross-compile (cargo zigbuild), scp, swap binary, restart systemd
   check-expiry.sh            RDAP domain expiry verification for operator leases
   config-multi-zone.toml     Production config template (zones, policy, payment, registrar keys)
   knot-zones.conf            Knot DNS zone configuration
+  zones/                     Per-zone configuration files (e.g., nodns.shop.zone)
   DEPLOY.md                  Deployment runbook
+  PURGE-POLICY.md            DNS record lifecycle management and purge policy
 
 docs/
   README.md                  Doc index with status badges (ACTIVE/DRAFT/ARCHIVED)
   11-protocol-experimental-draft.md  Kind 11111 protocol specification
 
-tests/                       Playwright E2E specs (9 spec files)
+tests/                       Playwright E2E specs (10 spec files)
 .githooks/
   pre-commit                 gitleaks + cargo fmt + cargo clippy
   pre-push                   cargo test + next build
@@ -563,10 +587,17 @@ npm run build     # next build — fails on TypeScript errors (strict mode)
 ### E2E tests (Playwright)
 
 ```bash
+# Frontend E2E tests
 npx playwright test
+
+# Registrar E2E tests
+cd nodns-registrar && npx playwright test
+
+# Explorer E2E tests
+cd nodns-explorer && npx playwright test
 ```
 
-9 spec files in `tests/`. Base URL: `https://amperstrand.github.io/nodns-poc/` (the GitHub Pages deployment). Tests cover landing page, record publishing, wallet, dashboard, search, and certificate flows. Config in `playwright.config.ts`.
+10 spec files in `tests/`. Base URL: `https://amperstrand.github.io/nodns-poc/` (the GitHub Pages deployment). Tests cover landing page, record publishing, wallet, dashboard, search, certificate flows, accessibility, security, and visual QA. Config in `playwright.config.ts`.
 
 ### Git hooks
 
@@ -586,6 +617,7 @@ Hooks are opt-in via `git config core.hooksPath .githooks`. The pre-commit hook 
 | `deploy-pages.yml` | push to main | Build frontend static export → publish to GitHub Pages |
 | `expiry-check.yml` | monthly schedule | RDAP domain expiry verification (`check-expiry.sh`) |
 | `ci-register.yml` | push/PR | Registration flow CI checks |
+| `registrar-e2e.yml` | push/PR | Playwright E2E tests for nodns-registrar |
 
 ## Key decisions
 

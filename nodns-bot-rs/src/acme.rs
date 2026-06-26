@@ -10,8 +10,8 @@ use instant_acme::{
 use thiserror::Error;
 use tracing::{error, info, warn};
 
+use crate::cloudflare_backend::DnsBackend;
 use crate::config::AcmeConfig;
-use crate::dns::Updater;
 use crate::store::Store;
 use base64::Engine;
 use sha2::{Digest, Sha256};
@@ -37,7 +37,7 @@ pub enum AcmeError {
 pub struct AcmeService {
     account: Arc<Mutex<HashMap<String, Account>>>,
     config: AcmeConfig,
-    updaters: Arc<HashMap<String, Updater>>,
+    updaters: Arc<HashMap<String, DnsBackend>>,
     store: Arc<Store>,
     zones: Vec<String>,
     zerossl_eab: Option<ExternalAccountKey>,
@@ -46,7 +46,7 @@ pub struct AcmeService {
 impl AcmeService {
     pub fn new(
         config: AcmeConfig,
-        updaters: Arc<HashMap<String, Updater>>,
+        updaters: Arc<HashMap<String, DnsBackend>>,
         store: Arc<Store>,
         zones: Vec<String>,
     ) -> Self {

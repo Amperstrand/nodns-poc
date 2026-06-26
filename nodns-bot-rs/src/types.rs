@@ -7,7 +7,14 @@ use std::str::FromStr;
 
 /// DNS record type constants.
 pub const KIND_DNS_RECORD: u64 = 11111;
+pub const KIND_DNS_REPLACEABLE: u64 = 31111;
 pub const DEFAULT_TTL: u32 = 3600;
+
+/// Check if a Nostr event kind is a recognized DNS record kind (11111 or 31111).
+#[must_use]
+pub fn is_dns_kind(kind: u64) -> bool {
+    kind == KIND_DNS_RECORD || kind == KIND_DNS_REPLACEABLE
+}
 
 /// A parsed delete request from a Nostr delete tag.
 /// Format: ["delete", TYPE, NAME]
@@ -66,6 +73,7 @@ pub struct ParsedEvent {
     pub renewal: Option<RenewalRequest>,
     pub sig: String,
     pub raw_tags: Vec<Vec<String>>,
+    pub d_tag: Option<String>,
 }
 
 /// A stored DNS event record (maps to `events` table).
@@ -367,5 +375,15 @@ mod tests {
     fn constants_have_expected_values() {
         assert_eq!(DEFAULT_TTL, 3600);
         assert_eq!(KIND_DNS_RECORD, 11111);
+        assert_eq!(KIND_DNS_REPLACEABLE, 31111);
+    }
+
+    #[test]
+    fn is_dns_kind_recognizes_both() {
+        assert!(is_dns_kind(KIND_DNS_RECORD));
+        assert!(is_dns_kind(KIND_DNS_REPLACEABLE));
+        assert!(!is_dns_kind(1));
+        assert!(!is_dns_kind(0));
+        assert!(!is_dns_kind(30000));
     }
 }

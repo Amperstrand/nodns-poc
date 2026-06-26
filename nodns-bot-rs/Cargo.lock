@@ -2404,6 +2404,7 @@ dependencies = [
  "p256",
  "pkcs8",
  "regex",
+ "reqwest",
  "rusqlite",
  "rustls",
  "serde",

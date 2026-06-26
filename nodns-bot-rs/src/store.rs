@@ -308,12 +308,13 @@ impl Store {
         rdata: &str,
         zone: &str,
         created_at: i64,
+        kind: u64,
     ) -> Result<(), StoreError> {
         let conn = self.conn();
         conn.execute(
-            "INSERT OR REPLACE INTO events (event_id, npub, pubkey, name, record_type, ttl, rdata, zone, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
-            params![event_id, npub, pubkey, name, record_type, ttl, rdata, zone, created_at],
+            "INSERT OR REPLACE INTO events (event_id, npub, pubkey, name, record_type, ttl, rdata, zone, created_at, kind)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+            params![event_id, npub, pubkey, name, record_type, ttl, rdata, zone, created_at, kind],
         )
         .map_err(|e| StoreError::SaveEvent(event_id.to_string(), e))?;
         Ok(())
@@ -1173,6 +1174,7 @@ fn run_migrations(conn: &Connection) -> Result<(), StoreError> {
         "ALTER TABLE delegations ADD COLUMN epp_auth_info_encrypted BLOB",
         "ALTER TABLE events ADD COLUMN mint_url TEXT",
         "ALTER TABLE events ADD COLUMN test_mint INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE events ADD COLUMN kind INTEGER NOT NULL DEFAULT 11111",
     ];
 
     for sql in &alter_statements {
