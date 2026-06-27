@@ -22,6 +22,11 @@ import {
   ChevronDownIcon,
   SearchIcon,
   RadioIcon,
+  SearchXIcon,
+  InboxIcon,
+  FilterIcon,
+  ClockIcon,
+  ArrowDownAZIcon,
 } from "lucide-react";
 
 interface MergedRecord {
@@ -54,6 +59,8 @@ export function RecordBrowser() {
   const [nostrEvents, setNostrEvents] = useState<EventWithRelay[]>([]);
   const [expandedEvents, setExpandedEvents] = useState<Set<string>>(new Set());
   const [recordFilter, setRecordFilter] = useState("");
+  const [typeFilter, setTypeFilter] = useState("All");
+  const [sortBy, setSortBy] = useState<"recent" | "az">("recent");
   const fetchRef = useRef<(() => void) | null>(null);
 
   const [dohFqdn, setDohFqdn] = useState(
@@ -228,15 +235,23 @@ export function RecordBrowser() {
     setDohLoading(false);
   }, [dohFqdn, dohType]);
 
-  const filteredRecords = recordFilter.trim()
-    ? mergedRecords.filter(
-        (r) =>
-          r.fqdn.toLowerCase().includes(recordFilter.toLowerCase()) ||
-          r.type.toLowerCase().includes(recordFilter.toLowerCase()) ||
-          r.value.toLowerCase().includes(recordFilter.toLowerCase()) ||
-          r.npub.toLowerCase().includes(recordFilter.toLowerCase()),
-      )
-    : mergedRecords;
+  const filterQuery = recordFilter.trim().toLowerCase();
+  const filteredRecords = mergedRecords
+    .filter((r) => {
+      if (typeFilter !== "All" && r.type !== typeFilter) return false;
+      if (!filterQuery) return true;
+      return (
+        r.fqdn.toLowerCase().includes(filterQuery) ||
+        r.type.toLowerCase().includes(filterQuery) ||
+        r.value.toLowerCase().includes(filterQuery) ||
+        r.npub.toLowerCase().includes(filterQuery)
+      );
+    })
+    .sort((a, b) =>
+      sortBy === "az"
+        ? a.fqdn.localeCompare(b.fqdn)
+        : b.created_at - a.created_at,
+    );
 
   const grouped: Record<string, MergedRecord[]> = {};
   for (const r of filteredRecords) {
@@ -311,7 +326,15 @@ export function RecordBrowser() {
         </div>
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
+      <Tabs
+        value={activeTab}
+        onValueChange={(v) => {
+          setActiveTab(v);
+          setRecordFilter("");
+          setTypeFilter("All");
+          setSortBy("recent");
+        }}
+      >
         <TabsList className="mb-4 h-auto gap-0 rounded-none border-b border-border bg-transparent p-0">
           <TabsTrigger
             value="api"
@@ -402,41 +425,92 @@ export function RecordBrowser() {
             ))}
           </div>
 
-          {/* Search filter */}
+          {/* Search + filter toolbar */}
           {!loading && mergedRecords.length > 0 && (
-            <div className="relative mb-4">
-              <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
-              <input
-                type="text"
-                aria-label="Filter records"
-                value={recordFilter}
-                onChange={(e) => setRecordFilter(e.target.value)}
-                placeholder="Filter by domain, type, value, or npub..."
-                className="w-full rounded-lg border border-input bg-transparent pl-10 pr-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 outline-none"
-              />
-              {recordFilter && (
-                <button
-                  onClick={() => setRecordFilter("")}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground hover:text-foreground"
-                >
-                  Clear
-                </button>
-              )}
+            <div className="flex flex-col gap-3 mb-4">
+              <div className="flex flex-col sm:flex-row gap-2">
+                <div className="relative flex-1">
+                  <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
+                  <input
+                    type="text"
+                    aria-label="Filter records"
+                    value={recordFilter}
+                    onChange={(e) => setRecordFilter(e.target.value)}
+                    placeholder="Filter by domain, type, value, or npub..."
+                    className="w-full rounded-lg border border-input bg-transparent pl-10 pr-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 outline-none"
+                  />
+                  {recordFilter && (
+                    <button
+                      onClick={() => setRecordFilter("")}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground hover:text-foreground"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+                <div className="flex items-center gap-0.5 rounded-lg border border-border bg-muted/30 p-0.5 shrink-0">
+                  <Button
+                    variant={sortBy === "recent" ? "default" : "ghost"}
+                    size="sm"
+                    onClick={() => setSortBy("recent")}
+                    className="text-xs"
+                  >
+                    <ClockIcon />
+                    Recent
+                  </Button>
+                  <Button
+                    variant={sortBy === "az" ? "default" : "ghost"}
+                    size="sm"
+                    onClick={() => setSortBy("az")}
+                    className="text-xs"
+                  >
+                    <ArrowDownAZIcon />
+                    A-Z
+                  </Button>
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="inline-flex items-center gap-1 text-xs text-muted-foreground mr-1">
+                  <FilterIcon className="size-3" />
+                  Type
+                </span>
+                {["All", "A", "AAAA", "CNAME", "TXT", "MX"].map((t) => (
+                  <Button
+                    key={t}
+                    variant={typeFilter === t ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setTypeFilter(t)}
+                    className="font-mono text-xs"
+                  >
+                    {t}
+                  </Button>
+                ))}
+              </div>
             </div>
           )}
 
           {/* Expand/Collapse all + group count */}
           {!loading && mergedRecords.length > 0 && (
-            <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center justify-between mb-3 gap-2">
               <span className="text-xs text-muted-foreground">
-                {allGroupKeys.length} {allGroupKeys.length === 1 ? "domain" : "domains"} · {filteredRecords.length} records
+                {filteredRecords.length < mergedRecords.length ? (
+                  <>
+                    Showing <span className="text-foreground font-medium">{filteredRecords.length}</span> of {mergedRecords.length}
+                  </>
+                ) : (
+                  <>{filteredRecords.length} records</>
+                )}
+                {" · "}
+                {allGroupKeys.length} {allGroupKeys.length === 1 ? "domain" : "domains"}
               </span>
-              <button
-                onClick={toggleAllGroups}
-                className="text-xs font-medium text-primary hover:text-primary/80 transition-colors"
-              >
-                {allExpanded ? "Collapse all" : "Expand all"}
-              </button>
+              {allGroupKeys.length > 0 && (
+                <button
+                  onClick={toggleAllGroups}
+                  className="text-xs font-medium text-primary hover:text-primary/80 transition-colors shrink-0"
+                >
+                  {allExpanded ? "Collapse all" : "Expand all"}
+                </button>
+              )}
             </div>
           )}
 
@@ -455,8 +529,34 @@ export function RecordBrowser() {
             </div>
           ) : mergedRecords.length === 0 ? (
             <div className="rounded-xl border border-dashed border-border bg-card p-12 text-center">
-              <DatabaseIcon className="size-12 mx-auto text-muted-foreground opacity-20 mb-4" />
-              <p className="text-foreground/70 text-sm">No records found.</p>
+              <InboxIcon className="size-12 mx-auto text-muted-foreground opacity-20 mb-4" />
+              <p className="text-foreground/70 text-sm mb-1 font-medium">
+                No records found
+              </p>
+              <p className="text-muted-foreground text-xs">
+                Records will appear here once published to the network.
+              </p>
+            </div>
+          ) : filteredRecords.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-border bg-card p-12 text-center">
+              <SearchXIcon className="size-12 mx-auto text-muted-foreground opacity-20 mb-4" />
+              <p className="text-foreground/70 text-sm mb-1 font-medium">
+                No records match your filters
+              </p>
+              <p className="text-muted-foreground text-xs mb-4">
+                Try adjusting your search query or record type.
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setRecordFilter("");
+                  setTypeFilter("All");
+                  setSortBy("recent");
+                }}
+              >
+                Clear filters
+              </Button>
             </div>
           ) : (
             Object.entries(grouped).map(([npub, recs]) => (

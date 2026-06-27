@@ -515,6 +515,26 @@ impl Config {
                 _ => "https://acme-staging-v02.api.letsencrypt.org/directory".to_string(),
             };
         }
+
+        // ACME: warn if encryption_key is missing while ACME is enabled.
+        // Without a persistent key the bot generates a random one at startup,
+        // making previously-encrypted ACME private keys unreadable after restart.
+        if self.acme.enabled {
+            let key_missing = self
+                .acme
+                .encryption_key
+                .as_deref()
+                .map(str::is_empty)
+                .unwrap_or(true);
+            if key_missing {
+                tracing::warn!(
+                    "acme.encryption_key is not set while ACME is enabled — \
+                     encrypted private keys will be unreadable after restart. \
+                     Set [acme] encryption_key in config.toml to a hex-encoded \
+                     32-byte key to persist keys across restarts."
+                );
+            }
+        }
     }
 
     /// Validate required fields after defaults are applied.
@@ -1008,7 +1028,7 @@ tsig_key_secret = "secret1"
         assert_eq!(cfg.epp.host, "registry.ola.cv");
         assert_eq!(cfg.epp.port, 700);
         assert_eq!(cfg.epp.pool_size, 8);
-        assert_eq!(cfg.epp.timeout_secs, 90);
+        assert_eq!(cfg.epp.timeout_secs, 30);
         assert_eq!(cfg.epp.password_env_var, "CV_EPP_PASSWORD");
     }
 

@@ -21,7 +21,7 @@ use hickory_client::proto::serialize::binary::BinEncodable;
 use tokio::net::UdpSocket;
 use tracing::{debug, error, info, warn};
 
-use crate::cloudflare_backend::DnsBackend;
+use crate::connector::DnsConnector;
 use crate::store::Store;
 
 // ---------------------------------------------------------------------------
@@ -148,7 +148,7 @@ fn is_allowed_record_type(rt: RecordType) -> bool {
 pub struct DnsUpdateServer {
     listen_addr: SocketAddr,
     store: Arc<Store>,
-    updaters: Arc<HashMap<String, DnsBackend>>,
+    updaters: Arc<HashMap<String, Arc<dyn DnsConnector>>>,
     zones: Vec<String>,
     tsig_signer: TSigner,
 }
@@ -157,7 +157,7 @@ impl DnsUpdateServer {
     pub fn new(
         listen_addr: SocketAddr,
         store: Arc<Store>,
-        updaters: Arc<HashMap<String, DnsBackend>>,
+        updaters: Arc<HashMap<String, Arc<dyn DnsConnector>>>,
         zones: Vec<String>,
         tsig_key_name: &str,
         tsig_key_secret: &str,

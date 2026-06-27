@@ -1,0 +1,38 @@
+# nodns
+
+> nodns is a decentralized DNS service where DNS records are published as Nostr events (kind 11111). Domains are minted by registrars, delegated to users, and resolved by the bot into a real authoritative DNS server (Knot DNS or Cloudflare). Anti-spam pricing uses Cashu ecash.
+
+## Protocol
+
+DNS records live in Nostr events of kind 11111 (replaceable kind 31111) signed by the domain owner. Tags:
+- `record` — record type, name, TTL, rdata (e.g. `["record","A","@",3600,"1.2.3.4"]`)
+- `delegation` — registrar-granted lease over a domain (npub, domain, zone, valid_until)
+- `registrar` — identifies the registrar pubkey that authorized the delegation
+- `cashu` — proofs of payment for create/update/delete fees
+
+Registrars publish delegations; users publish records under delegated names. The bot verifies the signature, the delegation, and the Cashu payment before writing to authoritative DNS.
+
+## REST API
+
+Base URL: `https://nodns.shop/` (configurable per deployment)
+
+- `GET /api/health` — service health (uptime, relay status, zone counts)
+- `GET /api/check?name=<subdomain>` — check registration in API and live DNS
+- `GET /api/records` — list records (optional `?pubkey=` or `?domain=`)
+- `GET /api/records/by-npub/{npub}` — records owned by an exact npub
+- `GET /api/records/by-prefix/{prefix}` — records by pubkey prefix
+- `GET /api/zones/{zone}/pricing` — create/update/delete prices + accepted mint
+- `GET /api/zone/{zone}/export` — full zone file
+- `GET /api/zone/{zone}/records` — zone-scoped record list (JSON)
+- `POST /api/acme/order` — ACME DNS-01 certificate order
+- `GET /api/acme/order/{id}` — fetch ACME order status / cert
+- `GET /.well-known/nostr.json?local=<subdomain>` — NIP-05 resolution
+
+## Auth & payments
+
+There is no bearer-token API auth for the REST endpoints above (they are read-only). DNS record mutations happen off-API by publishing Nostr events. Cashu ecash proofs in `cashu` tags pay for create/update/delete; each zone has a configurable mint URL and price schedule. ACME orders are rate-limited at the HTTP layer.
+
+## More
+
+Full reference with curl examples: `/llms-full.txt`.
+Source: https://github.com/peterstein/nodns

@@ -1049,6 +1049,29 @@ impl Store {
             .collect())
     }
 
+    pub fn list_non_terminal_acme_orders(&self) -> Result<Vec<AcmeOrder>, StoreError> {
+        let conn = self.conn();
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, domain, npub, status, certificate_pem, private_key_pem, error, csr_der, environment, created_at, updated_at
+                 FROM acme_orders
+                 WHERE status NOT IN ('issued', 'failed')
+                 ORDER BY created_at ASC",
+            )
+            .map_err(|e| StoreError::ListAcmeOrdersByNpub("non-terminal".to_string(), e))?;
+
+        let records = stmt
+            .query_map([], scan_acme_order_row)
+            .map_err(|e| StoreError::ListAcmeOrdersByNpub("non-terminal".to_string(), e))?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(StoreError::ScanAcmeOrder)?;
+
+        Ok(records
+            .into_iter()
+            .map(|o| self.decrypt_private_key(o))
+            .collect())
+    }
+
     pub fn save_acme_order_log(
         &self,
         order_id: &str,
@@ -1199,6 +1222,27 @@ fn run_migrations(conn: &Connection) -> Result<(), StoreError> {
 
 // ---------------------------------------------------------------------------
 // Schema constant — matches Go exactly
+//
+// Lazy-table trade-off (Issue #72):
+//
+// Tables are created via `CREATE TABLE IF NOT EXISTS` at startup (`Store::init`).
+// This "lazy" approach means the bot always boots regardless of whether the
+// database file already exists — a fresh SQLite file gets the full schema on
+// first run, and an existing file gets any missing tables filled in.
+//
+// The trade-off: SQLite does not support `ALTER TABLE ADD COLUMN IF NOT
+// EXISTS`, so schema evolution requires explicit migration code. New columns
+// are added via best-effort `ALTER TABLE ... ADD COLUMN` statements in
+// `Store::init` and `run_migrations`, where "duplicate column" errors are
+// silently swallowed (idempotent). Changing a PRIMARY KEY requires a full
+// table rebuild (see the events PK migration below). There is no formal
+// migration version tracking — the init sequence is append-only and
+// idempotent by design.
+//
+// WAL mode (`PRAGMA journal_mode=WAL`, set in `Store::new`) allows concurrent
+// readers while all writes are serialized through the `Mutex<Connection>`.
+// This means read-heavy operations (NIP-05 lookups, record queries) don't
+// block on the writer lock, but all mutations go through a single writer.
 // ---------------------------------------------------------------------------
 
 const SCHEMA: &str = r"

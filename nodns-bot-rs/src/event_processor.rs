@@ -8,8 +8,8 @@ use nostr_sdk::Event;
 use tracing::{debug, error, info, warn};
 
 use crate::auth;
-use crate::cloudflare_backend::DnsBackend;
 use crate::config::Config;
+use crate::connector::DnsConnector;
 use crate::dns_cache::DnsEventCache;
 use crate::parser;
 use crate::payment;
@@ -77,7 +77,7 @@ fn parse_operator_expiry(date_str: &Option<String>) -> Option<i64> {
 pub async fn process_nostr_event(
     evt: &Event,
     cfg: &Config,
-    updaters: &Arc<HashMap<String, DnsBackend>>,
+    updaters: &Arc<HashMap<String, Arc<dyn DnsConnector>>>,
     store: &Arc<Store>,
     authority: &auth::AuthorityChecker,
     zone_verifiers: &HashMap<String, Verifier>,
@@ -221,7 +221,7 @@ pub async fn process_nostr_event(
 
     if let Some(zone_config) = cfg.dns.zones.iter().find(|z| z.dns_cache_events) {
         if let Some(backend) = updaters.get(&zone_config.zone) {
-            DnsEventCache::try_cache(backend, evt, &zone_config.zone).await;
+            DnsEventCache::try_cache(&**backend, evt, &zone_config.zone).await;
         }
     }
 
@@ -720,7 +720,7 @@ async fn process_dns_update(
     created_at: i64,
     event_kind: u64,
     cfg: &Config,
-    updaters: &Arc<HashMap<String, DnsBackend>>,
+    updaters: &Arc<HashMap<String, Arc<dyn DnsConnector>>>,
     store: &Arc<Store>,
     authority: &auth::AuthorityChecker,
     zone_verifiers: &HashMap<String, Verifier>,
@@ -1010,7 +1010,7 @@ async fn process_dns_deletes(
     pubkey_hex: &str,
     npub: &str,
     cfg: &Config,
-    updaters: &Arc<HashMap<String, DnsBackend>>,
+    updaters: &Arc<HashMap<String, Arc<dyn DnsConnector>>>,
     store: &Arc<Store>,
     authority: &auth::AuthorityChecker,
     metrics: &Metrics,

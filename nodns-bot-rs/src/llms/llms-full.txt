@@ -1,0 +1,161 @@
+# nodns — full API reference
+
+> nodns is a decentralized DNS service where DNS records are published as Nostr events. Domains are minted by registrars, delegated to users via signed Nostr events, and resolved by this bot into an authoritative DNS server (Knot DNS via RFC 2136 DDNS, or Cloudflare via API). Anti-spam pricing uses Cashu ecash proofs.
+
+## 1. Protocol: Nostr kind 11111
+
+DNS records are encoded in Nostr events. Replaceable records use kind 31111; standard records use kind 11111. The event `pubkey` MUST be the delegated owner of the target domain.
+
+### Tags
+
+- `["record", <TYPE>, <NAME>, <TTL>, <RDATA>]` — a single resource record.
+  - `TYPE` — one of `A`, `AAAA`, `CNAME`, `MX`, `SRV`, `TXT`.
+  - `NAME` — subdomain label under the delegated domain. `@` or empty string means the zone apex of the delegation.
+  - `TTL` — seconds (u32). Falls back to zone default if `0`.
+  - `RDATA` — record value. For `MX`: `"10 mail.example.com."`. For `SRV`: `"10 60 5060 sip.example.com."`. For `TXT`: a single string (multiple character-strings are supported via the `record` repeated tag).
+- `["delegation", <NPUB>, <DOMAIN>, <ZONE>, <VALID_UNTIL_UNIX>]` — a lease granted by a registrar. `<DOMAIN>` is the label (e.g. `alice`), `<ZONE>` is the zone (e.g. `nodns.shop`). `VALID_UNTIL_UNIX` is the expiry; records past expiry + grace period are purged.
+- `["registrar", <NPUB>]` — the registrar pubkey that signed the delegation. Must be in the bot's configured `registrar_pubkeys`.
+- `["cashu", <TOKEN>]` — Cashu ecash token paying for the operation. Required amount depends on operation (create/update/delete) and zone pricing. Use the mint URL advertised by `/api/zones/{zone}/pricing`.
+
+### Verification flow (server side)
+
+1. Verify the Nostr signature (BIP-340).
+2. Look up the delegation for `(pubkey, domain, zone)`. It must be active and unexpired.
+3. Validate the Cashu token decodes, denominates in sats, is from the accepted mint, and meets the price for the operation.
+4. Apply the record(s) to the authoritative DNS backend (Knot DDNS or Cloudflare API).
+5. Store the record metadata in the local SQLite index for fast API lookup.
+
+## 2. REST API
+
+All endpoints are JSON over HTTP unless noted. Base URL is deployment-specific (e.g. `https://nodns.shop/`).
+
+### Health & discovery
+
+```
+GET /api/health
+```
+Returns service status, uptime, relay connection states, zone list, total record count, and ddns success/failure counters. Status is `ok` or `degraded`.
+
+```
+GET /llms.txt          # concise summary
+GET /llms-full.txt     # this document
+```
+
+### Record lookup
+
+```
+GET /api/records                      # list all records
+GET /api/records?pubkey=<npub>        # filter by owner pubkey
+GET /api/records?domain=<fqdn>        # filter by FQDN
+GET /api/records/by-npub/{npub}       # exact-pubkey match
+GET /api/records/by-prefix/{prefix}   # pubkey prefix match (hex)
+```
+Response: `{ "records": [ { npub, name, fqdn, type, ttl, rdata, created_at } ], "count": N }`
+
+### Registration check
+
+```
+GET /api/check?name=<subdomain>
+```
+Cross-checks both the API index and live authoritative DNS. Returns `{ name, zone, api: { registered, records }, dns: { registered, records } }`.
+
+Example:
+```bash
+curl -s "https://nodns.shop/api/check?name=alice" | jq
+```
+
+### Zone metadata
+
+```
+GET /api/zones/{zone}/pricing
+```
+Returns `{ zone, enabled, create_price, update_price, delete_price, npub_names_free, mint_url, mint_filter }`. Prices are in sats. Use `mint_url` when constructing the Cashu token for record events.
+
+```
+GET /api/zone/{zone}/export      # text/plain zone file
+GET /api/zone/{zone}/records     # JSON record list scoped to a zone
+```
+
+### DynDNS (RFC 2136-style HTTP shim)
+
+```
+GET  /nic/update?hostname=<fqdn>&myip=<addr>
+POST /nic/update    (form body: hostname, myip)
+```
+HTTP Basic auth: `<npub>:<nsec>`. Used by routers/IP cameras that speak the Dyn.com protocol. Only the delegated owner may update.
+
+### ACME DNS-01 (Let's Encrypt)
+
+```
+POST /api/acme/order      # body: { domain, zone } -> { id, ..., txt_record, ... }
+GET  /api/acme/order/{id}                  # poll status; final body includes cert chain
+```
+The bot provisions the `_acme-challenge` TXT record automatically and completes the ACME DNS-01 challenge with the configured directory (Let's Encrypt). Private keys are encrypted at rest. Rate-limited (1 req/s, burst 3).
+
+### NIP-05
+
+```
+GET /.well-known/nostr.json?local=<name>
+```
+Returns `{ names: { <name>: <npub> } }` for any locally delegated internet identifier `<name>@<zone>`.
+
+## 3. Payments (Cashu)
+
+nodns uses Cashu (NUT-04/05 ecash) for anti-spam. Each zone may set:
+- `create_price`, `update_price`, `delete_price` — in millisats... actually sats (u64)
+- `mint_url` — the only mint whose tokens are accepted
+- `mint_filter` — substring filter restricting mints further (e.g. `testnut`)
+
+### Acquiring a token
+
+Mint ecash at the zone's `mint_url` (e.g. `https://mint.minibits.cash` for production, or a test mint like `https://testnut.cashu.space` for free test sats). Wrap the proofs into a Cashu token (`cashuA...` or `cashuB...`).
+
+### Including in an event
+
+Attach the token to the kind 11111 event:
+```json
+["cashu","cashuA..."]
+```
+The bot decodes (does not network-verify at submission time — verification is delayed until a 24h trial window for test mints, 30d for production mints). Double-spends result in the delegation being revoked and records deleted.
+
+## 4. Auth model
+
+- REST read endpoints: unauthenticated (rate-limited).
+- REST write endpoints (DynDNS `/nic/update`, ACME `/api/acme/order`): HTTP Basic with `<npub>:<nsec>`, or local rate limit only.
+- DNS record mutations: not over REST — published as Nostr events. Auth is the Nostr signature itself.
+
+## 5. Backends
+
+Two interchangeable DNS backends, configured per zone in `config.toml` under `dns.zones[i].backend`:
+- `"ddns"` (default) — RFC 2136 dynamic DNS updates TSIG-signed to Knot DNS.
+- `"cloudflare"` — Cloudflare REST API (`cloudflare_api_token` + `cloudflare_zone_id` required).
+
+Both implement the same connector trait; the bot transparently routes updates to the configured backend.
+
+## 6. Example: end-to-end record publish
+
+```bash
+# 1. Discover pricing
+curl -s https://nodns.shop/api/zones/nodns.shop/pricing | jq
+# -> { "create_price": 5, "mint_url": "https://mint.minibits.cash", ... }
+
+# 2. Mint 5 sats at that mint into a Cashu token (use a Cashu wallet).
+
+# 3. Publish a kind 11111 Nostr event from your delegated npub:
+#    content: ""
+#    tags: [
+#      ["record","A","@",3600,"203.0.113.10"],
+#      ["delegation","<your-npub>","alice","nodns.shop","1799999999"],
+#      ["registrar","<registrar-npub>"],
+#      ["cashu","cashuA...token..."]
+#    ]
+#    to the relays configured by the bot.
+
+# 4. Wait ~1 relay round-trip; then verify:
+curl -s "https://nodns.shop/api/check?name=alice" | jq '.dns.records'
+```
+
+## 7. Source & issues
+
+- Source: https://github.com/peterstein/nodns
+- Protocol spec lives alongside the bot source (`PROTOCOL.md` if present).

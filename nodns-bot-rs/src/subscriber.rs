@@ -4,6 +4,21 @@
 //!
 //! Uses nostr-sdk's built-in relay pool (one shared `Client`) instead of
 //! managing one client per relay.
+//!
+//! ## Relay reconnection (Issue #69)
+//!
+//! nostr-sdk 0.44 handles relay reconnection automatically. `Client::connect()`
+//! spawns a background maintenance task per relay that monitors the WebSocket
+//! and re-establishes dropped connections without caller intervention. The
+//! `RelayPoolNotification::Shutdown` variant below corresponds to a *pool-wide*
+//! shutdown (e.g. explicit `disconnect()` or process teardown), not a single
+//! transient relay drop — those are recovered internally by the SDK.
+//! Per-relay status is observable via `client.relays()` (used by the health
+//! endpoint). There is no need for manual reconnection with exponential
+//! backoff; the SDK's background task is always running while the client is
+//! connected. If finer-grained status tracking is desired in the future, the
+//! `Monitor` API (nostr-sdk 0.44+) can be attached to the `Client` builder to
+//! stream `StatusChanged` notifications.
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};

@@ -2385,6 +2385,8 @@ name = "nodns-bot"
 version = "0.1.0"
 dependencies = [
  "aes-gcm",
+ "anyhow",
+ "async-trait",
  "axum",
  "base64 0.22.1",
  "cashu",

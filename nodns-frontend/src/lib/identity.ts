@@ -42,6 +42,36 @@ export function getOrCreateIdentity(): Identity {
   return { sk, pk, npub: npubEncode(pk), nsec };
 }
 
+export function importIdentity(nsec: string): Identity {
+  const trimmed = nsec.trim();
+  if (!trimmed.startsWith('nsec1')) {
+    throw new Error('Invalid key: must start with nsec1');
+  }
+
+  const decoded = nip19Decode(trimmed);
+  if (decoded.type !== 'nsec') {
+    throw new Error('Invalid key: expected nsec format');
+  }
+
+  const sk = toUint8Array(decoded.data);
+  const pk = getPublicKey(sk);
+  const encoded = nsecEncode(sk);
+
+  localStorage.setItem(STORAGE_KEY, encoded);
+
+  return { sk, pk, npub: npubEncode(pk), nsec: encoded };
+}
+
+export function resetIdentity(): Identity {
+  const sk = generateSecretKey();
+  const pk = getPublicKey(sk);
+  const nsec = nsecEncode(sk);
+
+  localStorage.setItem(STORAGE_KEY, nsec);
+
+  return { sk, pk, npub: npubEncode(pk), nsec };
+}
+
 export function nsecToSeed(nsec: string): Uint8Array {
   const decoded = nip19Decode(nsec);
   if (decoded.type !== 'nsec') throw new Error('Expected nsec');

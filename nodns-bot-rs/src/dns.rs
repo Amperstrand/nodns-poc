@@ -14,6 +14,7 @@ use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
 use base64::Engine;
 use hickory_client::proto::dnssec::rdata::tsig::TsigAlgorithm;
 use hickory_client::proto::dnssec::tsig::TSigner;
+use hickory_client::proto::dnssec::PublicKey;
 use hickory_client::proto::op::{Message, MessageType, OpCode, Query, ResponseCode};
 use hickory_client::proto::rr::rdata::{A, AAAA, CNAME, MX, SRV, TXT};
 use hickory_client::proto::rr::{DNSClass, Name, RData, Record, RecordType};
@@ -616,6 +617,51 @@ impl Updater {
     }
 }
 
+#[async_trait::async_trait]
+impl crate::connector::DnsConnector for Updater {
+    async fn update_record(
+        &self,
+        fqdn: &str,
+        ttl: u32,
+        record_type: u16,
+        rdata: &str,
+    ) -> anyhow::Result<()> {
+        Updater::update_record(self, fqdn, ttl, record_type, rdata).await?;
+        Ok(())
+    }
+
+    async fn update_txt_multi(
+        &self,
+        fqdn: &str,
+        ttl: u32,
+        segments: &[String],
+    ) -> anyhow::Result<()> {
+        Updater::update_txt_multi(self, fqdn, ttl, segments).await?;
+        Ok(())
+    }
+
+    async fn delete_record(&self, fqdn: &str, record_type: u16) -> anyhow::Result<()> {
+        Updater::delete_record(self, fqdn, record_type).await?;
+        Ok(())
+    }
+
+    async fn append_record(
+        &self,
+        fqdn: &str,
+        ttl: u32,
+        record_type: u16,
+        rdata: &str,
+    ) -> anyhow::Result<()> {
+        Updater::append_record(self, fqdn, ttl, record_type, rdata).await?;
+        Ok(())
+    }
+
+    async fn test_connection(&self) -> anyhow::Result<()> {
+        Updater::test_connection(self).await?;
+        Ok(())
+    }
+}
+
 pub struct DnsQueryResult {
     pub registered: bool,
     pub records: Vec<DnsRecord>,
@@ -744,4 +790,87 @@ pub async fn query_txt_records(nameserver: SocketAddr, fqdn: &str) -> DnsQueryRe
         registered,
         records,
     }
+}
+
+pub async fn query_dnskey_base64(nameserver: SocketAddr, zone: &str) -> Vec<String> {
+    let Ok(name) = Name::from_str(zone) else {
+        return vec![];
+    };
+
+    let mut query = Query::new();
+    query
+        .set_name(name)
+        .set_query_class(DNSClass::IN)
+        .set_query_type(RecordType::DNSKEY);
+
+    let mut msg = Message::new();
+    msg.set_id(generate_id())
+        .set_message_type(MessageType::Query)
+        .set_recursion_desired(false)
+        .add_query(query);
+
+    let timeout = Duration::from_secs(2);
+
+    let Ok(Ok(stream)) = tokio::time::timeout(timeout, TokioTcpStream::connect(nameserver)).await
+    else {
+        return vec![];
+    };
+    let mut stream = stream;
+
+    let Ok(bytes) = msg.to_bytes() else {
+        return vec![];
+    };
+
+    use tokio::io::AsyncWriteExt;
+    let len = (bytes.len() as u16).to_be_bytes();
+    if stream.write_all(&len).await.is_err() || stream.write_all(&bytes).await.is_err() {
+        return vec![];
+    }
+
+    let mut len_buf = [0u8; 2];
+    if tokio::io::AsyncReadExt::read_exact(&mut stream, &mut len_buf)
+        .await
+        .is_err()
+    {
+        return vec![];
+    }
+    let resp_len = u16::from_be_bytes(len_buf) as usize;
+    let mut buf = vec![0u8; resp_len];
+    if tokio::io::AsyncReadExt::read_exact(&mut stream, &mut buf)
+        .await
+        .is_err()
+    {
+        return vec![];
+    }
+
+    let Ok(resp) = Message::from_vec(&buf) else {
+        return vec![];
+    };
+
+    if resp.response_code() != ResponseCode::NoError {
+        return vec![];
+    }
+
+    let mut keys = Vec::new();
+    for rec in resp.answers() {
+        if rec.record_type() == RecordType::DNSKEY {
+            if let RData::DNSSEC(hickory_client::proto::dnssec::rdata::DNSSECRData::DNSKEY(
+                ref dk,
+            )) = rec.data()
+            {
+                if dk.secure_entry_point() {
+                    let pk_bytes = dk.public_key().public_bytes();
+                    let mut rdata = Vec::with_capacity(4 + pk_bytes.len());
+                    rdata.extend_from_slice(&dk.flags().to_be_bytes());
+                    rdata.push(3);
+                    rdata.push(13);
+                    rdata.extend_from_slice(pk_bytes);
+                    let b64 = base64::engine::general_purpose::STANDARD.encode(&rdata);
+                    keys.push(b64);
+                }
+            }
+        }
+    }
+
+    keys
 }

@@ -6,7 +6,10 @@
 //! records (configurable). Cashu ecash tokens are verified against the mint's
 //! checkstate endpoint to ensure proofs are unspent.
 
+use std::collections::HashMap;
 use std::str::FromStr;
+use std::sync::{LazyLock, Mutex};
+use std::time::Duration;
 
 use cdk::dhke::hash_to_curve;
 use cdk::http_client::HttpClient;
@@ -14,9 +17,56 @@ use cdk::nuts::{CheckStateRequest, CheckStateResponse, State, Token};
 use thiserror::Error;
 use tracing::{error, info, warn};
 
+use crate::circuit_breaker::MINT_CIRCUITS;
 use crate::config::ZonePaymentConfig;
 use crate::store::Store;
 use crate::types::{DnsRecord, Payment};
+
+// ---------------------------------------------------------------------------
+// Tunables & per-mint HTTP client cache
+// ---------------------------------------------------------------------------
+
+/// Hard cap on a single mint `/v1/checkstate` round-trip (connect + send +
+/// body + deserialize). Backed by both a [`tokio::time::timeout`] wrapper and
+/// a per-client `reqwest` timeout, so a hung mint can never block a verifier
+/// task indefinitely. See issue #60.
+const CHECKSTATE_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// Cache of reusable CDK [`HttpClient`]s, keyed by normalized mint URL.
+///
+/// Each [`HttpClient`] wraps a [`reqwest::Client`] (itself `Arc`-based and
+/// cheap to clone) and internally pools TCP connections, so reusing one per
+/// mint avoids reconnect/TLS overhead on every verification. See issue #61.
+///
+/// A [`Mutex`] is used (rather than `dashmap`, which is not a dependency)
+/// because the critical section is a single `entry().or_insert_with()` — lock
+/// contention is negligible. Poison is recovered rather than panicked.
+static MINT_CLIENTS: LazyLock<Mutex<HashMap<String, HttpClient>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
+
+/// Returns a shared [`HttpClient`] for `mint_url`, building and caching one on
+/// first use. The underlying `reqwest::Client` is configured with a 10s total
+/// timeout as defense in depth (the [`tokio::time::timeout`] wrapper is the
+/// primary bound).
+///
+/// Building the client can only fail if the TLS backend fails to initialize
+/// (essentially never in practice); the error is propagated rather than
+/// panicked.
+fn get_mint_client(mint_url: &str) -> Result<HttpClient, PaymentError> {
+    let mut cache = MINT_CLIENTS
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    if let Some(client) = cache.get(mint_url) {
+        return Ok(client.clone());
+    }
+    let reqwest_client = reqwest::Client::builder()
+        .timeout(CHECKSTATE_TIMEOUT)
+        .build()
+        .map_err(|e| PaymentError::MintCheckFailed(format!("building http client: {e}")))?;
+    let client = HttpClient::from_reqwest(reqwest_client);
+    cache.insert(mint_url.to_string(), client.clone());
+    Ok(client)
+}
 
 // ---------------------------------------------------------------------------
 // Error type
@@ -48,6 +98,9 @@ pub enum PaymentError {
 
     #[error("mint checkstate request failed: {0}")]
     MintCheckFailed(String),
+
+    #[error("mint {mint} temporarily unavailable (circuit open)")]
+    MintUnavailable { mint: String },
 
     #[error("checking record existence: {0}")]
     StoreError(String),
@@ -191,25 +244,53 @@ impl Verifier {
             .map_err(|e| PaymentError::HashToCurve(e.to_string()))?;
 
         // 5. Call mint checkstate endpoint (POST /v1/checkstate)
+        // Guard: skip mints the circuit breaker has tripped (issue #62).
+        if !MINT_CIRCUITS.is_available(&self.mint_url) {
+            warn!(mint = %self.mint_url, "circuit open, skipping checkstate");
+            return Err(PaymentError::MintUnavailable {
+                mint: self.mint_url.clone(),
+            });
+        }
+
         let url = format!("{}/v1/checkstate", self.mint_url.trim_end_matches('/'));
         let request_body = CheckStateRequest { ys };
-        let client = HttpClient::new();
-        let response: CheckStateResponse = client
-            .post(&url)
-            .json(&request_body)
-            .send()
-            .await
-            .map_err(|e| {
+        let client = get_mint_client(&self.mint_url)?;
+
+        // Bound the full round-trip (connect + send + body + deserialize)
+        // with tokio::time::timeout (issue #60). The cached reqwest client
+        // also carries its own 10s timeout as defense in depth.
+        let response: CheckStateResponse = match tokio::time::timeout(CHECKSTATE_TIMEOUT, async {
+            let raw = client.post(&url).json(&request_body).send().await?;
+            raw.json::<CheckStateResponse>().await
+        })
+        .await
+        {
+            Ok(Ok(response)) => {
+                MINT_CIRCUITS.record_success(&self.mint_url);
+                response
+            }
+            Ok(Err(e)) => {
                 error!(
                     mint = %self.mint_url,
                     error = %e,
                     "mint checkstate request failed"
                 );
-                PaymentError::MintCheckFailed(e.to_string())
-            })?
-            .json()
-            .await
-            .map_err(|e| PaymentError::MintCheckFailed(format!("deserializing checkstate: {e}")))?;
+                MINT_CIRCUITS.record_failure(&self.mint_url);
+                return Err(PaymentError::MintCheckFailed(e.to_string()));
+            }
+            Err(_elapsed) => {
+                warn!(
+                    mint = %self.mint_url,
+                    timeout_secs = CHECKSTATE_TIMEOUT.as_secs(),
+                    "mint checkstate timed out"
+                );
+                MINT_CIRCUITS.record_failure(&self.mint_url);
+                return Err(PaymentError::MintCheckFailed(format!(
+                    "checkstate timed out after {}s",
+                    CHECKSTATE_TIMEOUT.as_secs()
+                )));
+            }
+        };
 
         // 6. Verify all proofs are unspent
         for proof_state in &response.states {

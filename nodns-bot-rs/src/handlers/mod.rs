@@ -4,6 +4,7 @@ mod api;
 mod client_log;
 mod dyndns;
 mod health;
+mod llms;
 mod tls_check;
 
 // Re-exports to preserve handlers::* API used by main.rs
@@ -16,6 +17,7 @@ pub use api::{
 pub use client_log::client_log_handler;
 pub use dyndns::dyndns_update_handler;
 pub use health::health_handler;
+pub use llms::{llms_full_txt_handler, llms_txt_handler};
 pub use tls_check::tls_check_handler;
 
 #[cfg(test)]
@@ -27,8 +29,8 @@ mod test_helpers {
     use axum::Router;
     use base64::Engine;
 
-    use crate::cloudflare_backend::DnsBackend;
     use crate::config;
+    use crate::connector::DnsConnector;
     use crate::dns;
     use crate::nip05;
     use crate::types::Metrics;
@@ -78,8 +80,8 @@ mod test_helpers {
 
         let zc = make_zone_config();
         let updater = dns::Updater::new(&zc).unwrap();
-        let mut updaters = HashMap::new();
-        updaters.insert("nodns.shop".to_string(), DnsBackend::Ddns(updater));
+        let mut updaters: HashMap<String, Arc<dyn DnsConnector>> = HashMap::new();
+        updaters.insert("nodns.shop".to_string(), Arc::new(updater));
 
         let nip05_state = Arc::new(nip05::Nip05State {
             store: store.clone(),

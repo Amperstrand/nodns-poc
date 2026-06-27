@@ -23,6 +23,7 @@ import {
   LayersIcon,
 } from "lucide-react";
 import { SourceIndicator } from "@/components/source-indicator";
+import { IdentityManager } from "@/components/identity-manager";
 
 interface DomainInfo {
   name: string;
@@ -225,6 +226,11 @@ function DashboardContent() {
             <span className="text-xs text-muted-foreground animate-pulse">Loading...</span>
           )}
         </div>
+      </div>
+
+      {/* Identity manager */}
+      <div className="mb-6">
+        <IdentityManager />
       </div>
 
       {/* Error state */}

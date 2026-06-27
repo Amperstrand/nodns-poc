@@ -58,7 +58,7 @@ impl Default for EppConfig {
             username: String::new(),
             password_env_var: "CV_EPP_PASSWORD".to_string(),
             pool_size: MAX_POOL_SIZE,
-            timeout_secs: 90,
+            timeout_secs: 30,
             simulate: true,
         }
     }
@@ -456,7 +456,7 @@ mod tests {
         assert!(cfg.username.is_empty());
         assert_eq!(cfg.password_env_var, "CV_EPP_PASSWORD");
         assert_eq!(cfg.pool_size, MAX_POOL_SIZE);
-        assert_eq!(cfg.timeout_secs, 90);
+        assert_eq!(cfg.timeout_secs, 30);
         assert!(cfg.simulate);
     }
 

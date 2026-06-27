@@ -2,9 +2,11 @@
 
 mod acme;
 mod auth;
+mod circuit_breaker;
 mod classify;
 mod cloudflare_backend;
 mod config;
+mod connector;
 mod dns;
 mod dns_cache;
 mod dns_update_server;
@@ -12,6 +14,7 @@ mod dnssec_derivation;
 #[allow(dead_code)]
 mod epp;
 mod event_processor;
+mod failover;
 mod handlers;
 mod nip05;
 mod parser;
@@ -34,13 +37,40 @@ use tower_governor::{
 };
 
 use axum::http::{HeaderName, HeaderValue};
+use axum::middleware::Next;
+use axum::response::Response;
 use clap::Parser;
 use tokio::signal;
 use tower_http::set_header::SetResponseHeaderLayer;
 use tracing::{info, warn};
 
-use cloudflare_backend::{CloudflareBackend, DnsBackend};
+const CORRELATION_ID_HEADER: &str = "x-correlation-id";
+
+async fn correlation_id_middleware(request: axum::extract::Request, next: Next) -> Response {
+    let correlation_id = request
+        .headers()
+        .get(CORRELATION_ID_HEADER)
+        .and_then(|v| v.to_str().ok())
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+
+    let span = tracing::info_span!("request", correlation_id = %correlation_id);
+    let response = span.in_scope(|| next.run(request)).await;
+
+    let mut response = response;
+    let headers = response.headers_mut();
+    headers.insert(
+        HeaderName::from_static(CORRELATION_ID_HEADER),
+        HeaderValue::from_str(&correlation_id)
+            .unwrap_or_else(|_| HeaderValue::from_static("invalid")),
+    );
+    response
+}
+
+use cloudflare_backend::CloudflareBackend;
 use config::{Config, ZoneConfig};
+use connector::DnsConnector;
 use dns::Updater;
 use payment::Verifier;
 use store::Store;
@@ -73,7 +103,7 @@ pub struct AppState {
     pub metrics: Metrics,
     pub start_time: Instant,
     pub dns_zones: Vec<config::ZoneConfig>,
-    pub updaters: Arc<HashMap<String, DnsBackend>>,
+    pub updaters: Arc<HashMap<String, Arc<dyn DnsConnector>>>,
     pub nostr_client: nostr_sdk::Client,
     pub relay_urls: Vec<String>,
     pub db_path: std::path::PathBuf,
@@ -86,7 +116,7 @@ pub struct AppState {
 async fn lease_expiry_task(
     store: Arc<Store>,
     zone_configs: Vec<ZoneConfig>,
-    updaters: Arc<HashMap<String, DnsBackend>>,
+    updaters: Arc<HashMap<String, Arc<dyn DnsConnector>>>,
 ) {
     let mut interval = tokio::time::interval(std::time::Duration::from_secs(3600));
     loop {
@@ -185,7 +215,7 @@ async fn lease_expiry_task(
 
 async fn test_record_cleanup_task(
     store: Arc<Store>,
-    updaters: Arc<HashMap<String, DnsBackend>>,
+    updaters: Arc<HashMap<String, Arc<dyn DnsConnector>>>,
     epp_pool: Option<Arc<epp::EppPool>>,
 ) {
     let mut interval = tokio::time::interval(std::time::Duration::from_secs(3600));
@@ -359,8 +389,60 @@ async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
                 info!("registrar npub: {}", registrar_keys.public_key().to_hex());
 
                 let zone = cfg.nostr.zone.clone();
-                let dnskey_b64 = base64_dnskey(&pub_hex);
-                let key_tag = compute_key_tag_13(&dnskey_b64);
+                let derived_dnskey_b64 = base64_dnskey(&pub_hex);
+                let derived_key_tag = compute_key_tag_13(&derived_dnskey_b64);
+
+                let (dnskey_b64, key_tag, attestation_source) = if let Some(first_zone) =
+                    cfg.dns.zones.first()
+                {
+                    let nameserver: SocketAddr = first_zone.knot_address.parse().unwrap_or_else(|_| {
+                        warn!(zone = %first_zone.zone, address = %first_zone.knot_address, "invalid knot_address, using derived key");
+                        "127.0.0.1:5353".parse().unwrap()
+                    });
+                    let live_keys = dns::query_dnskey_base64(nameserver, &first_zone.zone).await;
+                    let ksk = live_keys.iter().find(|k| {
+                        use base64::Engine;
+                        if let Ok(bytes) = base64::engine::general_purpose::STANDARD.decode(k) {
+                            !bytes.is_empty() && (bytes[0] & 0x01) != 0
+                        } else {
+                            false
+                        }
+                    });
+
+                    if let Some(live_ksk) = ksk {
+                        let live_tag = compute_key_tag_13(live_ksk);
+                        if live_ksk == &derived_dnskey_b64 {
+                            (
+                                derived_dnskey_b64.clone(),
+                                derived_key_tag,
+                                "derived (matches live)",
+                            )
+                        } else {
+                            warn!(
+                                zone = %first_zone.zone,
+                                derived_key_tag = derived_key_tag,
+                                live_key_tag = live_tag,
+                                "DNSSEC KSK mismatch: live DNSKEY differs from derived key — attesting live key"
+                            );
+                            (live_ksk.clone(), live_tag, "live (rollover detected)")
+                        }
+                    } else {
+                        warn!(zone = %first_zone.zone, "no KSK found in live DNS — attesting derived key");
+                        (
+                            derived_dnskey_b64.clone(),
+                            derived_key_tag,
+                            "derived (no live KSK found)",
+                        )
+                    }
+                } else {
+                    (
+                        derived_dnskey_b64.clone(),
+                        derived_key_tag,
+                        "derived (no zones configured)",
+                    )
+                };
+
+                info!(zone = %zone, source = attestation_source, key_tag = key_tag, "DNSKEY attestation source");
 
                 let mut tags: Vec<nostr_sdk::Tag> = vec![
                     nostr_sdk::Tag::custom(
@@ -417,10 +499,14 @@ async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // ── Store ──
-    let acme_enc_key: Option<String> = cfg.acme.encryption_key.clone().or_else(|| {
-        tracing::warn!("acme.encryption_key not set — generating ephemeral key; encrypted private keys will be unreadable after restart");
-        Some(uuid::Uuid::new_v4().to_string())
-    });
+    let acme_enc_key: Option<String> = if cfg.acme.enabled {
+        cfg.acme.encryption_key.clone().or_else(|| {
+            warn!("acme.encryption_key not set — generating ephemeral key; encrypted private keys will be unreadable after restart");
+            Some(uuid::Uuid::new_v4().to_string())
+        })
+    } else {
+        cfg.acme.encryption_key.clone()
+    };
     let store = Arc::new(Store::new(&cfg.store.path, acme_enc_key.as_deref())?);
     store.init()?;
 
@@ -436,16 +522,38 @@ async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // ── DNS backends ──
-    let mut updaters: HashMap<String, DnsBackend> = HashMap::new();
+    let mut updaters: HashMap<String, Arc<dyn DnsConnector>> = HashMap::new();
     for zc in &cfg.dns.zones {
-        let backend = if zc.backend == "cloudflare" {
+        let backend: Arc<dyn DnsConnector> = if zc.backend == "cloudflare" {
             let token = zc.cloudflare_api_token.clone().unwrap_or_default();
             let zone_id = zc.cloudflare_zone_id.clone().unwrap_or_default();
-            let cf = CloudflareBackend::new(token, zone_id);
-            DnsBackend::Cloudflare(cf)
+            Arc::new(CloudflareBackend::new(token, zone_id))
         } else {
-            let u = Updater::new(zc)?;
-            DnsBackend::Ddns(u)
+            let primary: Arc<dyn DnsConnector> = Arc::new(Updater::new(zc)?);
+            // Opt-in failover: if Cloudflare credentials are supplied alongside
+            // a DDNS backend, wrap the primary so Knot DNS failures fall back
+            // to the Cloudflare API automatically (Issue #68).
+            let has_cf_creds = zc
+                .cloudflare_api_token
+                .as_deref()
+                .is_some_and(|t| !t.is_empty())
+                && zc
+                    .cloudflare_zone_id
+                    .as_deref()
+                    .is_some_and(|z| !z.is_empty());
+            if has_cf_creds {
+                let token = zc.cloudflare_api_token.clone().unwrap_or_default();
+                let zone_id = zc.cloudflare_zone_id.clone().unwrap_or_default();
+                let fallback: Arc<dyn DnsConnector> =
+                    Arc::new(CloudflareBackend::new(token, zone_id));
+                info!(
+                    zone = %zc.zone,
+                    "DNS failover enabled: Knot DDNS primary → Cloudflare fallback"
+                );
+                Arc::new(failover::FailoverConnector::new(primary, fallback))
+            } else {
+                primary
+            }
         };
         if let Err(e) = backend.test_connection().await {
             warn!(zone = %zc.zone, backend = %zc.backend, error = %e, "DNS backend connection test failed (will retry on updates)");
@@ -470,6 +578,10 @@ async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
     } else {
         None
     };
+
+    if let Some(ref acme) = acme_service {
+        acme.recover_pending_orders().await;
+    }
 
     // ── RFC 2136 DNS UPDATE server ──
     if cfg.dns_update.enabled {
@@ -565,6 +677,11 @@ async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
                 axum::routing::get(nip05::nip05_handler),
             )
             .route("/health", axum::routing::get(handlers::health_handler))
+            .route("/llms.txt", axum::routing::get(handlers::llms_txt_handler))
+            .route(
+                "/llms-full.txt",
+                axum::routing::get(handlers::llms_full_txt_handler),
+            )
             .route(
                 "/api/records",
                 axum::routing::get(handlers::records_handler),
@@ -620,6 +737,7 @@ async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
         let app = axum::Router::new()
             .merge(acme_routes)
             .merge(api_routes)
+            .layer(axum::middleware::from_fn(correlation_id_middleware))
             .layer(SetResponseHeaderLayer::overriding(
                 HeaderName::from_static("x-content-type-options"),
                 HeaderValue::from_static("nosniff"),

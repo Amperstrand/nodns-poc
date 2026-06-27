@@ -10,14 +10,14 @@ use nostr_sdk::nips::nip19::ToBech32;
 use nostr_sdk::Event;
 use tracing::warn;
 
-use crate::cloudflare_backend::DnsBackend;
+use crate::connector::DnsConnector;
 const TXT_SEGMENT_MAX: usize = 255;
 
 pub struct DnsEventCache;
 
 impl DnsEventCache {
     pub async fn cache_event(
-        backend: &DnsBackend,
+        backend: &dyn DnsConnector,
         event: &Event,
         zone: &str,
     ) -> Result<(), String> {
@@ -37,7 +37,7 @@ impl DnsEventCache {
     }
 
     pub async fn cache_profile(
-        backend: &DnsBackend,
+        backend: &dyn DnsConnector,
         event: &Event,
         zone: &str,
     ) -> Result<(), String> {
@@ -56,7 +56,7 @@ impl DnsEventCache {
             .map_err(|e| format!("DNS profile cache write failed for {fqdn}: {e}"))
     }
 
-    pub async fn try_cache(backend: &DnsBackend, event: &Event, zone: &str) {
+    pub async fn try_cache(backend: &dyn DnsConnector, event: &Event, zone: &str) {
         let kind = u64::from(event.kind.as_u16());
         let result = match kind {
             0 => Self::cache_profile(backend, event, zone).await,

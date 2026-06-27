@@ -10,8 +10,8 @@ use instant_acme::{
 use thiserror::Error;
 use tracing::{error, info, warn};
 
-use crate::cloudflare_backend::DnsBackend;
 use crate::config::AcmeConfig;
+use crate::connector::DnsConnector;
 use crate::store::Store;
 use base64::Engine;
 use sha2::{Digest, Sha256};
@@ -37,7 +37,7 @@ pub enum AcmeError {
 pub struct AcmeService {
     account: Arc<Mutex<HashMap<String, Account>>>,
     config: AcmeConfig,
-    updaters: Arc<HashMap<String, DnsBackend>>,
+    updaters: Arc<HashMap<String, Arc<dyn DnsConnector>>>,
     store: Arc<Store>,
     zones: Vec<String>,
     zerossl_eab: Option<ExternalAccountKey>,
@@ -46,7 +46,7 @@ pub struct AcmeService {
 impl AcmeService {
     pub fn new(
         config: AcmeConfig,
-        updaters: Arc<HashMap<String, DnsBackend>>,
+        updaters: Arc<HashMap<String, Arc<dyn DnsConnector>>>,
         store: Arc<Store>,
         zones: Vec<String>,
     ) -> Self {
@@ -302,6 +302,10 @@ impl AcmeService {
                 AcmeError::OrderFailed(e.to_string())
             })?;
 
+        let _ = self
+            .store
+            .update_acme_order_status(order_id, "ordering", None, None, None);
+
         // Stage 3: Challenges
         info!(order_id = %order_id, "stage 3: processing DNS-01 challenges");
 
@@ -392,6 +396,10 @@ impl AcmeService {
             })?;
         }
 
+        let _ =
+            self.store
+                .update_acme_order_status(order_id, "challenge_published", None, None, None);
+
         // Stage 4: Poll
         self.log_stage(
             order_id,
@@ -415,6 +423,10 @@ impl AcmeService {
                 "unexpected order status after polling: {status:?}"
             )));
         }
+
+        let _ = self
+            .store
+            .update_acme_order_status(order_id, "verifying", None, None, None);
 
         // Stage 5: Finalize
         let finalize_mode = if csr_der.is_some() {
@@ -443,6 +455,20 @@ impl AcmeService {
                 AcmeError::OrderFailed(e.to_string())
             })?)
         };
+
+        if let Some(ref key_pem) = private_key_pem {
+            if let Err(e) = self.store.update_acme_order_status(
+                order_id,
+                "finalizing",
+                None,
+                Some(key_pem),
+                None,
+            ) {
+                warn!(order_id = %order_id, error = %e, "failed to persist private key early");
+            } else {
+                info!(order_id = %order_id, "private key persisted early for crash safety");
+            }
+        }
 
         info!(order_id = %order_id, "stage 5: order finalized, polling for certificate");
 
@@ -524,5 +550,41 @@ impl AcmeService {
             }
         }
         None
+    }
+
+    pub async fn recover_pending_orders(&self) {
+        match self.store.list_non_terminal_acme_orders() {
+            Ok(orders) if orders.is_empty() => {
+                info!("no pending ACME orders to recover");
+            }
+            Ok(orders) => {
+                warn!(
+                    count = orders.len(),
+                    "found non-terminal ACME orders from previous run, marking as failed"
+                );
+                for order in &orders {
+                    let msg = if order.private_key_pem.is_some() {
+                        "bot restarted after key generation — private key preserved, but certificate issuance was interrupted. Please re-request."
+                    } else {
+                        "bot restarted during certificate issuance. Please re-request."
+                    };
+                    if let Err(e) = self.store.update_acme_order_status(
+                        &order.id,
+                        "failed",
+                        None,
+                        None,
+                        Some(msg),
+                    ) {
+                        error!(order_id = %order.id, error = %e, "failed to mark order as failed during recovery");
+                    } else {
+                        self.log_stage(&order.id, "recovery", msg, None);
+                        warn!(order_id = %order.id, domain = %order.domain, "marked as failed: bot restarted mid-flow");
+                    }
+                }
+            }
+            Err(e) => {
+                error!(error = %e, "failed to query non-terminal ACME orders for recovery");
+            }
+        }
     }
 }

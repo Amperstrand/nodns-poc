@@ -85,3 +85,9 @@ humantime = "2"
 hex = "0.4"
 url = "2"
 regex = "1"
+
+# Async trait support for DnsConnector trait
+async-trait = "0.1"
+
+# Error abstraction for DnsConnector trait
+anyhow = "1"
