@@ -2,7 +2,6 @@ export const API_BASE = import.meta.env.VITE_API_BASE || "";
 
 export const RELAYS = [
   "wss://relay.cashu.email",
-  "wss://relay.tollgate.me",
 ];
 
 export const DEFAULT_ZONE = "nodns.shop";

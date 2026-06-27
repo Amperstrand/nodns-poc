@@ -58,6 +58,7 @@ impl CircuitBreaker {
 pub struct CloudflareBackend {
     api_token: String,
     zone_id: String,
+    api_base: String,
     client: reqwest::Client,
     record_ids: Arc<Mutex<HashMap<String, String>>>,
     circuit: Arc<Mutex<CircuitBreaker>>,
@@ -65,9 +66,16 @@ pub struct CloudflareBackend {
 
 impl CloudflareBackend {
     pub fn new(api_token: String, zone_id: String) -> Self {
+        Self::new_with_base(api_token, zone_id, API_BASE.to_string())
+    }
+
+    /// Alternate constructor allowing a custom API base URL (used by tests to
+    /// point at a mock server). Production callers should use [`new`].
+    pub fn new_with_base(api_token: String, zone_id: String, api_base: String) -> Self {
         Self {
             api_token,
             zone_id,
+            api_base,
             client: reqwest::Client::new(),
             record_ids: Arc::new(Mutex::new(HashMap::new())),
             circuit: Arc::new(Mutex::new(CircuitBreaker::new())),
@@ -103,7 +111,7 @@ impl CloudflareBackend {
 
         self.check_circuit().await?;
 
-        let url = format!("{}/zones/{}/dns_records", API_BASE, self.zone_id);
+        let url = format!("{}/zones/{}/dns_records", self.api_base, self.zone_id);
 
         let resp = match self
             .client
@@ -169,7 +177,7 @@ impl CloudflareBackend {
         content: &str,
         ttl: u32,
     ) -> Result<()> {
-        let url = format!("{}/zones/{}/dns_records", API_BASE, self.zone_id);
+        let url = format!("{}/zones/{}/dns_records", self.api_base, self.zone_id);
 
         let payload = serde_json::json!({
             "type": record_type,
@@ -206,7 +214,7 @@ impl CloudflareBackend {
     ) -> Result<()> {
         let url = format!(
             "{}/zones/{}/dns_records/{}",
-            API_BASE, self.zone_id, record_id
+            self.api_base, self.zone_id, record_id
         );
 
         let payload = serde_json::json!({
@@ -227,7 +235,7 @@ impl CloudflareBackend {
     async fn delete_record_by_id(&self, record_id: &str, fqdn: &str) -> Result<()> {
         let url = format!(
             "{}/zones/{}/dns_records/{}",
-            API_BASE, self.zone_id, record_id
+            self.api_base, self.zone_id, record_id
         );
 
         self.send_with_retry(&url, reqwest::Method::DELETE, None)
@@ -362,7 +370,7 @@ impl CloudflareBackend {
     pub async fn health_check(&self) -> Result<()> {
         self.check_circuit().await?;
 
-        let url = format!("{}/zones/{}", API_BASE, self.zone_id);
+        let url = format!("{}/zones/{}", self.api_base, self.zone_id);
 
         let resp = match self
             .client
@@ -527,5 +535,386 @@ mod tests {
         }
         let result = backend.check_circuit().await;
         assert!(result.is_err());
+    }
+
+    #[cfg(test)]
+    mod mock {
+        use super::*;
+        use serde_json::json;
+        use wiremock::matchers::{body_partial_json, header, method, path, query_param};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        const TOKEN: &str = "test-token";
+        const ZONE_ID: &str = "zone456";
+        const FQDN: &str = "foo.example.com";
+
+        fn backend(server_uri: String) -> CloudflareBackend {
+            CloudflareBackend::new_with_base(TOKEN.into(), ZONE_ID.into(), server_uri)
+        }
+
+        fn dns_records_path() -> String {
+            format!("/zones/{ZONE_ID}/dns_records")
+        }
+
+        fn record_path(id: &str) -> String {
+            format!("/zones/{ZONE_ID}/dns_records/{id}")
+        }
+
+        fn zone_path() -> String {
+            format!("/zones/{ZONE_ID}")
+        }
+
+        fn auth_header() -> String {
+            format!("Bearer {TOKEN}")
+        }
+
+        fn empty_result() -> serde_json::Value {
+            json!({ "success": true, "errors": [], "result": [] })
+        }
+
+        async fn mount_get_empty(server: &MockServer) {
+            Mock::given(method("GET"))
+                .and(path(dns_records_path()))
+                .respond_with(ResponseTemplate::new(200).set_body_json(empty_result()))
+                .expect(1)
+                .mount(server)
+                .await;
+        }
+
+        #[tokio::test]
+        async fn upsert_record_creates_new_record_via_post() {
+            let server = MockServer::start().await;
+            let backend = backend(server.uri());
+
+            mount_get_empty(&server).await;
+
+            Mock::given(method("POST"))
+                .and(path(dns_records_path()))
+                .and(body_partial_json(json!({
+                    "type": "A",
+                    "name": FQDN,
+                    "content": "1.2.3.4",
+                    "ttl": 300,
+                    "proxied": false,
+                })))
+                .and(header("authorization", auth_header()))
+                .respond_with(
+                    ResponseTemplate::new(200)
+                        .set_body_json(json!({ "success": true, "result": { "id": "rec-new-1" } })),
+                )
+                .expect(1)
+                .mount(&server)
+                .await;
+
+            let result = backend.upsert_record(FQDN, "A", "1.2.3.4", 300).await;
+            assert!(result.is_ok(), "upsert should succeed: {:?}", result.err());
+
+            let cache = backend.record_ids.lock().await;
+            assert_eq!(
+                cache.get("foo.example.com|A"),
+                Some(&"rec-new-1".to_string()),
+                "record id should be cached after create"
+            );
+        }
+
+        #[tokio::test]
+        async fn upsert_record_updates_existing_via_patch() {
+            let server = MockServer::start().await;
+            let backend = backend(server.uri());
+
+            Mock::given(method("GET"))
+                .and(path(dns_records_path()))
+                .and(query_param("name", FQDN))
+                .and(query_param("type", "A"))
+                .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                    "success": true,
+                    "result": [{ "id": "rec-existing", "type": "A", "name": FQDN }]
+                })))
+                .expect(1)
+                .mount(&server)
+                .await;
+
+            Mock::given(method("PATCH"))
+                .and(path(record_path("rec-existing")))
+                .and(body_partial_json(json!({
+                    "type": "A",
+                    "name": FQDN,
+                    "content": "5.6.7.8",
+                    "proxied": false,
+                })))
+                .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                    "success": true,
+                    "result": { "id": "rec-existing", "content": "5.6.7.8" }
+                })))
+                .expect(1)
+                .mount(&server)
+                .await;
+
+            Mock::given(method("POST"))
+                .and(path(dns_records_path()))
+                .respond_with(ResponseTemplate::new(500))
+                .expect(0)
+                .mount(&server)
+                .await;
+
+            let result = backend.upsert_record(FQDN, "A", "5.6.7.8", 300).await;
+            assert!(
+                result.is_ok(),
+                "upsert update should succeed: {:?}",
+                result.err()
+            );
+
+            let cache = backend.record_ids.lock().await;
+            assert_eq!(
+                cache.get("foo.example.com|A"),
+                Some(&"rec-existing".to_string()),
+                "record id should be cached after lookup"
+            );
+        }
+
+        #[tokio::test]
+        async fn upsert_record_returns_error_on_500() {
+            let server = MockServer::start().await;
+            let backend = backend(server.uri());
+
+            mount_get_empty(&server).await;
+
+            Mock::given(method("POST"))
+                .and(path(dns_records_path()))
+                .respond_with(ResponseTemplate::new(500).set_body_json(json!({
+                    "success": false,
+                    "errors": [{ "code": 1000, "message": "internal server error" }]
+                })))
+                .expect(1)
+                .mount(&server)
+                .await;
+
+            let result = backend.upsert_record(FQDN, "A", "1.2.3.4", 300).await;
+            let err = result.expect_err("should error on 500");
+            let msg = err.to_string().to_lowercase();
+            assert!(
+                msg.contains("500"),
+                "error should mention status 500: {msg}"
+            );
+            assert!(
+                msg.contains("internal server error"),
+                "error should include upstream message: {msg}"
+            );
+        }
+
+        #[tokio::test]
+        async fn upsert_record_returns_rate_limit_error_on_429() {
+            let server = MockServer::start().await;
+            let backend = backend(server.uri());
+
+            mount_get_empty(&server).await;
+
+            // send_with_retry retries up to MAX_RETRIES then surfaces a rate-limit error.
+            Mock::given(method("POST"))
+                .and(path(dns_records_path()))
+                .respond_with(ResponseTemplate::new(429).set_body_json(json!({
+                    "success": false,
+                    "errors": [{ "code": 1003, "message": "rate limited" }]
+                })))
+                .expect((1 + MAX_RETRIES) as u64)
+                .mount(&server)
+                .await;
+
+            let result = backend.upsert_record(FQDN, "A", "1.2.3.4", 300).await;
+            let err = result.expect_err("should error on persistent 429");
+            let msg = err.to_string().to_lowercase();
+            assert!(
+                msg.contains("rate limit"),
+                "error should mention rate limit: {msg}"
+            );
+        }
+
+        #[tokio::test]
+        async fn delete_record_succeeds_when_record_exists() {
+            let server = MockServer::start().await;
+            let backend = backend(server.uri());
+
+            Mock::given(method("GET"))
+                .and(path(dns_records_path()))
+                .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                    "success": true,
+                    "result": [{ "id": "rec-del", "type": "TXT", "name": FQDN }]
+                })))
+                .expect(1)
+                .mount(&server)
+                .await;
+
+            Mock::given(method("DELETE"))
+                .and(path(record_path("rec-del")))
+                .and(header("authorization", auth_header()))
+                .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                    "success": true,
+                    "result": { "id": "rec-del" }
+                })))
+                .expect(1)
+                .mount(&server)
+                .await;
+
+            let result = backend.delete_record(FQDN, "TXT").await;
+            assert!(result.is_ok(), "delete should succeed: {:?}", result.err());
+
+            let cache = backend.record_ids.lock().await;
+            assert!(
+                !cache.contains_key("foo.example.com|TXT"),
+                "record id should be evicted from cache after delete"
+            );
+        }
+
+        #[tokio::test]
+        async fn delete_record_is_noop_when_not_found() {
+            let server = MockServer::start().await;
+            let backend = backend(server.uri());
+
+            mount_get_empty(&server).await;
+
+            Mock::given(method("DELETE"))
+                .and(path(dns_records_path()))
+                .respond_with(ResponseTemplate::new(500))
+                .expect(0)
+                .mount(&server)
+                .await;
+
+            let result = backend.delete_record(FQDN, "A").await;
+            assert!(
+                result.is_ok(),
+                "delete of missing record should succeed (noop): {:?}",
+                result.err()
+            );
+        }
+
+        #[tokio::test]
+        async fn upsert_txt_multi_joins_segments_into_single_txt() {
+            let server = MockServer::start().await;
+            let backend = backend(server.uri());
+
+            mount_get_empty(&server).await;
+
+            Mock::given(method("POST"))
+                .and(path(dns_records_path()))
+                .and(body_partial_json(json!({
+                    "type": "TXT",
+                    "name": FQDN,
+                    "content": "part-onepart-two",
+                })))
+                .respond_with(
+                    ResponseTemplate::new(200)
+                        .set_body_json(json!({ "success": true, "result": { "id": "txt-1" } })),
+                )
+                .expect(1)
+                .mount(&server)
+                .await;
+
+            let segments = vec!["part-one".to_string(), "part-two".to_string()];
+            let result = backend.upsert_txt_multi(FQDN, &segments, 300).await;
+            assert!(
+                result.is_ok(),
+                "upsert_txt_multi should succeed: {:?}",
+                result.err()
+            );
+        }
+
+        #[tokio::test]
+        async fn cache_skips_lookup_and_uses_patch_on_second_upsert() {
+            let server = MockServer::start().await;
+            let backend = backend(server.uri());
+
+            // First upsert: GET (empty) + POST (create) — caches the id.
+            Mock::given(method("GET"))
+                .and(path(dns_records_path()))
+                .respond_with(ResponseTemplate::new(200).set_body_json(empty_result()))
+                .expect(1)
+                .mount(&server)
+                .await;
+
+            Mock::given(method("POST"))
+                .and(path(dns_records_path()))
+                .respond_with(
+                    ResponseTemplate::new(200)
+                        .set_body_json(json!({ "success": true, "result": { "id": "cached-1" } })),
+                )
+                .expect(1)
+                .mount(&server)
+                .await;
+
+            // Second upsert: cache hit → no GET, only PATCH against cached id.
+            Mock::given(method("PATCH"))
+                .and(path(record_path("cached-1")))
+                .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                    "success": true,
+                    "result": { "id": "cached-1" }
+                })))
+                .expect(1)
+                .mount(&server)
+                .await;
+
+            backend
+                .upsert_record(FQDN, "A", "1.1.1.1", 300)
+                .await
+                .unwrap();
+            backend
+                .upsert_record(FQDN, "A", "2.2.2.2", 300)
+                .await
+                .unwrap();
+
+            let cache = backend.record_ids.lock().await;
+            assert_eq!(
+                cache.get("foo.example.com|A"),
+                Some(&"cached-1".to_string()),
+                "cached id should remain after update"
+            );
+        }
+
+        #[tokio::test]
+        async fn health_check_passes_on_success() {
+            let server = MockServer::start().await;
+            let backend = backend(server.uri());
+
+            Mock::given(method("GET"))
+                .and(path(zone_path()))
+                .and(header("authorization", auth_header()))
+                .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                    "success": true,
+                    "result": { "id": ZONE_ID, "name": "example.com" }
+                })))
+                .expect(1)
+                .mount(&server)
+                .await;
+
+            let result = backend.health_check().await;
+            assert!(
+                result.is_ok(),
+                "health_check should succeed: {:?}",
+                result.err()
+            );
+        }
+
+        #[tokio::test]
+        async fn health_check_fails_on_non_2xx() {
+            let server = MockServer::start().await;
+            let backend = backend(server.uri());
+
+            Mock::given(method("GET"))
+                .and(path(zone_path()))
+                .respond_with(ResponseTemplate::new(403).set_body_json(json!({
+                    "success": false,
+                    "errors": [{ "code": 9109, "message": "Unauthorized to access zone resource" }]
+                })))
+                .expect(1)
+                .mount(&server)
+                .await;
+
+            let result = backend.health_check().await;
+            let err = result.expect_err("health_check should fail on 403");
+            let msg = err.to_string().to_lowercase();
+            assert!(
+                msg.contains("403"),
+                "error should mention the failing status: {msg}"
+            );
+        }
     }
 }

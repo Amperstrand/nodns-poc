@@ -91,3 +91,7 @@ async-trait = "0.1"
 
 # Error abstraction for DnsConnector trait
 anyhow = "1"
+
+[dev-dependencies]
+# Mock HTTP server for CloudflareBackend API tests
+wiremock = "0.6"
