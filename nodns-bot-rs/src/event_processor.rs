@@ -9,7 +9,6 @@ use tracing::{debug, error, info, warn};
 
 use crate::auth;
 use crate::config::Config;
-use crate::connector::DnsConnector;
 use crate::dns_cache::DnsEventCache;
 use crate::parser;
 use crate::payment;
@@ -19,6 +18,7 @@ use crate::types::{
     build_fqdn, record_type_to_u16, ClaimRequest, Delegation, Metrics, ParsedEvent, RegistrarKey,
     RenewalRequest,
 };
+use nodns_connectors::connector::DnsConnector;
 
 // ---------------------------------------------------------------------------
 // FQDN resolution

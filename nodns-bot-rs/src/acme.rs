@@ -11,9 +11,9 @@ use thiserror::Error;
 use tracing::{error, info, warn};
 
 use crate::config::AcmeConfig;
-use crate::connector::DnsConnector;
 use crate::store::Store;
 use base64::Engine;
+use nodns_connectors::connector::DnsConnector;
 use sha2::{Digest, Sha256};
 
 #[derive(Debug, Error)]

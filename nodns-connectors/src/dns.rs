@@ -24,7 +24,22 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream as TokioTcpStream;
 use tracing::{debug, info};
 
-use crate::config::ZoneConfig;
+// ---------------------------------------------------------------------------
+// DDNS configuration (decoupled from the bot's ZoneConfig)
+// ---------------------------------------------------------------------------
+
+/// Minimal configuration for constructing an [`Updater`].
+///
+/// This struct exists so that the connectors crate has no dependency on the
+/// bot's `config` module. Callers construct it from whatever configuration
+/// source they use (e.g. `ZoneConfig` in the bot crate).
+pub struct DdnsConfig {
+    pub knot_address: String,
+    pub zone: String,
+    pub tsig_key_name: String,
+    pub tsig_key_secret: String,
+    pub tsig_algorithm: String,
+}
 
 // ---------------------------------------------------------------------------
 // Error type
@@ -245,7 +260,7 @@ impl Updater {
     ///
     /// Mirrors Go's `NewUpdater`: TSIG key name and algorithm are normalised to
     /// FQDN form for DNS wire format compatibility.
-    pub fn new(cfg: &ZoneConfig) -> Result<Self> {
+    pub fn new(cfg: &DdnsConfig) -> Result<Self> {
         // miekg/dns requires TSIG key name to be fully qualified (trailing dot)
         // for DNS wire format packing.  The TsigSecret map key must match exactly.
         let tsig_key_name = ensure_fqdn(&cfg.tsig_key_name);
@@ -886,15 +901,14 @@ mod tests {
 
     /// Build a `ZoneConfig` with a valid HMAC-SHA256 key (32 zero bytes,
     /// base64-encoded) and a loopback address.
-    fn make_test_zone() -> ZoneConfig {
+    fn make_test_zone() -> DdnsConfig {
         let secret = BASE64_STANDARD.encode([0u8; 32]);
-        ZoneConfig {
+        DdnsConfig {
             knot_address: "127.0.0.1:5353".to_string(),
             zone: "example.com".to_string(),
             tsig_key_name: "test-key".to_string(),
             tsig_key_secret: secret,
             tsig_algorithm: "hmac-sha256".to_string(),
-            ..Default::default()
         }
     }
 

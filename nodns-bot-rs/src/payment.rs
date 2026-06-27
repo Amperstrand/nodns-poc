@@ -17,10 +17,10 @@ use cdk::nuts::{CheckStateRequest, CheckStateResponse, State, Token};
 use thiserror::Error;
 use tracing::{error, info, warn};
 
-use crate::circuit_breaker::MINT_CIRCUITS;
 use crate::config::ZonePaymentConfig;
 use crate::store::Store;
 use crate::types::{DnsRecord, Payment};
+use nodns_connectors::circuit_breaker::MINT_CIRCUITS;
 
 // ---------------------------------------------------------------------------
 // Tunables & per-mint HTTP client cache

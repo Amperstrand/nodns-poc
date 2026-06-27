@@ -30,11 +30,11 @@ mod test_helpers {
     use base64::Engine;
 
     use crate::config;
-    use crate::connector::DnsConnector;
-    use crate::dns;
     use crate::nip05;
     use crate::types::Metrics;
     use crate::AppState;
+    use nodns_connectors::connector::DnsConnector;
+    use nodns_connectors::dns;
 
     pub fn make_zone_config() -> config::ZoneConfig {
         config::ZoneConfig {
@@ -79,7 +79,14 @@ mod test_helpers {
         store.init().unwrap();
 
         let zc = make_zone_config();
-        let updater = dns::Updater::new(&zc).unwrap();
+        let ddns_config = dns::DdnsConfig {
+            knot_address: zc.knot_address.clone(),
+            zone: zc.zone.clone(),
+            tsig_key_name: zc.tsig_key_name.clone(),
+            tsig_key_secret: zc.tsig_key_secret.clone(),
+            tsig_algorithm: zc.tsig_algorithm.clone(),
+        };
+        let updater = dns::Updater::new(&ddns_config).unwrap();
         let mut updaters: HashMap<String, Arc<dyn DnsConnector>> = HashMap::new();
         updaters.insert("nodns.shop".to_string(), Arc::new(updater));
 

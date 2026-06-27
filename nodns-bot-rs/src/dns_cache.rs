@@ -10,7 +10,7 @@ use nostr_sdk::nips::nip19::ToBech32;
 use nostr_sdk::Event;
 use tracing::warn;
 
-use crate::connector::DnsConnector;
+use nodns_connectors::connector::DnsConnector;
 const TXT_SEGMENT_MAX: usize = 255;
 
 pub struct DnsEventCache;

@@ -2,19 +2,14 @@
 
 mod acme;
 mod auth;
-mod circuit_breaker;
 mod classify;
-mod cloudflare_backend;
 mod config;
-mod connector;
-mod dns;
 mod dns_cache;
 mod dns_update_server;
 mod dnssec_derivation;
 #[allow(dead_code)]
 mod epp;
 mod event_processor;
-mod failover;
 mod handlers;
 mod nip05;
 mod parser;
@@ -68,10 +63,12 @@ async fn correlation_id_middleware(request: axum::extract::Request, next: Next) 
     response
 }
 
-use cloudflare_backend::CloudflareBackend;
 use config::{Config, ZoneConfig};
-use connector::DnsConnector;
-use dns::Updater;
+use nodns_connectors::cloudflare_backend::CloudflareBackend;
+use nodns_connectors::connector::DnsConnector;
+use nodns_connectors::dns::DdnsConfig;
+use nodns_connectors::dns::Updater;
+use nodns_connectors::failover::FailoverConnector;
 use payment::Verifier;
 use store::Store;
 use subscriber::Subscriber;
@@ -399,7 +396,9 @@ async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
                         warn!(zone = %first_zone.zone, address = %first_zone.knot_address, "invalid knot_address, using derived key");
                         "127.0.0.1:5353".parse().unwrap()
                     });
-                    let live_keys = dns::query_dnskey_base64(nameserver, &first_zone.zone).await;
+                    let live_keys =
+                        nodns_connectors::dns::query_dnskey_base64(nameserver, &first_zone.zone)
+                            .await;
                     let ksk = live_keys.iter().find(|k| {
                         use base64::Engine;
                         if let Ok(bytes) = base64::engine::general_purpose::STANDARD.decode(k) {
@@ -529,7 +528,16 @@ async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
             let zone_id = zc.cloudflare_zone_id.clone().unwrap_or_default();
             Arc::new(CloudflareBackend::new(token, zone_id))
         } else {
-            let primary: Arc<dyn DnsConnector> = Arc::new(Updater::new(zc)?);
+            let primary: Arc<dyn DnsConnector> = {
+                let ddns_config = DdnsConfig {
+                    knot_address: zc.knot_address.clone(),
+                    zone: zc.zone.clone(),
+                    tsig_key_name: zc.tsig_key_name.clone(),
+                    tsig_key_secret: zc.tsig_key_secret.clone(),
+                    tsig_algorithm: zc.tsig_algorithm.clone(),
+                };
+                Arc::new(Updater::new(&ddns_config)?)
+            };
             // Opt-in failover: if Cloudflare credentials are supplied alongside
             // a DDNS backend, wrap the primary so Knot DNS failures fall back
             // to the Cloudflare API automatically (Issue #68).
@@ -550,7 +558,7 @@ async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
                     zone = %zc.zone,
                     "DNS failover enabled: Knot DDNS primary → Cloudflare fallback"
                 );
-                Arc::new(failover::FailoverConnector::new(primary, fallback))
+                Arc::new(FailoverConnector::new(primary, fallback))
             } else {
                 primary
             }

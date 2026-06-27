@@ -1,0 +1,3 @@
+[workspace]
+members = ["nodns-bot-rs", "nodns-connectors"]
+resolver = "2"

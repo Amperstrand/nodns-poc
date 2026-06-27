@@ -5,10 +5,10 @@ use axum::http::header;
 use axum::response::{IntoResponse, Json, Response};
 use serde::{Deserialize, Serialize};
 
-use crate::dns::query_txt_records;
 use crate::event_processor::resolve_fqdn;
 use crate::types::EventRecord;
 use crate::AppState;
+use nodns_connectors::dns::query_txt_records;
 
 // ---------------------------------------------------------------------------
 // API response types

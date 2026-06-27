@@ -49,6 +49,7 @@ fn decrypt_aes_gcm(key: &[u8; 32], encoded: &str) -> Result<String, aes_gcm::Err
     if combined.len() < 13 {
         return Err(aes_gcm::Error);
     }
+    #[allow(deprecated)]
     let nonce = Nonce::from_slice(&combined[..12]);
     let ciphertext = &combined[12..];
     let plaintext = cipher.decrypt(nonce, ciphertext)?;

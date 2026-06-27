@@ -86,12 +86,8 @@ hex = "0.4"
 url = "2"
 regex = "1"
 
-# Async trait support for DnsConnector trait
-async-trait = "0.1"
+# NoDNS connector library (DNS backends: Knot DDNS, Cloudflare, failover)
+nodns-connectors = { path = "../nodns-connectors" }
 
 # Error abstraction for DnsConnector trait
 anyhow = "1"
-
-[dev-dependencies]
-# Mock HTTP server for CloudflareBackend API tests
-wiremock = "0.6"

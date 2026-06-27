@@ -21,8 +21,8 @@ use hickory_client::proto::serialize::binary::BinEncodable;
 use tokio::net::UdpSocket;
 use tracing::{debug, error, info, warn};
 
-use crate::connector::DnsConnector;
 use crate::store::Store;
+use nodns_connectors::connector::DnsConnector;
 
 // ---------------------------------------------------------------------------
 // Error helpers

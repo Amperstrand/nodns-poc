@@ -7,7 +7,7 @@ import {
 } from "nostr-tools/pure";
 import { npubEncode, nsecEncode, decode as nip19Decode } from "nostr-tools/nip19";
 import { SimplePool } from "nostr-tools/pool";
-import { RELAYS } from "./constants";
+import { RELAYS, PUBLISH_RELAYS } from "./constants";
 
 export function generateKeypair() {
   const sk = generateSecretKey();
@@ -95,8 +95,8 @@ export async function signAndPublish(
   }
 
   const pool = new SimplePool();
-  await Promise.allSettled(RELAYS.map((url) => pool.publish([url], event)));
-  pool.close(RELAYS);
+  await Promise.allSettled(PUBLISH_RELAYS.map((url) => pool.publish([url], event)));
+  pool.close(PUBLISH_RELAYS);
 
   return event;
 }

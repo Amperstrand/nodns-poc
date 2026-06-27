@@ -2,7 +2,7 @@ import { SimplePool } from 'nostr-tools/pool';
 import { generateSecretKey, getPublicKey, finalizeEvent } from 'nostr-tools/pure';
 import { npubEncode, nsecEncode, decode as nip19Decode } from 'nostr-tools/nip19';
 import { bytesToHex } from 'nostr-tools/utils';
-import { RELAYS } from './constants';
+import { RELAYS, PUBLISH_RELAYS } from './constants';
 import type { NostrEvent, KeyPair } from './types';
 
 const pool = new SimplePool();
@@ -62,7 +62,7 @@ export async function publishDnsEvent(
 
   const event = finalizeEvent(template, secretKey);
 
-  const pubs = pool.publish(RELAYS, event);
+  const pubs = pool.publish(PUBLISH_RELAYS, event);
   await Promise.any(pubs);
 
   return event as NostrEvent;
@@ -83,7 +83,7 @@ export async function publishDeleteEvent(
 
   const event = finalizeEvent(template, secretKey);
 
-  const pubs = pool.publish(RELAYS, event);
+  const pubs = pool.publish(PUBLISH_RELAYS, event);
   await Promise.any(pubs);
 
   return event as NostrEvent;

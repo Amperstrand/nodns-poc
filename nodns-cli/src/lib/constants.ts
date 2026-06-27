@@ -1,4 +1,7 @@
-export const DEFAULT_RELAYS = ["wss://relay.cashu.email"];
+import { PUBLISH_RELAYS, READ_RELAYS } from "../../../shared/relays";
+
+export const DEFAULT_RELAYS = PUBLISH_RELAYS;
+export const ALL_RELAYS = READ_RELAYS;
 export const DEFAULT_ZONE = "nodns.shop";
 export const DEFAULT_MINT_URL = "https://testnut.cashu.space";
 export const RECORD_KIND = 11111;
