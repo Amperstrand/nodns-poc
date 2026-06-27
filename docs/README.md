@@ -86,6 +86,7 @@ These docs are the authoritative source for reasoning. `content/consensus.json` 
 | [39-protocol-v2-design.md](39-protocol-v2-design.md) | DRAFT | Protocol v2: zone attestation, Nostr discovery, P2PK locking, testnet flag, known limitations, versioning |
 | [40-bridge-agent-architecture.md](40-bridge-agent-architecture.md) | DRAFT | Pluggable DNS backends, generalizing bot into a distributed bridge agent |
 | [41-nostr-over-dns-experiment.md](41-nostr-over-dns-experiment.md) | DRAFT | Experimental Nostr event caching over DNS (non-fatal, warn-only) |
+| [44-minimal-consensus-roadmap.md](44-minimal-consensus-roadmap.md) | DRAFT | Talk outline, decision table, and docs split plan for the minimal standard |
 | [crash-recovery-audit.md](crash-recovery-audit.md) | ACTIVE | Crash recovery audit of nodns-bot-rs: 8 operations reviewed, failure modes documented |
 
 ### Competitive
