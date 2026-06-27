@@ -8,6 +8,8 @@ This doc collects the decisions we want to surface in the talk and the smallest 
 
 The goal is not perfection. The goal is a minimal, understandable consensus that people can implement and discuss.
 
+Open the browser talk at `/talk`.
+
 ## Recommendation
 
 ### 1) Name classes
@@ -18,15 +20,16 @@ The goal is not perfection. The goal is a minimal, understandable consensus that
 
 ### 2) Protocol version
 
-- Stay on **kind 11111** for now.
-- Treat **31111** as the later migration step once the rest of the stack is ready.
-- The migration can be framed as the "we are live" moment.
+- Make **kind 11111** the special NoDNS event kind for the current protocol.
+- Keep current-state logic in the bot and viewer, not in the relay.
+- Do **not** migrate to 31111; stay on 11111.
 
 ### 3) Custom-name registration
 
-- Keep it simple: **bid → accept bid**.
-- The namespace owner signals acceptance.
-- This is closer to a fee market than a full auction system.
+- Use **public locked bids with a refund path**.
+- The namespace owner signals acceptance by claiming the bid.
+- Keep the flow simple: visible bid, visible accept, visible reclaim deadline.
+- This is the first-milestone answer; blind/private bids stay future.
 
 ### 4) Edit semantics
 
@@ -50,9 +53,9 @@ The goal is not perfection. The goal is a minimal, understandable consensus that
 |---|---|---|
 | `$npub.tld` | Always true | No ambiguity: the key is the name |
 | `$string.tld` | Owner opt-in + pledge | Keeps the operator as the lease holder |
-| Wire format | Keep 11111 for now | Lowers churn while the rest settles |
-| Future migration | 31111 when ready | Clear “we’re live” transition |
-| Custom names | Bid then accept | Minimal and understandable |
+| Wire format | 11111 as the special NoDNS kind | Keeps the protocol obvious and current |
+| Future migration | None | 11111 stays the protocol |
+| Custom names | Public locked bid then accept | Minimal and credible |
 | Editing | Overwrite current record | Matches normal DNS expectations |
 | Viewers | Modular debug + personal views | Supports both analysis and everyday use |
 | Docs | Now vs future split | Makes the project easier to explain |
@@ -76,12 +79,13 @@ The minimum useful standard is: simple wire format, simple rules, simple viewers
 - npub names are always true
 - string names need opt-in
 - edits overwrite
-- keep 11111 for now
+- 11111 is the special NoDNS event kind
+- custom names use public locked bids with refunds
 
 ### Slide 5 — What stays open
 
-- 31111 migration
-- bids vs auctions
+- blind/private bids for sniping resistance
+- relay sequencing / registrar-run relay for FCFS fairness
 - future anti-spam and takeover mechanics
 
 ### Slide 6 — Tooling
@@ -95,6 +99,12 @@ A minimal standard makes it easier for others to implement, critique, and extend
 ### Slide 8 — Ask
 
 Ask the room which parts should become standard now and which should remain future ideas.
+
+### Talk framing
+
+- Start with the full protocol walkthrough.
+- Then shift into the decisions that still need agreement.
+- Keep each tradeoff explicit: argue both sides, then state the provisional recommendation.
 
 ## Docs Restructuring Plan
 
@@ -123,7 +133,6 @@ These docs are good ideas, but they are not the minimal PoC:
 - `39-protocol-v2-design.md`
 - `40-bridge-agent-architecture.md`
 - `41-nostr-over-dns-experiment.md`
-- `42-kind-31111-migration.md`
 - `43-payment-escrow-model.md`
 
 ### Suggested structure after the talk

@@ -1,15 +1,15 @@
-# Kind 31111 Migration — Parameterized Replaceable DNS Events
+# Kind 31111 Migration — Historical Note
 
-**Status**: ACTIVE
+**Status**: ARCHIVED
 **Issue**: [#59](https://github.com/amperstrand/nodns-poc/issues/59)
 
 ## Overview
 
-NoDNS DNS record events are migrating from kind **11111** (regular) to kind **31111** (NIP-33 parameterized replaceable). The bot now accepts both kinds simultaneously during the transition period.
+NoDNS DNS record events are staying on kind **11111**. The 31111 idea is recorded here only as historical context; it is not part of the current protocol or roadmap.
 
 ## Why 31111?
 
-Kind 31111 is a **parameterized replaceable** event per [NIP-33](https://github.com/nostr-protocol/nips/blob/master/33.md). Relays keep only the latest event per coordinate tuple `(kind, pubkey, d-tag)`, which provides three benefits over kind 11111:
+Kind 31111 is a **parameterized replaceable** event per [NIP-33](https://github.com/nostr-protocol/nips/blob/master/33.md). Relays keep only the latest event per coordinate tuple `(kind, pubkey, d-tag)`, which would provide three benefits over kind 11111:
 
 1. **Automatic deduplication** — Relays discard older events with the same coordinate. No record flooding or stale-event replay.
 2. **Stable reference** — The `d` tag creates a persistent identifier for a specific record, enabling clean updates without ambiguity.
@@ -56,37 +56,31 @@ The `record` tag format is identical for both kinds:
 
 All validation (allowed types, private IP blocking, TXT length cap, DNS label rules) applies equally to both kinds.
 
-## Migration Timeline
+## Historical Timeline
 
 | Phase | Status | Description |
 |---|---|---|
-| **1. Accept both** | **Current** | Bot subscribes to and processes both 11111 and 31111. Clients may publish either. |
-| **2. Prefer 31111** | Planned | Frontend and CLI switch to publishing 31111 by default. 11111 still accepted. |
-| **3. Deprecate 11111** | Future | Bot stops subscribing to 11111. Only 31111 accepted. Existing 11111 records remain in DNS until updated. |
+| **1. Stay on 11111** | **Current** | Bot subscribes to and processes 11111 only. This is the live protocol. |
+| **2. 31111 idea** | Archived | Considered for relay deduplication, but not pursued. |
+| **3. Migration path** | Archived | No migration planned. |
 
 ## Client Subscription Guide
 
-During the transition, clients should subscribe to **both** kinds:
+Current clients should subscribe to **11111 only**.
 
 ```javascript
 const filter = {
-  kinds: [11111, 31111],
+  kinds: [11111],
   since: lastSeenTimestamp,
 };
 ```
 
-After deprecation, subscribe to 31111 only:
-
-```javascript
-const filter = {
-  kinds: [31111],
-};
-```
+Clients should subscribe to 11111 only.
 
 ## Bot Implementation Details
 
-- **`subscriber.rs`**: Subscribes with `kinds: [11111, 31111]` in the relay filter.
-- **`parser.rs`**: `is_dns_kind()` accepts both kinds. The `d` tag is extracted into `ParsedEvent.d_tag` for logging.
-- **`event_processor.rs`**: Logs the `d` tag coordinate for 31111 events. Proof TXT records include the actual event kind (`k=31111` or `k=11111`).
-- **`store.rs`**: A `kind` column (default 11111) is added to the `events` table via migration. Non-Nostr updates (RFC 2136, DynDNS HTTP) store kind `0`.
-- **`types.rs`**: `KIND_DNS_REPLACEABLE = 31111` constant alongside existing `KIND_DNS_RECORD = 11111`.
+- **`subscriber.rs`**: Subscribes with `kinds: [11111]` in the relay filter.
+- **`parser.rs`**: `is_dns_kind()` accepts 11111 only.
+- **`event_processor.rs`**: Emits the v1 event kind in proofs and logs.
+- **`store.rs`**: A `kind` column (default 11111) is stored for events; non-Nostr updates (RFC 2136, DynDNS HTTP) store kind `0`.
+- **`types.rs`**: `KIND_DNS_RECORD = 11111` remains the only protocol kind for v1.

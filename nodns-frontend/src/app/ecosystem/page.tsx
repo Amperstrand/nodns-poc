@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
 import { ErrorBoundary } from "@/components/error-boundary";
@@ -511,7 +512,7 @@ dig _nodns.nodns.shop TXT +short
           </section>
 
           <div className="mt-12 flex justify-center">
-            <a
+            <Link
               href="/"
               className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-4 py-2.5 text-sm text-foreground/60 transition-colors hover:border-primary/30 hover:text-foreground min-h-[44px]"
             >
@@ -519,7 +520,7 @@ dig _nodns.nodns.shop TXT +short
                 <path d="m18 15-6-6-6 6" />
               </svg>
               Back to top
-            </a>
+            </Link>
           </div>
 
         </div>

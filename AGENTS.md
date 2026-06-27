@@ -655,6 +655,33 @@ Hooks are opt-in via `git config core.hooksPath .githooks`. The pre-commit hook 
 
 - **nodns-nameserver is a separate repo**: Arjen's `$npub.nostr` reference implementation (Go, Khatru relay, 17 DNS record types) is a sibling project, not part of this build. It's documented in the README as related work. Different language (Go), different relay (Khatru vs nostr-sdk), different scope (reference impl vs production bot).
 
+## Architecture Direction (2026-06)
+
+The system is moving toward a **two-component split**: DNS connector (Knot/Cloudflare/EPP) + payment processor (NIP-17 DM listener). See `docs/45-architecture-direction.md` for the full spec.
+
+**Key points:**
+- Kind 11111 events contain record claims only — no payment tags.
+- Payment is sent out-of-band via NIP-17 encrypted DM to the registrar.
+- The `DnsBackend` enum already exists with `Ddns` + `Cloudflare` variants — the connector abstraction is done.
+- EPP needs to become a third `DnsBackend` variant.
+- `payment.rs` is already modular — change the input source (DM vs event tag), keep `Verifier` as-is.
+- **Refactor in place. Do NOT rewrite from scratch.**
+
+## Locked Decisions (2026-06)
+
+These are decided. Do not re-litigate without explicit instruction.
+
+| Decision | Details |
+|---|---|
+| **Kind 11111 stays** | Not temporary. 31111 migration archived (#59, docs/42). |
+| **`$npub.tld` names are free** | Cryptographic ownership. Spam accepted; proof-of-burn is future. |
+| **`$string.tld` names are paid** | Zone operator sets price (Model A: fixed published rates). #32 decided. |
+| **No per-record Cashu antispam** | Antispam = namespace access, not per-record taxation. #34 pivoted. |
+| **No escrow for v1** | Simple trust-based payment via NIP-17 DM. P2PK/escrow is future. |
+| **Payment is out-of-band** | Cashu via NIP-17 DM, not inside kind 11111 events. |
+| **Two-component architecture** | DNS connector + payment processor. docs/45. |
+| **31111 is off the table** | Archived. Do not propose migration. |
+
 ## Known limitations
 
 - **Payment verification is not yet enforced in production**: `deploy/config-multi-zone.toml` has `[payment] enabled = false`. Cashu verification infrastructure (`payment.rs`, CDK integration) is built but disabled pending mint selection and pricing finalization. Anti-spam currently relies on rate limiting and record count caps only.

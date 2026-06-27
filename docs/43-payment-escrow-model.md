@@ -1,17 +1,19 @@
-# 43 — Payment Escrow Model: Public Bid + P2PK Refund
+# 43 — Payment Escrow Model: Public Locked Bid + P2PK Refund
 
 > **Status**: DRAFT. Novel payment model for trustless namespace registration.
 
 ## Overview
 
-Every nodns custom name registration is a **public bid** — the Cashu payment token is visible on the relay, P2PK-locked to the zone owner, with a time-limited refund condition. The zone owner must actively claim the token to confirm the registration. If they don't claim within the refund window, the user gets their sats back.
+Every nodns custom name registration is a **public locked bid** — the Cashu payment token is visible on the relay, P2PK-locked to the zone owner, with a time-limited refund condition. The zone owner must actively claim the token to confirm the registration. If they don't claim within the refund window, the user gets their sats back.
 
 This creates a **trustless escrow** without any custodian or smart contract — just Cashu P2PK conditions and the passage of time.
+
+This model is intended for the **first milestone**. If sniping or race conditions become painful later, the protocol can add blind/private bids or a sequenced relay path.
 
 ## How It Works
 
 ```
-1. User publishes kind 31111 event with:
+1. User publishes kind 11111 event with:
    - Record tags (A, TXT, etc.)
    - ["cashu", "<p2pk-token>", "testnut.cashu.space", "2"]
    The Cashu token is P2PK-locked to the zone owner's npub with a 7-day refund.
@@ -96,11 +98,11 @@ With P2PK-locked tokens + refund:
 
 ## Public Bidding Model
 
-Because the Cashu token is visible on the relay (inside the kind 31111 event), every registration is a **public bid**:
+Because the Cashu token is visible on the relay (inside the kind 11111 event), every registration is a **public bid**:
 
 ```
 Relay event:
-  kind: 31111
+  kind: 11111
   pubkey: user-npub
   tags:
     ["d", "A:alice.nodns.shop"]
@@ -117,7 +119,7 @@ Anyone monitoring the relay can see:
 ### Competitive Bidding
 
 If two users want "alice.nodns.shop":
-1. Both publish kind 31111 events with their bids
+1. Both publish kind 11111 events with their bids
 2. Zone owner processes the first one (first-come-first-serve at bot level)
 3. Zone owner claims the first bid's token = ACK
 4. Second bid: name is taken, bot rejects
@@ -130,7 +132,15 @@ Or, for a premium name:
 4. Claims User B's token, ignores User A's
 5. User A reclaims after 7 days
 
-This turns namespace registration into an **open auction** — visible, trustless, non-custodial.
+This turns namespace registration into a **public bid market** — visible, trustless, non-custodial, and time-bounded.
+
+### Future direction
+
+If public bids turn into a sniping problem, the next step is not necessarily a bigger auction. It can also be:
+
+- **Blind/private bids** so squatters cannot see what is being targeted
+- **Relay sequencing** so first-come-first-served is enforced more cleanly
+- **Registrar-run relay** for names that need a controlled order path
 
 ### Anti-Squatting
 

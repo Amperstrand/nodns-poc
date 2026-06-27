@@ -49,7 +49,7 @@ nodns uses **kind 11111** (regular range: 0-9999). Regular events are stored onc
 
 No idempotency. If a user publishes 100 events for the same record, all 100 are stored and delivered. The bot must dedup client-side. Relay storage grows unbounded.
 
-### Alternative: kind 31111 (addressable/parameterized replaceable)
+### Historical alternative: kind 31111 (addressable/parameterized replaceable)
 
 Kind 31111 is in the addressable range (30000-39999). Addressable events keep only the latest per `(pubkey, kind, d-tag)`. The d-tag identifies which specific record this is:
 
@@ -75,7 +75,7 @@ Trade-offs:
 
 ### Recommendation
 
-Migrate to kind 31111 in the next protocol version. Keep kind 11111 as legacy/deprecated. Bot subscribes to both during transition.
+Do **not** migrate to kind 31111. Keep kind 11111 as the protocol. The rest of this section is retained only as a record of the trade-off analysis.
 
 ## Part 3: NIP-31 (alt tags for unknown kinds)
 
@@ -167,7 +167,7 @@ The npub from the TXT record is the lock target. **Always fetched from DNS, neve
 User wants to register alice.nodns.shop:
 1. Client fetches _nodns.nodns.shop TXT → npub = npub1xxx
 2. Client creates Cashu token P2PK-locked to npub1xxx (NUT-11)
-3. Client publishes kind 31111 with:
+3. Client publishes the existing kind 11111 with:
    - record tag: ["record", "A", "alice", "3600", "1.2.3.4"]
    - cashu tag: ["cashu", "<p2pk-locked-token>", "testnut.cashu.space", "2"]
 4. Bot receives event:

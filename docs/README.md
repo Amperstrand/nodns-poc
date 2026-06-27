@@ -32,7 +32,7 @@
 | Doc | Status | Description |
 |---|---|---|
 | [11-protocol-experimental-draft.md](11-protocol-experimental-draft.md) | ACTIVE (experimental draft) | Wire format: kind 11111, record/delegation/registrar/payment tags |
-| [42-kind-31111-migration.md](42-kind-31111-migration.md) | ACTIVE | Migration from kind 11111 to 31111 (parameterized replaceable DNS events) |
+| [42-kind-31111-migration.md](42-kind-31111-migration.md) | ARCHIVED | Historical 31111 migration note; current protocol stays on kind 11111 |
 
 ### Design Philosophy
 
@@ -57,7 +57,7 @@ These docs are the authoritative source for reasoning. `content/consensus.json` 
 | [28-wallet-and-registrar-redesign.md](28-wallet-and-registrar-redesign.md) | ACTIVE | Frontend redesign: Cashu wallet, Porkbun-inspired UX |
 | [30-payment-architecture.md](30-payment-architecture.md) | DRAFT | Cashu P2PK to registrar payment flow |
 | [30-known-issues.md](30-known-issues.md) | ACTIVE | Documented but unresolved issues, linked to GitHub issues |
-| [43-payment-escrow-model.md](43-payment-escrow-model.md) | DRAFT | Public bid + P2PK refund model for trustless namespace registration |
+| [43-payment-escrow-model.md](43-payment-escrow-model.md) | DRAFT | Public locked bid + P2PK refund model for trustless namespace registration |
 
 ### Security & DNSSEC
 
@@ -82,11 +82,12 @@ These docs are the authoritative source for reasoning. `content/consensus.json` 
 | [14-demo-recipes.md](14-demo-recipes.md) | ACTIVE | 7 demo scripts with exact commands |
 | [36-anti-spam-research.md](36-anti-spam-research.md) | DRAFT | NIP-13 PoW, Proof of Burn (ThomasV/origami74), Cashu micro-payment, comparison table — tabled |
 | [37-cv-trust-model.md](37-cv-trust-model.md) | DRAFT | .cv front-running protection: testnut-only, TXT attestation, P2PK locking, pledge mirroring |
-| [38-nostr-alignment-research.md](38-nostr-alignment-research.md) | DRAFT | NIP-89 service discovery, kind 11111 vs 31111, alt tags, self-referential DNS↔Nostr trust, P2PK locking |
+| [38-nostr-alignment-research.md](38-nostr-alignment-research.md) | DRAFT | NIP-89 service discovery, historical kind 11111 vs 31111 comparison, alt tags, self-referential DNS↔Nostr trust, P2PK locking |
 | [39-protocol-v2-design.md](39-protocol-v2-design.md) | DRAFT | Protocol v2: zone attestation, Nostr discovery, P2PK locking, testnet flag, known limitations, versioning |
 | [40-bridge-agent-architecture.md](40-bridge-agent-architecture.md) | DRAFT | Pluggable DNS backends, generalizing bot into a distributed bridge agent |
 | [41-nostr-over-dns-experiment.md](41-nostr-over-dns-experiment.md) | DRAFT | Experimental Nostr event caching over DNS (non-fatal, warn-only) |
 | [44-minimal-consensus-roadmap.md](44-minimal-consensus-roadmap.md) | DRAFT | Talk outline, decision table, and docs split plan for the minimal standard |
+| [45-architecture-direction.md](45-architecture-direction.md) | DRAFT | Two-component split: DNS connector + payment processor via NIP-17 |
 | [crash-recovery-audit.md](crash-recovery-audit.md) | ACTIVE | Crash recovery audit of nodns-bot-rs: 8 operations reviewed, failure modes documented |
 
 ### Competitive

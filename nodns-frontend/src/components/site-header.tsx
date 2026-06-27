@@ -8,6 +8,7 @@ import { useIdentity } from "@/contexts/IdentityContext";
 
 const NAV_ITEMS = [
   { href: "/", label: "Home" },
+  { href: "/talk", label: "Talk" },
   { href: "/records", label: "Records" },
   { href: "/dashboard", label: "Dashboard" },
   { href: "/learn", label: "Learn" },
@@ -42,7 +43,7 @@ export function SiteHeader() {
         </Link>
 
         {/* Desktop nav */}
-        <nav className="hidden md:flex items-center gap-1">
+        <nav className="hidden xl:flex items-center gap-1">
           {NAV_ITEMS.map((item) => (
             <Link
               key={item.href}
@@ -59,7 +60,7 @@ export function SiteHeader() {
         </nav>
 
         {/* Wallet info (desktop) */}
-        <div className="hidden md:flex items-center gap-3 shrink-0">
+        <div className="hidden xl:flex items-center gap-3 shrink-0">
           {initialized && (
             <span className="text-xs font-mono text-muted-foreground">
               {truncateNpub(npub)}

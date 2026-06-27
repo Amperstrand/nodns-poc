@@ -197,7 +197,7 @@ Events with `created_at < valid_from` are ignored by the zone's bot. This allows
 1. **Phase 1 (now)**: Publish zone attestation TXT + NIP-89 event for nodns.shop
 2. **Phase 2**: Add `alt` tags to all new kind 11111 events
 3. **Phase 3**: Add P2PK locking to Cashu tokens
-4. **Phase 4**: Consider kind 11111 → 31111 migration (breaking)
+4. **Phase 4**: Keep kind 11111; do not migrate to 31111
 5. **Phase 5**: Registration page discovers zones from Nostr (self-contained nsite)
 
 Events before Phase 1 cutoff are legacy and can be ignored.
@@ -210,10 +210,14 @@ Events before Phase 1 cutoff are legacy and can be ignored.
 
 **Mitigation options**:
 - Bot checks if name already exists before processing → rejects duplicate
-- Cashu token for the loser is NOT claimed (they keep their sats)
+- Cashu token for the loser is NOT claimed (they keep their sats via refund path)
 - But the loser's event is still on the relay — confusing
 
 **Default**: Bot SHOULD reject duplicate registrations. Loser's Cashu token SHOULD NOT be claimed. Registration is first-come-first-serve at the bot level.
+
+**Current direction**: public locked bids with a refund path for the first milestone.
+
+**Future option**: if public bids become too race-prone, introduce blind/private bids or a sequenced relay path (possibly registrar-run) instead of a more complex auction.
 
 **Open question**: Should we implement a commit-reveal scheme? (Overkill for pilot.)
 
@@ -255,7 +259,7 @@ Events before Phase 1 cutoff are legacy and can be ignored.
 
 **Mitigation**:
 - Rate limiting at relay level
-- Kind 31111 (addressable) would limit to one event per (pubkey, d-tag)
+- Kind 31111 (addressable) was considered, but we are not pursuing that path
 - Bot ignores events from rate-limited pububs
 
 **Default**: Relay.cashu.email rate-limits per pubkey. Bot has its own rate limiter (5 events/window).
@@ -286,7 +290,7 @@ nodns is explicitly experimental. The protocol may change at any time. Key cavea
 - [11-protocol-experimental-draft.md](11-protocol-experimental-draft.md) — kind 11111 protocol specification
 - [36-anti-spam-research.md](36-anti-spam-research.md) — NIP-13 PoW, proof of burn, Cashu micro-payment
 - [37-cv-trust-model.md](37-cv-trust-model.md) — .cv front-running protection
-- [38-nostr-alignment-research.md](38-nostr-alignment-research.md) — NIP-89, kind 11111 vs 31111, P2PK research
+- [38-nostr-alignment-research.md](38-nostr-alignment-research.md) — NIP-89, kind 11111 vs historical 31111 comparison, P2PK research
 - NIP-89: https://nips.nostr.com/89
 - NIP-31 (alt tags): https://nips.nostr.com/31
 - NUT-11 (P2PK): https://cashubtc.github.io/nuts/11/
