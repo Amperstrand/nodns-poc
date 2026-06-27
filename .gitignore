@@ -31,6 +31,8 @@ nodns-bot-rs/config.toml
 # Test artifacts
 test-results/
 .playwright-mcp/
+playwright-report/
+.playwright-output/
 
 # Package manager (project uses npm)
 pnpm-lock.yaml
