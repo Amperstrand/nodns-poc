@@ -22,7 +22,7 @@ User publishes kind 11111 Nostr event to relay
         │
         ▼
   dns.rs + dns_update_server.rs ── DDNS UPDATE (RFC 2136 + TSIG)
-  cloudflare_backend.rs ── alternative: Cloudflare API (DnsBackend enum)
+  DnsConnector trait ── pluggable backend (Knot DDNS | Cloudflare API | failover)
         │
         ▼
   Knot DNS 3.3.4 ── authoritative, DNSSEC-signed (ECDSAP256SHA256)
@@ -306,8 +306,10 @@ The bot uses `tracing` for structured logging. The frontend calls `GET /api/heal
 ## Source layout
 
 ```
+Cargo.toml                      Workspace root (members: nodns-bot-rs, nodns-connectors)
+
 nodns-bot-rs/src/
-  main.rs                    Entry point: loads config, spawns subscriber + axum HTTP server
+  main.rs                    Entry point: loads config, spawns subscriber + axum HTTP server, ACME recovery sweep, DNSKEY attestation
   types.rs                   Shared types: ParsedEvent, Record, Delegation, etc.
   config.rs                  TOML config loading, multi-zone, per-zone payment, backward compat, validation
   parser.rs                  Kind 11111 tag parsing, record validation, private-IP blocking, TXT length cap
@@ -315,17 +317,15 @@ nodns-bot-rs/src/
   payment.rs                 Cashu token verification via CDK, npub_names_free bypass, dynamic pricing
   event_processor.rs         Orchestrates the full validation pipeline (parse → auth → payment → store → DNS)
   store.rs                   SQLite persistence (rusqlite + Mutex<Connection>), SCHEMA const, AES-256-GCM for ACME keys
-  dns.rs                     DDNS UPDATE message construction (RFC 2136 + TSIG signing)
   dns_update_server.rs       RFC 2136 dynamic update listener (accepts external DDNS)
-  dnssec_derivation.rs       DNSSEC key/record derivation
+  dnssec_derivation.rs       SLIP-10 P-256 DNSSEC key derivation from registrar nsec
   tls_derivation.rs          TLSA (DANE) record derivation
   nip05.rs                   NIP-05 identity verification endpoint
-  acme.rs                    ACME client: Let's Encrypt staging/production, ZeroSSL EAB, DNS-01 challenge
-  epp.rs                    EPP bridge to ccTLD registry (instant-epp 0.4, simulate mode, domain create/delete)
-  classify.rs               Name/mint classification + enforcement matrix (Npub/Testing/Custom × Real/Test)
+  acme.rs                    ACME client: Let's Encrypt/ZeroSSL, DNS-01, crash recovery (key persistence + order sweep)
+  epp.rs                     EPP bridge to ccTLD registry (instant-epp 0.4, simulate mode, domain create/delete)
+  classify.rs                Name/mint classification + enforcement matrix (Npub/Testing/Custom × Real/Test)
   subscriber.rs              Nostr relay subscription (nostr-sdk), reconnect backoff
   security_tests.rs          Security regression tests
-  cloudflare_backend.rs      Cloudflare API DNS backend (DnsBackend enum: Knot | Cloudflare)
   dns_cache.rs               Experimental Nostr-over-DNS event caching (warn-only)
   handlers/
     mod.rs                   Module exports + route registration
@@ -336,6 +336,22 @@ nodns-bot-rs/src/
     dyndns.rs                Dynamic DNS update endpoints
     health.rs                Health check endpoint (/api/health)
     tls_check.rs             TLS certificate verification endpoint
+
+nodns-connectors/              Workspace crate: pluggable DNS backend abstraction
+  src/
+    connector.rs              DnsConnector trait (async: update_record, delete_record, append_record, etc.)
+    dns.rs                    DnsConnector impl for Knot DDNS Updater (RFC 2136 + TSIG)
+    cloudflare_backend.rs     DnsConnector impl for Cloudflare API (record CRUD, rate-limited)
+    circuit_breaker.rs        Circuit breaker for Cloudflare API (suspends on repeated failures)
+    failover.rs               Failover connector (primary → backup switching)
+
+shared/
+  relays.ts                   Single source of truth for relay config (PUBLISH_RELAYS, READ_RELAYS)
+                              imported by frontend, registrar, and CLI
+
+nodns-clientlog-worker/       Cloudflare Worker for client-side error log ingestion
+  src/index.ts                Receives POST /api/client-log, forwards to bot
+  wrangler.toml               Cloudflare Workers config
 
 nodns-cli/src/                 TypeScript CLI (commander, nostr-tools, @cashu/cashu-ts)
   index.ts                    CLI entry point, commander command parsing
@@ -415,6 +431,7 @@ nodns-frontend/src/
     wallet-debug-widget.tsx  Cashu wallet debug panel
     collapsible-section.tsx  Collapsible UI section
     error-boundary.tsx       React error boundary
+    identity-manager.tsx     Identity management (npub display, nsec export/import, identity reset)
     source-indicator.tsx     Data source badge
     protocol-spec.tsx        Protocol specification viewer
     consensus.tsx            Consensus rules display
@@ -655,6 +672,14 @@ Hooks are opt-in via `git config core.hooksPath .githooks`. The pre-commit hook 
 
 - **nodns-nameserver is a separate repo**: Arjen's `$npub.nostr` reference implementation (Go, Khatru relay, 17 DNS record types) is a sibling project, not part of this build. It's documented in the README as related work. Different language (Go), different relay (Khatru vs nostr-sdk), different scope (reference impl vs production bot).
 
+- **DnsConnector trait over DnsBackend enum**: Originally a `DnsBackend` enum with `Ddns` and `Cloudflare` variants. Refactored to a `DnsConnector` async trait in the `nodns-connectors/` workspace crate, enabling third-party implementations, failover, and circuit breaker patterns without changing the bot's event processor.
+
+- **ACME crash recovery via intermediate status tracking**: Orders transition through `pending → ordering → challenge_published → verifying → finalizing → issued/failed`. Private key persisted immediately after generation (not at end of flow). Startup sweep marks non-terminal orders as failed with clear messages.
+
+- **DNSSEC attestation tracks live key**: The bot queries the actual DNSKEY from Knot DNS at startup and attests that (not just the SLIP-10 derived key). If a KSK rollover changes the live key, the attestation automatically tracks it. The SLIP-10 derivation is informational — Knot DNS manages its own keys.
+
+- **Shared relay configuration**: `shared/relays.ts` is the single source of truth for relay config across frontend, registrar, and CLI. All components publish exclusively to `relay.cashu.email`; reading fans out to multiple relays for coverage.
+
 ## Architecture Direction (2026-06)
 
 The system is moving toward a **two-component split**: DNS connector (Knot/Cloudflare/EPP) + payment processor (NIP-17 DM listener). See `docs/45-architecture-direction.md` for the full spec.
@@ -662,8 +687,7 @@ The system is moving toward a **two-component split**: DNS connector (Knot/Cloud
 **Key points:**
 - Kind 11111 events contain record claims only — no payment tags.
 - Payment is sent out-of-band via NIP-17 encrypted DM to the registrar.
-- The `DnsBackend` enum already exists with `Ddns` + `Cloudflare` variants — the connector abstraction is done.
-- EPP needs to become a third `DnsBackend` variant.
+- The `DnsConnector` trait in `nodns-connectors/` provides the backend abstraction (Knot DDNS, Cloudflare API, failover). EPP can become another `DnsConnector` impl.
 - `payment.rs` is already modular — change the input source (DM vs event tag), keep `Verifier` as-is.
 - **Refactor in place. Do NOT rewrite from scratch.**
 
