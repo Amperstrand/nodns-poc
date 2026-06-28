@@ -588,6 +588,24 @@ impl Config {
                 }
             }
         }
+
+        if self.acme.enabled
+            && self.acme.environment == "production"
+            && self
+                .acme
+                .encryption_key
+                .as_deref()
+                .map(str::is_empty)
+                .unwrap_or(true)
+        {
+            return Err(ConfigError::Validation(
+                "acme.encryption_key is required when acme.enabled = true and acme.environment = \"production\". \
+                 Without a persistent key, ACME private keys are unreadable after restart. \
+                 Generate one with: openssl rand -hex 32"
+                    .into(),
+            ));
+        }
+
         Ok(())
     }
 }
