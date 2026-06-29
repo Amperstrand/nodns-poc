@@ -1,7 +1,8 @@
-//! In-memory circuit breaker for Cashu mint calls.
+//! Generic per-key circuit breaker.
 //!
-//! Prevents the bot from hammering a mint that is known to be down or slow.
-//! One breaker is maintained per mint URL. The state machine is:
+//! Prevents hammering a service that is known to be down or slow.
+//! One breaker is maintained per key (mint URL, provider name, etc.).
+//! The state machine is:
 //!
 //! ```text
 //!   Closed --(3 consecutive failures)--> Open
@@ -41,13 +42,13 @@ pub enum CircuitState {
 
 /// Per-mint bookkeeping stored under the breaker.
 #[derive(Clone, Debug)]
-struct MintEntry {
+struct CircuitEntry {
     failures: u32,
     opened_at: Option<Instant>,
     state: CircuitState,
 }
 
-impl Default for MintEntry {
+impl Default for CircuitEntry {
     fn default() -> Self {
         Self {
             failures: 0,
@@ -62,11 +63,11 @@ impl Default for MintEntry {
 /// Methods take `&self` (the inner state is behind a `Mutex`) so a single
 /// instance can be shared globally via [`LazyLock`].
 #[derive(Debug, Default)]
-pub struct MintCircuitBreaker {
-    inner: Mutex<HashMap<String, MintEntry>>,
+pub struct CircuitBreaker {
+    inner: Mutex<HashMap<String, CircuitEntry>>,
 }
 
-impl MintCircuitBreaker {
+impl CircuitBreaker {
     /// Create an empty breaker.
     pub fn new() -> Self {
         Self::default()
@@ -77,7 +78,7 @@ impl MintCircuitBreaker {
     /// Poison only occurs if a thread panicked while holding the lock; our
     /// critical sections are panic-free, so this is purely defensive. On
     /// poison we take the inner guard anyway so the bot keeps serving.
-    fn lock(&self) -> MutexGuard<'_, HashMap<String, MintEntry>> {
+    fn lock(&self) -> MutexGuard<'_, HashMap<String, CircuitEntry>> {
         self.inner
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
@@ -181,15 +182,15 @@ impl MintCircuitBreaker {
 }
 
 /// Global singleton breaker used by the payment verifier.
-pub static MINT_CIRCUITS: std::sync::LazyLock<MintCircuitBreaker> =
-    std::sync::LazyLock::new(MintCircuitBreaker::new);
+pub static MINT_CIRCUITS: std::sync::LazyLock<CircuitBreaker> =
+    std::sync::LazyLock::new(CircuitBreaker::new);
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn fresh() -> MintCircuitBreaker {
-        MintCircuitBreaker::new()
+    fn fresh() -> CircuitBreaker {
+        CircuitBreaker::new()
     }
 
     #[test]

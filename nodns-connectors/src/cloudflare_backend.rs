@@ -5,15 +5,12 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
 
 use tokio::sync::Mutex;
 use tracing::{debug, info, warn};
 
 const API_BASE: &str = "https://api.cloudflare.com/client/v4";
 const MAX_RETRIES: u32 = 3;
-const CIRCUIT_FAILURE_THRESHOLD: u32 = 3;
-const CIRCUIT_COOLDOWN: Duration = Duration::from_secs(5 * 60);
 
 #[derive(Debug, thiserror::Error)]
 pub enum CloudflareError {
@@ -42,51 +39,12 @@ pub struct CloudflareRecord {
     pub ttl: u32,
 }
 
-struct CircuitBreaker {
-    consecutive_failures: u32,
-    open_until: Option<Instant>,
-}
-
-impl CircuitBreaker {
-    const fn new() -> Self {
-        Self {
-            consecutive_failures: 0,
-            open_until: None,
-        }
-    }
-
-    fn is_open(&self) -> bool {
-        matches!(self.open_until, Some(deadline) if deadline > Instant::now())
-    }
-
-    fn record_success(&mut self) {
-        if self.consecutive_failures > 0 || self.open_until.is_some() {
-            info!("Cloudflare circuit breaker closed — recovered after success");
-        }
-        self.consecutive_failures = 0;
-        self.open_until = None;
-    }
-
-    fn record_failure(&mut self) {
-        self.consecutive_failures += 1;
-        if self.consecutive_failures >= CIRCUIT_FAILURE_THRESHOLD && !self.is_open() {
-            self.open_until = Some(Instant::now() + CIRCUIT_COOLDOWN);
-            warn!(
-                failures = self.consecutive_failures,
-                cooldown_secs = CIRCUIT_COOLDOWN.as_secs(),
-                "Cloudflare circuit breaker OPENED — API calls suspended for 5 minutes"
-            );
-        }
-    }
-}
-
 pub struct CloudflareBackend {
     api_token: String,
     zone_id: String,
     api_base: String,
     client: reqwest::Client,
     record_ids: Arc<Mutex<HashMap<String, String>>>,
-    circuit: Arc<Mutex<CircuitBreaker>>,
 }
 
 impl CloudflareBackend {
@@ -103,16 +61,7 @@ impl CloudflareBackend {
             api_base,
             client: reqwest::Client::new(),
             record_ids: Arc::new(Mutex::new(HashMap::new())),
-            circuit: Arc::new(Mutex::new(CircuitBreaker::new())),
         }
-    }
-
-    async fn check_circuit(&self) -> Result<()> {
-        let cb = self.circuit.lock().await;
-        if cb.is_open() {
-            return Err(CloudflareError::CircuitOpen);
-        }
-        Ok(())
     }
 
     fn cache_key(fqdn: &str, record_type: &str) -> String {
@@ -132,8 +81,6 @@ impl CloudflareBackend {
             }
         }
 
-        self.check_circuit().await?;
-
         let url = format!("{}/zones/{}/dns_records", self.api_base, self.zone_id);
 
         let resp = match self
@@ -146,7 +93,6 @@ impl CloudflareBackend {
         {
             Ok(r) => r,
             Err(e) => {
-                self.record_circuit_failure().await;
                 return Err(CloudflareError::Request(e.to_string()));
             }
         };
@@ -155,7 +101,6 @@ impl CloudflareBackend {
         let body: serde_json::Value = match resp.json().await {
             Ok(b) => b,
             Err(e) => {
-                self.record_circuit_failure().await;
                 return Err(CloudflareError::Parse(e.to_string()));
             }
         };
@@ -164,14 +109,11 @@ impl CloudflareBackend {
             let msg = body["errors"][0]["message"]
                 .as_str()
                 .unwrap_or("unknown error");
-            self.record_circuit_failure().await;
             return Err(CloudflareError::Api {
                 status: status.as_u16(),
                 message: msg.into(),
             });
         }
-
-        self.record_circuit_success().await;
 
         let result_array = body["result"]
             .as_array()
@@ -277,8 +219,6 @@ impl CloudflareBackend {
         method: reqwest::Method,
         payload: Option<&serde_json::Value>,
     ) -> Result<serde_json::Value> {
-        self.check_circuit().await?;
-
         let mut attempt = 0u32;
         loop {
             attempt += 1;
@@ -296,7 +236,6 @@ impl CloudflareBackend {
             let resp = match req.send().await {
                 Ok(r) => r,
                 Err(e) => {
-                    self.record_circuit_failure().await;
                     return Err(CloudflareError::Request(e.to_string()));
                 }
             };
@@ -317,24 +256,20 @@ impl CloudflareBackend {
             let body: serde_json::Value = match resp.json().await {
                 Ok(b) => b,
                 Err(e) => {
-                    self.record_circuit_failure().await;
                     return Err(CloudflareError::Parse(e.to_string()));
                 }
             };
 
             if !status.is_success() {
                 if status.as_u16() == 429 {
-                    self.record_circuit_failure().await;
                     return Err(CloudflareError::RateLimited);
                 }
                 let msg = body["errors"][0]["message"]
                     .as_str()
                     .unwrap_or("unknown error");
-                self.record_circuit_failure().await;
                 return Err(CloudflareError::Api { status: status.as_u16(), message: msg.into() });
             }
 
-            self.record_circuit_success().await;
             return Ok(body);
         }
     }
@@ -368,16 +303,6 @@ impl CloudflareBackend {
             .collect();
 
         Ok(records)
-    }
-
-    async fn record_circuit_success(&self) {
-        let mut cb = self.circuit.lock().await;
-        cb.record_success();
-    }
-
-    async fn record_circuit_failure(&self) {
-        let mut cb = self.circuit.lock().await;
-        cb.record_failure();
     }
 
     pub async fn upsert_record(
@@ -415,8 +340,6 @@ impl CloudflareBackend {
     }
 
     pub async fn health_check(&self) -> Result<()> {
-        self.check_circuit().await?;
-
         let url = format!("{}/zones/{}", self.api_base, self.zone_id);
 
         let resp = match self
@@ -428,7 +351,6 @@ impl CloudflareBackend {
         {
             Ok(r) => r,
             Err(e) => {
-                self.record_circuit_failure().await;
                 return Err(CloudflareError::Request(
                     format!("health check failed: {e}")
                 ));
@@ -436,14 +358,12 @@ impl CloudflareBackend {
         };
 
         if !resp.status().is_success() {
-            self.record_circuit_failure().await;
             return Err(CloudflareError::Api {
                 status: resp.status().as_u16(),
                 message: format!("health check returned {}", resp.status()),
             });
         }
 
-        self.record_circuit_success().await;
         info!(zone_id = %self.zone_id, "Cloudflare connection test passed");
         Ok(())
     }
@@ -547,41 +467,6 @@ mod tests {
         let backend = CloudflareBackend::new("token123".into(), "zone456".into());
         assert_eq!(backend.api_token, "token123");
         assert_eq!(backend.zone_id, "zone456");
-    }
-
-    #[test]
-    fn circuit_breaker_starts_closed() {
-        let cb = CircuitBreaker::new();
-        assert!(!cb.is_open());
-    }
-
-    #[test]
-    fn circuit_breaker_opens_after_threshold() {
-        let mut cb = CircuitBreaker::new();
-        for _ in 0..CIRCUIT_FAILURE_THRESHOLD {
-            cb.record_failure();
-        }
-        assert!(cb.is_open());
-    }
-
-    #[test]
-    fn circuit_breaker_resets_on_success() {
-        let mut cb = CircuitBreaker::new();
-        cb.record_failure();
-        cb.record_failure();
-        cb.record_success();
-        assert!(!cb.is_open());
-        assert_eq!(cb.consecutive_failures, 0);
-    }
-
-    #[tokio::test]
-    async fn circuit_breaker_suspends_api_calls() {
-        let backend = CloudflareBackend::new("token".into(), "zone".into());
-        for _ in 0..CIRCUIT_FAILURE_THRESHOLD {
-            backend.record_circuit_failure().await;
-        }
-        let result = backend.check_circuit().await;
-        assert!(result.is_err());
     }
 
     #[cfg(test)]
@@ -962,6 +847,44 @@ mod tests {
                 msg.contains("403"),
                 "error should mention the failing status: {msg}"
             );
+        }
+
+        #[tokio::test]
+        async fn list_records_returns_filtered_records() {
+            let server = MockServer::start().await;
+            let backend = backend(server.uri());
+
+            Mock::given(method("GET"))
+                .and(path(dns_records_path()))
+                .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                    "success": true,
+                    "result": [
+                        { "id": "rec-1", "name": "npub1abc.nostr", "type": "A", "content": "1.2.3.4", "ttl": 3600 },
+                        { "id": "rec-2", "name": "www.npub1abc.nostr", "type": "CNAME", "content": "example.com", "ttl": 3600 },
+                        { "id": "rec-3", "name": "npub1xyz.nostr", "type": "A", "content": "5.6.7.8", "ttl": 3600 },
+                        { "id": "rec-4", "name": "other.example.com", "type": "TXT", "content": "hello", "ttl": 3600 }
+                    ]
+                })))
+                .expect(1)
+                .mount(&server)
+                .await;
+
+            let records = backend
+                .list_records("npub1abc.nostr")
+                .await
+                .expect("list_records should succeed");
+
+            assert_eq!(
+                records.len(),
+                2,
+                "should return only records ending with npub1abc.nostr"
+            );
+            assert_eq!(records[0].id, "rec-1");
+            assert_eq!(records[0].name, "npub1abc.nostr");
+            assert_eq!(records[0].rtype, "A");
+            assert_eq!(records[1].id, "rec-2");
+            assert_eq!(records[1].name, "www.npub1abc.nostr");
+            assert_eq!(records[1].rtype, "CNAME");
         }
     }
 }

@@ -815,4 +815,77 @@ mod tests {
             other => panic!("expected TagError, got {other:?}"),
         }
     }
+
+    #[test]
+    fn hostname_simple_valid() {
+        assert!(validate_hostname("example.com").is_ok());
+    }
+
+    #[test]
+    fn hostname_multi_label_valid() {
+        assert!(validate_hostname("mail.sub.example.com").is_ok());
+    }
+
+    #[test]
+    fn hostname_trailing_dot_valid() {
+        assert!(validate_hostname("example.com.").is_ok());
+    }
+
+    #[test]
+    fn hostname_single_label_valid() {
+        assert!(validate_hostname("localhost").is_ok());
+    }
+
+    #[test]
+    fn hostname_with_underscore_valid() {
+        assert!(validate_hostname("_dmarc.example.com").is_ok());
+        assert!(validate_hostname("_sip._tcp.example.com").is_ok());
+    }
+
+    #[test]
+    fn hostname_empty_rejected() {
+        assert!(validate_hostname("").is_err());
+    }
+
+    #[test]
+    fn hostname_empty_label_rejected() {
+        assert!(validate_hostname("example..com").is_err());
+        assert!(validate_hostname(".example.com").is_err());
+    }
+
+    #[test]
+    fn hostname_label_too_long_rejected() {
+        let long_label = "a".repeat(64);
+        assert!(validate_hostname(&format!("{long_label}.com")).is_err());
+    }
+
+    #[test]
+    fn hostname_total_too_long_rejected() {
+        let very_long = (0..5)
+            .map(|_| "x".repeat(63))
+            .collect::<Vec<_>>()
+            .join(".");
+        assert!(validate_hostname(&very_long).is_err());
+    }
+
+    #[test]
+    fn hostname_leading_hyphen_in_label_rejected() {
+        assert!(validate_hostname("-bad.example.com").is_err());
+    }
+
+    #[test]
+    fn hostname_trailing_hyphen_in_label_rejected() {
+        assert!(validate_hostname("bad-.example.com").is_err());
+    }
+
+    #[test]
+    fn hostname_special_chars_rejected() {
+        assert!(validate_hostname("exam!ple.com").is_err());
+        assert!(validate_hostname("example .com").is_err());
+    }
+
+    #[test]
+    fn hostname_uppercase_allowed() {
+        assert!(validate_hostname("Example.COM").is_ok());
+    }
 }
