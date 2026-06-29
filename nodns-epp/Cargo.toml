@@ -1,0 +1,13 @@
+[package]
+name = "nodns-epp"
+version = "0.1.0"
+edition = "2021"
+description = "NoDNS EPP client — .cv registry integration (RFC 5730-5734)"
+
+[dependencies]
+instant-epp = "0.4"
+serde = { version = "1", features = ["derive"] }
+thiserror = "2"
+tokio = { version = "1", features = ["sync", "macros", "rt"] }
+tracing = "0.1"
+uuid = { version = "1", features = ["v4"] }

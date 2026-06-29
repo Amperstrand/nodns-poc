@@ -7,8 +7,6 @@ mod config;
 mod dns_cache;
 mod dns_update_server;
 mod dnssec_derivation;
-#[allow(dead_code)]
-mod epp;
 mod event_processor;
 mod handlers;
 mod nip05;
@@ -213,7 +211,7 @@ async fn lease_expiry_task(
 async fn test_record_cleanup_task(
     store: Arc<Store>,
     updaters: Arc<HashMap<String, Arc<dyn DnsConnector>>>,
-    epp_pool: Option<Arc<epp::EppPool>>,
+    epp_pool: Option<Arc<nodns_epp::EppPool>>,
 ) {
     let mut interval = tokio::time::interval(std::time::Duration::from_secs(3600));
     loop {
@@ -353,8 +351,8 @@ async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
         );
     }
 
-    let epp_pool: Option<Arc<epp::EppPool>> = if cfg.epp.pool_size > 0 {
-        let pool = Arc::new(epp::EppPool::new(cfg.epp.clone()).await?);
+    let epp_pool: Option<Arc<nodns_epp::EppPool>> = if cfg.epp.pool_size > 0 {
+        let pool = Arc::new(nodns_epp::EppPool::new(cfg.epp.clone()).await?);
         info!(host = %cfg.epp.host, simulated = cfg.epp.simulate, "EPP pool constructed");
         Some(pool)
     } else {

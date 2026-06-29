@@ -77,7 +77,7 @@ pub struct Config {
     pub dns_update: DnsUpdateConfig,
 
     #[serde(default)]
-    pub epp: crate::epp::EppConfig,
+    pub epp: nodns_epp::EppConfig,
 }
 
 // ---------------------------------------------------------------------------

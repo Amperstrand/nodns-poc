@@ -82,7 +82,7 @@ pub async fn process_nostr_event(
     authority: &auth::AuthorityChecker,
     zone_verifiers: &HashMap<String, Verifier>,
     metrics: &Metrics,
-    epp_pool: Option<&crate::epp::EppPool>,
+    epp_pool: Option<&nodns_epp::EppPool>,
 ) {
     let event_id = evt.id.to_hex();
     let pubkey_hex = evt.pubkey.to_hex();
@@ -725,7 +725,7 @@ async fn process_dns_update(
     authority: &auth::AuthorityChecker,
     zone_verifiers: &HashMap<String, Verifier>,
     metrics: &Metrics,
-    epp_pool: Option<&crate::epp::EppPool>,
+    epp_pool: Option<&nodns_epp::EppPool>,
 ) {
     if parsed.records.is_empty() {
         return;

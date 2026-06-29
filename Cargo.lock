@@ -2460,9 +2460,9 @@ dependencies = [
  "http",
  "humantime",
  "instant-acme",
- "instant-epp",
  "ipnet",
  "nodns-connectors",
+ "nodns-epp",
  "nodns-protocol",
  "nostr-sdk",
  "p256",
@@ -2501,6 +2501,18 @@ dependencies = [
  "tokio",
  "tracing",
  "wiremock",
+]
+
+[[package]]
+name = "nodns-epp"
+version = "0.1.0"
+dependencies = [
+ "instant-epp",
+ "serde",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "uuid",
 ]
 
 [[package]]
