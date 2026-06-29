@@ -5,16 +5,21 @@
 //! from Nostr event tags.
 
 use std::collections::HashSet;
-use std::net::IpAddr;
-use std::str::FromStr;
 
 use nostr_sdk::prelude::*;
 use thiserror::Error;
 
+use nodns_protocol::{self, ValidationPolicy};
+
 use crate::types::{
     is_dns_kind, ClaimRequest, Delegation, DeleteRequest, DnsRecord, ParsedEvent, Payment,
-    RegistrarKey, RenewalRequest, DEFAULT_TTL,
+    RegistrarKey, RenewalRequest,
 };
+
+#[cfg(test)]
+use nodns_protocol::is_private_ip;
+#[cfg(test)]
+use std::net::IpAddr;
 
 #[derive(Error, Debug)]
 pub enum ParserError {
@@ -28,28 +33,6 @@ pub enum ParserError {
     NoRecognizedTags,
     #[error("CNAME records cannot coexist with other record types at the same name")]
     CannotCoexistWithCname,
-}
-
-/// Private/reserved IP networks that should be blocked.
-const PRIVATE_NETWORKS: &[&str] = &[
-    "10.0.0.0/8",
-    "172.16.0.0/12",
-    "192.168.0.0/16",
-    "127.0.0.0/8",
-    "169.254.0.0/16",
-    "0.0.0.0/8",
-    "100.64.0.0/10",
-    "fc00::/7",
-    "fe80::/10",
-    "::1/128",
-];
-
-/// Check if an IP address is in a private/reserved range.
-fn is_private_ip(ip: IpAddr) -> bool {
-    PRIVATE_NETWORKS
-        .iter()
-        .filter_map(|cidr| ipnet::IpNet::from_str(cidr).ok())
-        .any(|net| net.contains(&ip))
 }
 
 /// Parse all tags and classify the event.
@@ -453,127 +436,41 @@ pub fn parse_record_tag(
         ));
     }
 
-    let allowed_set: HashSet<String> = allowed_types.iter().map(|t| t.to_uppercase()).collect();
+    let normalized = normalize_legacy_tag(tag);
 
-    match tag.len() {
-        5 => parse_new_format(tag, &allowed_set, block_private_ip, max_txt_length),
-        11 => parse_legacy_format(tag, &allowed_set, block_private_ip, max_txt_length),
-        _ => Err(ParserError::Validation(format!(
-            "record tag must have 5 or 11 elements, got {}",
-            tag.len()
-        ))),
-    }
+    let policy = ValidationPolicy {
+        allowed_types: allowed_types.to_vec(),
+        block_private_ip,
+        max_txt_length,
+    };
+
+    let rec = nodns_protocol::parse_record(&normalized, &policy)
+        .map_err(|e| ParserError::Validation(e.to_string()))?;
+
+    Ok(DnsRecord {
+        record_type: rec.rtype,
+        name: rec.name,
+        ttl: rec.ttl,
+        rdata: rec.rdata,
+    })
 }
 
-/// Handle 5-element format: `["record", "TYPE", "name", "TTL", "rdata"]`.
-fn parse_new_format(
-    tag: &[String],
-    allowed_types: &HashSet<String>,
-    block_private_ip: bool,
-    max_txt_length: usize,
-) -> Result<DnsRecord, ParserError> {
-    let rtype = tag[1].to_uppercase();
-    if rtype.is_empty() {
-        return Err(ParserError::Validation(
-            "record type cannot be empty".to_string(),
-        ));
-    }
-    if !allowed_types.is_empty() && !allowed_types.contains(&rtype) {
-        return Err(ParserError::Validation(format!(
-            "record type {rtype:?} not allowed"
-        )));
-    }
-
-    let name = if tag[2].is_empty() {
-        "@".to_string()
+fn normalize_legacy_tag(tag: &[String]) -> Vec<String> {
+    if tag.len() == 11 && tag[0] == "record" {
+        let rdata_parts: Vec<&str> = (3..=9)
+            .filter(|&i| !tag[i].is_empty())
+            .map(|i| tag[i].as_str())
+            .collect();
+        vec![
+            "record".to_string(),
+            tag[1].clone(),
+            tag[2].clone(),
+            tag[10].clone(),
+            rdata_parts.join(" "),
+        ]
     } else {
-        tag[2].clone()
-    };
-
-    validate_dns_label(&name)?;
-
-    let rdata = tag[4].clone();
-
-    let mut ttl = DEFAULT_TTL;
-    if !tag[3].is_empty() {
-        let parsed: u32 = tag[3]
-            .parse()
-            .map_err(|e| ParserError::Validation(format!("invalid TTL {:?}: {}", tag[3], e)))?;
-        ttl = parsed;
+        tag.to_vec()
     }
-    if ttl == 0 {
-        ttl = DEFAULT_TTL;
-    }
-
-    let rec = DnsRecord {
-        record_type: rtype,
-        name,
-        rdata,
-        ttl,
-    };
-
-    validate_record(&rec, block_private_ip, max_txt_length)?;
-
-    Ok(rec)
-}
-
-/// Handle 11-element legacy format:
-/// `["record", "TYPE", "name", "pos1", "pos2", "pos3", "pos4", "pos5", "pos6", "pos7", "ttl"]`
-fn parse_legacy_format(
-    tag: &[String],
-    allowed_types: &HashSet<String>,
-    block_private_ip: bool,
-    max_txt_length: usize,
-) -> Result<DnsRecord, ParserError> {
-    let rtype = tag[1].to_uppercase();
-    if rtype.is_empty() {
-        return Err(ParserError::Validation(
-            "record type cannot be empty".to_string(),
-        ));
-    }
-    if !allowed_types.is_empty() && !allowed_types.contains(&rtype) {
-        return Err(ParserError::Validation(format!(
-            "record type {rtype:?} not allowed"
-        )));
-    }
-
-    let name = if tag[2].is_empty() {
-        "@".to_string()
-    } else {
-        tag[2].clone()
-    };
-
-    validate_dns_label(&name)?;
-
-    // Reconstruct rdata from positions 3-9 (indices 3..=9) by joining non-empty values
-    let rdata_parts: Vec<&str> = (3..=9)
-        .filter(|&i| !tag[i].is_empty())
-        .map(|i| tag[i].as_str())
-        .collect();
-    let rdata = rdata_parts.join(" ");
-
-    // TTL from position 10 (index 10)
-    let mut ttl = DEFAULT_TTL;
-    if !tag[10].is_empty() {
-        let parsed: u32 = tag[10]
-            .parse()
-            .map_err(|e| ParserError::Validation(format!("invalid TTL {:?}: {}", tag[10], e)))?;
-        ttl = parsed;
-    }
-    if ttl == 0 {
-        ttl = DEFAULT_TTL;
-    }
-
-    let rec = DnsRecord {
-        record_type: rtype,
-        name,
-        rdata,
-        ttl,
-    };
-
-    validate_record(&rec, block_private_ip, max_txt_length)?;
-
-    Ok(rec)
 }
 
 /// Validate a DNS label (the `name` field that becomes a subdomain label).
@@ -617,134 +514,31 @@ pub fn validate_dns_label(name: &str) -> Result<(), ParserError> {
     Ok(())
 }
 
-/// Perform type-specific validation on a parsed record.
+#[cfg(test)]
 fn validate_record(
     rec: &DnsRecord,
     block_private_ip: bool,
     max_txt_length: usize,
 ) -> Result<(), ParserError> {
-    if rec.rdata.is_empty() && rec.record_type != "TXT" {
-        return Err(ParserError::Validation(format!(
-            "{} record requires rdata",
-            rec.record_type
-        )));
-    }
-
-    if rec.record_type == "TXT" && max_txt_length > 0 && rec.rdata.len() > max_txt_length {
-        return Err(ParserError::Validation(format!(
-            "TXT record exceeds max length {}: got {}",
-            max_txt_length,
-            rec.rdata.len()
-        )));
-    }
-
-    let fields: Vec<&str> = rec.rdata.split_whitespace().collect();
-
-    match rec.record_type.as_str() {
-        "A" => {
-            let a: hickory_proto::rr::rdata::A = rec.rdata.parse().map_err(|_| {
-                ParserError::Validation(format!("invalid IPv4 address: {}", rec.rdata))
-            })?;
-            if block_private_ip && is_private_ip(IpAddr::from(*a)) {
-                return Err(ParserError::Validation(format!(
-                    "private IP address blocked: {}",
-                    rec.rdata
-                )));
-            }
-        }
-        "AAAA" => {
-            let aaaa: hickory_proto::rr::rdata::AAAA = rec.rdata.parse().map_err(|_| {
-                ParserError::Validation(format!("invalid IPv6 address: {}", rec.rdata))
-            })?;
-            if block_private_ip && is_private_ip(IpAddr::from(*aaaa)) {
-                return Err(ParserError::Validation(format!(
-                    "private IP address blocked: {}",
-                    rec.rdata
-                )));
-            }
-        }
-        "CNAME" | "NS" | "PTR" => {
-            if rec.rdata.is_empty() {
-                return Err(ParserError::Validation(format!(
-                    "{} record requires target domain",
-                    rec.record_type
-                )));
-            }
-            rec.rdata
-                .parse::<hickory_proto::rr::domain::Name>()
-                .map_err(|_| {
-                    ParserError::Validation(format!(
-                        "invalid {} domain name: {}",
-                        rec.record_type, rec.rdata
-                    ))
-                })?;
-        }
-        "TXT" => {
-            if rec.name == "_dmarc" {
-                return Err(ParserError::Validation(
-                    "TXT record with name '_dmarc' is reserved (DMARC spoofing protection)"
-                        .to_string(),
-                ));
-            }
-            if rec.name.starts_with("_domainkey") {
-                return Err(ParserError::Validation(
-                    "TXT record with name starting with '_domainkey' is reserved (DKIM spoofing protection)"
-                        .to_string(),
-                ));
-            }
-            if rec.name == "@" && rec.rdata.trim().starts_with("v=spf1") {
-                return Err(ParserError::Validation(
-                    "TXT record at apex with SPF data is reserved (SPF spoofing protection)"
-                        .to_string(),
-                ));
-            }
-        }
-        "MX" => {
-            if fields.len() < 2 {
-                return Err(ParserError::Validation(
-                    "MX record requires: priority mailserver".to_string(),
-                ));
-            }
-            let _priority: u16 = fields[0].parse().map_err(|_| {
-                ParserError::Validation(format!("invalid MX priority: {}", fields[0]))
-            })?;
-            fields[1]
-                .parse::<hickory_proto::rr::domain::Name>()
-                .map_err(|_| {
-                    ParserError::Validation(format!("invalid MX exchange domain: {}", fields[1]))
-                })?;
-        }
-        "SRV" => {
-            if fields.len() < 4 {
-                return Err(ParserError::Validation(
-                    "SRV record requires: priority weight port target".to_string(),
-                ));
-            }
-            for (i, field_name) in ["priority", "weight", "port"].iter().enumerate() {
-                let _: u16 = fields[i].parse().map_err(|_| {
-                    ParserError::Validation(format!("invalid SRV {}: {}", field_name, fields[i]))
-                })?;
-            }
-            fields[3]
-                .parse::<hickory_proto::rr::domain::Name>()
-                .map_err(|_| {
-                    ParserError::Validation(format!("invalid SRV target domain: {}", fields[3]))
-                })?;
-        }
-        _ => {
-            return Err(ParserError::Validation(format!(
-                "unsupported record type: {}",
-                rec.record_type
-            )));
-        }
-    }
-
-    Ok(())
+    let proto_rec = nodns_protocol::Record {
+        rtype: rec.record_type.clone(),
+        name: rec.name.clone(),
+        ttl: rec.ttl,
+        rdata: rec.rdata.clone(),
+    };
+    let policy = ValidationPolicy {
+        allowed_types: vec![],
+        block_private_ip,
+        max_txt_length,
+    };
+    nodns_protocol::validate_record(&proto_rec, &policy)
+        .map_err(|e| ParserError::Validation(e.to_string()))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::types::DEFAULT_TTL;
 
     #[test]
     fn test_is_private_ip_v4() {
@@ -858,7 +652,7 @@ mod tests {
     fn test_parse_record_tag_wrong_length() {
         let tag: Vec<String> = vec!["record".to_string(), "A".to_string()];
         let err = parse_record_tag(&tag, &[], false, 0).unwrap_err();
-        assert!(err.to_string().contains("must have 5 or 11 elements"));
+        assert!(err.to_string().contains("must have 5 elements"));
     }
 
     #[test]
@@ -1624,7 +1418,7 @@ mod tests {
             "invalid..double..dot".to_string(),
         ];
         let err = parse_record_tag(&tag, &[], false, 0).unwrap_err();
-        assert!(err.to_string().contains("invalid CNAME domain name"));
+        assert!(err.to_string().contains("empty label") || err.to_string().contains("domain"));
     }
 
     #[test]

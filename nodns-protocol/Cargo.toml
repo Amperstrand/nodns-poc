@@ -1,0 +1,9 @@
+[package]
+name = "nodns-protocol"
+version = "0.1.0"
+edition = "2021"
+description = "NoDNS record event parser — parse and validate kind 11111 record tags"
+
+[dependencies]
+thiserror = "2"
+ipnet = "2"

@@ -89,5 +89,8 @@ regex = "1"
 # NoDNS connector library (DNS backends: Knot DDNS, Cloudflare, failover)
 nodns-connectors = { path = "../nodns-connectors" }
 
+# NoDNS protocol library (kind 11111 record parsing + validation)
+nodns-protocol = { path = "../nodns-protocol" }
+
 # Error abstraction for DnsConnector trait
 anyhow = "1"

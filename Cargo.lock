@@ -2463,6 +2463,7 @@ dependencies = [
  "instant-epp",
  "ipnet",
  "nodns-connectors",
+ "nodns-protocol",
  "nostr-sdk",
  "p256",
  "pkcs8",
@@ -2500,6 +2501,14 @@ dependencies = [
  "tokio",
  "tracing",
  "wiremock",
+]
+
+[[package]]
+name = "nodns-protocol"
+version = "0.1.0"
+dependencies = [
+ "ipnet",
+ "thiserror 2.0.18",
 ]
 
 [[package]]
