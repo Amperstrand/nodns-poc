@@ -10,12 +10,37 @@ use std::time::{Duration, Instant};
 use tokio::sync::Mutex;
 use tracing::{debug, info, warn};
 
-use crate::dns::{DnsError, Result};
-
 const API_BASE: &str = "https://api.cloudflare.com/client/v4";
 const MAX_RETRIES: u32 = 3;
 const CIRCUIT_FAILURE_THRESHOLD: u32 = 3;
 const CIRCUIT_COOLDOWN: Duration = Duration::from_secs(5 * 60);
+
+#[derive(Debug, thiserror::Error)]
+pub enum CloudflareError {
+    #[error("Cloudflare API error ({status}): {message}")]
+    Api { status: u16, message: String },
+    #[error("Cloudflare rate limit exceeded after retries")]
+    RateLimited,
+    #[error("Cloudflare circuit breaker is open — API calls suspended")]
+    CircuitOpen,
+    #[error("Cloudflare API request failed: {0}")]
+    Request(String),
+    #[error("Cloudflare API response parse failed: {0}")]
+    Parse(String),
+    #[error("Cloudflare API: {0}")]
+    Other(String),
+}
+
+pub type Result<T> = std::result::Result<T, CloudflareError>;
+
+#[derive(Debug, Clone)]
+pub struct CloudflareRecord {
+    pub id: String,
+    pub name: String,
+    pub rtype: String,
+    pub content: String,
+    pub ttl: u32,
+}
 
 struct CircuitBreaker {
     consecutive_failures: u32,
@@ -85,9 +110,7 @@ impl CloudflareBackend {
     async fn check_circuit(&self) -> Result<()> {
         let cb = self.circuit.lock().await;
         if cb.is_open() {
-            return Err(DnsError::Dns(
-                "Cloudflare circuit breaker is open — API calls suspended".into(),
-            ));
+            return Err(CloudflareError::CircuitOpen);
         }
         Ok(())
     }
@@ -100,7 +123,7 @@ impl CloudflareBackend {
         )
     }
 
-    async fn find_record_id(&self, fqdn: &str, record_type: &str) -> Result<Option<String>> {
+    pub async fn find_record_id(&self, fqdn: &str, record_type: &str) -> Result<Option<String>> {
         let key = Self::cache_key(fqdn, record_type);
         {
             let cache = self.record_ids.lock().await;
@@ -124,7 +147,7 @@ impl CloudflareBackend {
             Ok(r) => r,
             Err(e) => {
                 self.record_circuit_failure().await;
-                return Err(DnsError::Dns(format!("Cloudflare API request failed: {e}")));
+                return Err(CloudflareError::Request(e.to_string()));
             }
         };
 
@@ -133,7 +156,7 @@ impl CloudflareBackend {
             Ok(b) => b,
             Err(e) => {
                 self.record_circuit_failure().await;
-                return Err(DnsError::Dns(format!("Cloudflare API parse failed: {e}")));
+                return Err(CloudflareError::Parse(e.to_string()));
             }
         };
 
@@ -142,18 +165,17 @@ impl CloudflareBackend {
                 .as_str()
                 .unwrap_or("unknown error");
             self.record_circuit_failure().await;
-            return Err(DnsError::Dns(format!(
-                "Cloudflare API error ({}): {}",
-                status.as_u16(),
-                msg
-            )));
+            return Err(CloudflareError::Api {
+                status: status.as_u16(),
+                message: msg.into(),
+            });
         }
 
         self.record_circuit_success().await;
 
         let result_array = body["result"]
             .as_array()
-            .ok_or_else(|| DnsError::Dns("Cloudflare API: unexpected response shape".into()))?;
+            .ok_or_else(|| CloudflareError::Other("unexpected response shape".into()))?;
 
         if result_array.is_empty() {
             return Ok(None);
@@ -161,7 +183,7 @@ impl CloudflareBackend {
 
         let id = result_array[0]["id"]
             .as_str()
-            .ok_or_else(|| DnsError::Dns("Cloudflare API: missing record id".into()))?
+            .ok_or_else(|| CloudflareError::Other("missing record id".into()))?
             .to_string();
 
         let mut cache = self.record_ids.lock().await;
@@ -170,7 +192,7 @@ impl CloudflareBackend {
         Ok(Some(id))
     }
 
-    async fn create_record(
+    pub async fn create_record(
         &self,
         fqdn: &str,
         record_type: &str,
@@ -193,7 +215,7 @@ impl CloudflareBackend {
 
         let id = resp["result"]["id"]
             .as_str()
-            .ok_or_else(|| DnsError::Dns("Cloudflare API: missing id in create response".into()))?
+            .ok_or_else(|| CloudflareError::Other("missing id in create response".into()))?
             .to_string();
 
         let key = Self::cache_key(fqdn, record_type);
@@ -204,7 +226,7 @@ impl CloudflareBackend {
         Ok(())
     }
 
-    async fn patch_record(
+    pub async fn patch_record(
         &self,
         record_id: &str,
         fqdn: &str,
@@ -232,7 +254,7 @@ impl CloudflareBackend {
         Ok(())
     }
 
-    async fn delete_record_by_id(&self, record_id: &str, fqdn: &str) -> Result<()> {
+    pub async fn delete_record_by_id(&self, record_id: &str, fqdn: &str) -> Result<()> {
         let url = format!(
             "{}/zones/{}/dns_records/{}",
             self.api_base, self.zone_id, record_id
@@ -275,7 +297,7 @@ impl CloudflareBackend {
                 Ok(r) => r,
                 Err(e) => {
                     self.record_circuit_failure().await;
-                    return Err(DnsError::Dns(format!("Cloudflare API request failed: {e}")));
+                    return Err(CloudflareError::Request(e.to_string()));
                 }
             };
 
@@ -296,31 +318,56 @@ impl CloudflareBackend {
                 Ok(b) => b,
                 Err(e) => {
                     self.record_circuit_failure().await;
-                    return Err(DnsError::Dns(format!("Cloudflare API parse failed: {e}")));
+                    return Err(CloudflareError::Parse(e.to_string()));
                 }
             };
 
             if !status.is_success() {
                 if status.as_u16() == 429 {
                     self.record_circuit_failure().await;
-                    return Err(DnsError::Dns(
-                        "Cloudflare rate limit exceeded after retries".into(),
-                    ));
+                    return Err(CloudflareError::RateLimited);
                 }
                 let msg = body["errors"][0]["message"]
                     .as_str()
                     .unwrap_or("unknown error");
                 self.record_circuit_failure().await;
-                return Err(DnsError::Dns(format!(
-                    "Cloudflare API error ({}): {}",
-                    status.as_u16(),
-                    msg
-                )));
+                return Err(CloudflareError::Api { status: status.as_u16(), message: msg.into() });
             }
 
             self.record_circuit_success().await;
             return Ok(body);
         }
+    }
+
+    pub async fn list_records(&self, name_prefix: &str) -> Result<Vec<CloudflareRecord>> {
+        let url = format!("{}/zones/{}/dns_records", self.api_base, self.zone_id);
+        let body = self
+            .send_with_retry(&url, reqwest::Method::GET, None)
+            .await?;
+
+        let result_array = body["result"]
+            .as_array()
+            .ok_or_else(|| CloudflareError::Other("unexpected response shape".into()))?;
+
+        let prefix_lower = name_prefix.trim_end_matches('.').to_lowercase();
+        let records = result_array
+            .iter()
+            .filter_map(|r| {
+                let name = r["name"].as_str()?.to_string();
+                if !name.to_lowercase().ends_with(&prefix_lower) {
+                    return None;
+                }
+                Some(CloudflareRecord {
+                    id: r["id"].as_str()?.to_string(),
+                    name,
+                    rtype: r["type"].as_str()?.to_string(),
+                    content: r["content"].as_str()?.to_string(),
+                    ttl: r["ttl"].as_u64()? as u32,
+                })
+            })
+            .collect();
+
+        Ok(records)
     }
 
     async fn record_circuit_success(&self) {
@@ -382,18 +429,18 @@ impl CloudflareBackend {
             Ok(r) => r,
             Err(e) => {
                 self.record_circuit_failure().await;
-                return Err(DnsError::Dns(format!(
-                    "Cloudflare health check failed: {e}"
-                )));
+                return Err(CloudflareError::Request(
+                    format!("health check failed: {e}")
+                ));
             }
         };
 
         if !resp.status().is_success() {
             self.record_circuit_failure().await;
-            return Err(DnsError::Dns(format!(
-                "Cloudflare health check returned: {}",
-                resp.status()
-            )));
+            return Err(CloudflareError::Api {
+                status: resp.status().as_u16(),
+                message: format!("health check returned {}", resp.status()),
+            });
         }
 
         self.record_circuit_success().await;

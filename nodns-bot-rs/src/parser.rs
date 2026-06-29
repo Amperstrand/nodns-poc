@@ -1,8 +1,20 @@
-//! Nostr event tag parser for DNS record events.
+//! Kind 11111 event tag parser.
 //!
-//! Port of `nodns-bot/internal/nostr/parser.go`. Handles kind 11111 events,
-//! extracting DNS records, delegations, registrar keys, and payment proofs
-//! from Nostr event tags.
+//! Record parsing (`["record", ...]` tags) is delegated to the
+//! [`nodns-protocol`](../../nodns-protocol) crate — the portable, standalone
+//! record parser shared with `nodns-lease`.
+//!
+//! What remains here are bot-specific tag types that serve the running
+//! `nodns.shop` system. These are old-repo concepts for custom-name
+//! management and inline payments, replaced in `nodns-lease` by the
+//! lease-event model:
+//!
+//! - `["delete", TYPE, NAME]` — DNS record deletion
+//! - `["claim", NAME, ZONE, VALID_UNTIL]` — custom name registration
+//! - `["renewal", NAME, ZONE, NEW_VALID_UNTIL]` — custom name renewal
+//! - `["delegation", DOMAIN, NPUB, FROM, UNTIL, RENEW]` — name delegation (NIP-26)
+//! - `["registrar", ZONE, PUBKEY]` — registrar key publication
+//! - `["cashu", TOKEN, MINT, AMOUNT]` — inline Cashu payment proof
 
 use std::collections::HashSet;
 
