@@ -5,8 +5,8 @@ edition = "2021"
 description = "NoDNS DNS connector trait and implementations (Knot DDNS, Cloudflare)"
 
 [dependencies]
-hickory-client = "0.25"
-hickory-proto = "0.25"
+hickory-client = { version = "0.25", features = ["dnssec-ring"] }
+hickory-proto = { version = "0.25", features = ["dnssec-ring"] }
 base64 = "0.22"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 tokio = { version = "1", features = ["full"] }
