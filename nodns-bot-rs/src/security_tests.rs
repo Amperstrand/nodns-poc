@@ -8,6 +8,7 @@ use crate::auth::AuthorityChecker;
 use crate::config::ZonePaymentConfig;
 use crate::parser;
 use crate::payment::Verifier;
+use crate::pow;
 use crate::store::Store;
 use crate::types::Delegation;
 
@@ -988,4 +989,68 @@ fn rejects_authority_check_with_invalid_pubkey_hex() {
         .check_authority("alice.test.shop.", "test.shop", "not-hex-at-all")
         .unwrap_err();
     assert!(err.to_string().contains("invalid pubkey hex"));
+}
+
+// ===========================================================================
+// SECURITY: NIP-13 Proof of Work verification
+// ===========================================================================
+
+#[test]
+fn pow_count_leading_zero_bits_correctness() {
+    assert_eq!(pow::count_leading_zero_bits(""), 0);
+    assert_eq!(
+        pow::count_leading_zero_bits(
+            "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+        ),
+        0
+    );
+    assert_eq!(
+        pow::count_leading_zero_bits(
+            "0000000000000000000000000000000000000000000000000000000000000000"
+        ),
+        256
+    );
+    assert_eq!(
+        pow::count_leading_zero_bits(
+            "1000000000000000000000000000000000000000000000000000000000000000"
+        ),
+        3
+    );
+    assert_eq!(
+        pow::count_leading_zero_bits(
+            "0100000000000000000000000000000000000000000000000000000000000000"
+        ),
+        7
+    );
+    let known_id = "000006d8c378af1779d2feebc7603a125d99eca0ccf1085959b307f64e5dd358";
+    assert_eq!(pow::count_leading_zero_bits(known_id), 21);
+}
+
+#[test]
+fn accepts_event_when_pow_disabled() {
+    let id = "f000000000000000000000000000000000000000000000000000000000000000";
+    assert!(pow::verify_pow(id, 0));
+}
+
+#[test]
+fn rejects_event_below_pow_threshold() {
+    let id = "f000000000000000000000000000000000000000000000000000000000000000";
+    assert_eq!(pow::count_leading_zero_bits(id), 0);
+    assert!(!pow::verify_pow(id, 16));
+}
+
+#[test]
+fn accepts_event_above_pow_threshold() {
+    let id = "000006d8c378af1779d2feebc7603a125d99eca0ccf1085959b307f64e5dd358";
+    assert_eq!(pow::count_leading_zero_bits(id), 21);
+    assert!(pow::verify_pow(id, 16));
+    assert!(pow::verify_pow(id, 20));
+    assert!(pow::verify_pow(id, 21));
+}
+
+#[test]
+fn rejects_event_exactly_at_boundary_check() {
+    let id = "000006d8c378af1779d2feebc7603a125d99eca0ccf1085959b307f64e5dd358";
+    assert_eq!(pow::count_leading_zero_bits(id), 21);
+    assert!(!pow::verify_pow(id, 22));
 }

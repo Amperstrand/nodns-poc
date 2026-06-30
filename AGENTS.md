@@ -326,6 +326,7 @@ nodns-bot-rs/src/
   classify.rs                Name/mint classification + enforcement matrix (Npub/Testing/Custom × Real/Test)
   subscriber.rs              Nostr relay subscription (nostr-sdk), reconnect backoff
   security_tests.rs          Security regression tests
+  pow.rs                     NIP-13 Proof of Work verification (count leading zero bits)
   dns_cache.rs               Experimental Nostr-over-DNS event caching (warn-only)
   handlers/
     mod.rs                   Module exports + route registration
@@ -348,6 +349,7 @@ nodns-connectors/              Workspace crate: pluggable DNS backend abstractio
 shared/
   relays.ts                   Single source of truth for relay config (PUBLISH_RELAYS, READ_RELAYS)
                               imported by frontend, registrar, and CLI
+  pow.ts                      Default PoW difficulty constant (DEFAULT_POW_DIFFICULTY = 20)
 
 nodns-clientlog-worker/       Cloudflare Worker for client-side error log ingestion
   src/index.ts                Receives POST /api/client-log, forwards to bot
@@ -542,6 +544,7 @@ The bot reads a TOML config file (default `/opt/nodns-bot/config.toml`, local: `
 | `[policy]` | `allowed_types` | `["A","AAAA","CNAME","TXT","MX"]` | Whitelisted DNS record types |
 | `[policy]` | `block_private_ip` | `false` | Reject private/loopback IPs in A/AAAA |
 | `[policy]` | `max_txt_length` | `512` | Max TXT record length (chars) |
+| `[policy]` | `min_pow` | `0` | Minimum NIP-13 PoW difficulty (leading zero bits in event ID). 0 = disabled. 20 = ~2-3s mining. Resolver-side policy — each operator/resolver sets their own threshold. |
 | `[store]` | `path` | `records.db` | SQLite database path |
 | `[payment]` | `enabled` | `false` | Global payment (legacy, propagates to zones without zone-level config) |
 | `[payment]` | `required_sats` | `250` | Global create price (legacy) |
@@ -679,6 +682,8 @@ Hooks are opt-in via `git config core.hooksPath .githooks`. The pre-commit hook 
 - **DNSSEC attestation tracks live key**: The bot queries the actual DNSKEY from Knot DNS at startup and attests that (not just the SLIP-10 derived key). If a KSK rollover changes the live key, the attestation automatically tracks it. The SLIP-10 derivation is informational — Knot DNS manages its own keys.
 
 - **Shared relay configuration**: `shared/relays.ts` is the single source of truth for relay config across frontend, registrar, and CLI. All components publish exclusively to `relay.cashu.email`; reading fans out to multiple relays for coverage.
+
+- **NIP-13 PoW as resolver-side policy**: Proof of Work difficulty is not a protocol constant — it's a local resolver policy. Publishers mine PoW before publishing (default 20 bits via Web Worker in frontend, synchronous in CLI). Each operator/resolver independently decides what minimum difficulty to accept: CI = 0-16 bits, nodns.shop = 20 bits, OpenWrt resolver = 24 bits. For operator-mirrored zones (nodns.shop), Cashu payment is the primary economic incentive — PoW is an optional additional gate. For .nostr resolver-indexed names (no operator), PoW IS the anti-spam mechanism.
 
 ## Architecture Direction (2026-06)
 

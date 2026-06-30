@@ -6,12 +6,13 @@ import {
   type NostrEvent,
 } from "nostr-tools/pure";
 import { npubEncode, nsecEncode, decode as nip19Decode } from "nostr-tools/nip19";
+import { minePow } from "nostr-tools/nip13";
 import { SimplePool } from "nostr-tools/pool";
 import { hexToBytes, bytesToHex } from "nostr-tools/utils";
-import { RECORD_KIND } from "./constants.js";
+import { RECORD_KIND, DEFAULT_POW_DIFFICULTY } from "./constants.js";
 import type { Keypair } from "./types.js";
 
-export { bytesToHex };
+export { bytesToHex, DEFAULT_POW_DIFFICULTY };
 
 export function generateKeypair(): Keypair {
   const sk = generateSecretKey();
@@ -81,13 +82,27 @@ export async function signAndPublish(
   tags: string[][],
   content: string = "",
   dryRun: boolean = false,
+  powDifficulty: number = DEFAULT_POW_DIFFICULTY,
 ): Promise<NostrEvent> {
-  const template: EventTemplate = {
+  let template: EventTemplate = {
     kind: RECORD_KIND,
     content,
     tags,
     created_at: Math.floor(Date.now() / 1000),
   };
+
+  if (powDifficulty > 0) {
+    const pubkey = getPublicKey(secretKey);
+    console.error(`Mining PoW (difficulty: ${powDifficulty})...`);
+    const mined = minePow({ ...template, pubkey }, powDifficulty);
+    template = {
+      kind: mined.kind,
+      content: mined.content,
+      tags: mined.tags,
+      created_at: mined.created_at,
+    };
+    console.error(`\u2713 PoW mined`);
+  }
 
   const event = finalizeEvent(template, secretKey);
 

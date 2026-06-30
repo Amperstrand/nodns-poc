@@ -12,6 +12,7 @@ export const deleteCommand = new Command("delete")
   .option("-n, --name <name>", "Subdomain name (empty for npub-derived)", "")
   .option("--dry-run", "Print event without publishing")
   .option("--force", "Skip testnet warning delay")
+  .option("--pow <bits>", "PoW difficulty in bits (0 to disable)", "20")
   .action(async (opts, cmd: Command) => {
     const o = cmd.optsWithGlobals();
     const relay = o.relay ?? "wss://relay.cashu.email";
@@ -24,6 +25,11 @@ export const deleteCommand = new Command("delete")
     const name = (opts.name as string) ?? "";
     const dryRun: boolean = opts.dryRun ?? false;
     const force: boolean = opts.force ?? false;
+    const powDifficulty: number = parseInt(opts.pow as string, 10);
+    if (isNaN(powDifficulty) || powDifficulty < 0) {
+      console.error("Error: --pow must be a non-negative integer");
+      process.exit(1);
+    }
 
     if (!dryRun && !skipZoneCheck) {
       const outcome = await checkZone(zone, relays, false);
@@ -63,7 +69,7 @@ export const deleteCommand = new Command("delete")
     }
 
     const kp = decodeSec(sec);
-    await signAndPublish(kp.secretKey, relays, tags, "", dryRun);
+    await signAndPublish(kp.secretKey, relays, tags, "", dryRun, powDifficulty);
     if (!dryRun) {
       console.error(`\nDelete published for ${name || "npub-derived"}.${zone}`);
     }

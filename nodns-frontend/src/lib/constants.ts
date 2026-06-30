@@ -1,9 +1,11 @@
 export const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? '';
 
 import { PUBLISH_RELAYS as _PUBLISH, READ_RELAYS as _READ } from '../../../shared/relays';
+import { DEFAULT_POW_DIFFICULTY as _POW } from '../../../shared/pow';
 
 export const RELAYS = _READ;
 export const PUBLISH_RELAYS = _PUBLISH;
+export const DEFAULT_POW_DIFFICULTY = _POW;
 
 export const DEFAULT_ZONE = 'nodns.shop';
 

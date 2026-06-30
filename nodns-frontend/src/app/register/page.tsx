@@ -30,6 +30,7 @@ function RegisterContent() {
   const [errorMsg, setErrorMsg] = useState("");
   const [txEventId, setTxEventId] = useState<string | null>(null);
   const [pricing, setPricing] = useState<ZonePricing | null>(null);
+  const [miningStatus, setMiningStatus] = useState<string>("");
 
   useEffect(() => {
     fetchPricing().then(setPricing).catch(() => {});
@@ -66,6 +67,10 @@ function RegisterContent() {
         cashuToken,
         mintUrl,
         price,
+        20,
+        (phase) => {
+          setMiningStatus(phase === "mining" ? "Mining PoW (20 bits)..." : "Publishing event...");
+        },
       );
 
       setTxEventId(event.id);
@@ -209,7 +214,7 @@ function RegisterContent() {
           <div className="animate-pulse text-2xl mb-3">⚡</div>
           <h2 className="text-lg font-semibold mb-2">Processing Payment</h2>
           <p className="text-sm text-foreground/60">
-            Sending {price} sats and publishing Nostr event...
+            {miningStatus || `Sending ${price} sats and publishing Nostr event...`}
           </p>
         </div>
       )}

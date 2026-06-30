@@ -61,6 +61,7 @@ export const addCommand = new Command("add")
   .option("--dry-run", "Print event without publishing")
   .option("--force", "Skip testnet warning delay")
   .option("--refund-days <days>", "Days until Cashu refund is available", "7")
+  .option("--pow <bits>", "PoW difficulty in bits (0 to disable)", "20")
   .action(async (opts, cmd: Command) => {
     const o = cmd.optsWithGlobals();
     const relay = o.relay ?? "wss://relay.cashu.email";
@@ -76,6 +77,11 @@ export const addCommand = new Command("add")
     const dryRun: boolean = opts.dryRun ?? false;
     const force: boolean = opts.force ?? false;
     const refundDays: number = parseInt(opts.refundDays as string, 10) || 7;
+    const powDifficulty: number = parseInt(opts.pow as string, 10);
+    if (isNaN(powDifficulty) || powDifficulty < 0) {
+      console.error("Error: --pow must be a non-negative integer");
+      process.exit(1);
+    }
 
     const validationError = validateRecord(recordType, name, data);
     if (validationError) {
@@ -130,7 +136,7 @@ export const addCommand = new Command("add")
       }
     }
 
-    await signAndPublish(kp.secretKey, relays, tags, "", dryRun);
+    await signAndPublish(kp.secretKey, relays, tags, "", dryRun, powDifficulty);
     if (!dryRun) {
       console.error(`\nRecord live at ${kp.npub}.${zone}`);
     }

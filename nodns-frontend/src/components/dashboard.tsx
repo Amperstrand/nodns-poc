@@ -35,6 +35,7 @@ export function Dashboard() {
     type: FeedbackType;
   } | null>(null);
   const [publishing, setPublishing] = useState(false);
+  const [publishStatusText, setPublishStatusText] = useState("");
   const [cashuToken, setCashuToken] = useState("");
   const [showCashu, setShowCashu] = useState(false);
   const [verifyFqdn, setVerifyFqdn] = useState("");
@@ -158,6 +159,7 @@ export function Dashboard() {
     async (records: PendingRecord[], kp: KeyPair) => {
       if (records.length === 0) return;
       setPublishing(true);
+      setPublishStatusText("");
       setFeedback(null);
 
       try {
@@ -167,6 +169,10 @@ export function Dashboard() {
           cashuToken || undefined,
           pricing?.mint_url,
           pricing?.create_price,
+          20,
+          (phase) => {
+            setPublishStatusText(phase === "mining" ? "Mining PoW (20 bits)..." : "Publishing to relays...");
+          },
         );
         setFeedback({
           message: `Published event with ${records.length} record(s). Event ID: ${event.id.slice(0, 16)}...`,
@@ -186,6 +192,7 @@ export function Dashboard() {
         setPipelineStatus("error");
       }
       setPublishing(false);
+      setPublishStatusText("");
     },
     [cashuToken, startPipeline, pricing],
   );
@@ -697,7 +704,7 @@ export function Dashboard() {
                   disabled={publishing || pendingRecords.length === 0}
                   className="rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {publishing ? "Publishing..." : "Publish to Nostr"}
+                  {publishing ? (publishStatusText || "Publishing...") : "Publish to Nostr"}
                 </button>
 
                 {feedback && (

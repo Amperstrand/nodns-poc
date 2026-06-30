@@ -1,0 +1,1 @@
+export const DEFAULT_POW_DIFFICULTY = 20;

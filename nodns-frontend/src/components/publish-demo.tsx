@@ -6,6 +6,15 @@ import { Badge } from "@/components/ui/badge";
 
 const STEPS = [
   {
+    title: "Mine PoW",
+    snippet: [
+      "Mining NIP-13 proof-of-work...",
+      "difficulty: 20 bits",
+      "nonce: searching...",
+      "✓ Valid nonce found",
+    ],
+  },
+  {
     title: "Publish Event",
     snippet: [
       "kind: 11111",
@@ -16,7 +25,7 @@ const STEPS = [
     title: "Bot Validates",
     snippet: [
       "✓ Event signature valid",
-      "✓ Policy check passed",
+      "✓ PoW difficulty met (20 bits)",
       "✓ Authority confirmed",
     ],
   },
@@ -50,14 +59,14 @@ export function PublishDemo() {
   useEffect(() => {
     const ms = step === 4 ? SUCCESS_MS : STEP_MS;
     const timer = setTimeout(() => {
-      setStep((s) => (s >= 4 ? 0 : s + 1));
+      setStep((s) => (s >= 5 ? 0 : s + 1));
       setProgressKey((k) => k + 1);
     }, ms);
     return () => clearTimeout(timer);
   }, [step]);
 
-  const isSuccess = step === 4;
-  const activeIdx = isSuccess ? 3 : step;
+  const isSuccess = step === 5;
+  const activeIdx = isSuccess ? 4 : step;
 
   return (
     <section className="px-6 py-16">
@@ -70,7 +79,7 @@ export function PublishDemo() {
           {isSuccess ? (
             <Badge variant="default">Record live!</Badge>
           ) : (
-            <Badge variant="outline">{step + 1} / 4</Badge>
+            <Badge variant="outline">{step + 1} / 5</Badge>
           )}
         </div>
 

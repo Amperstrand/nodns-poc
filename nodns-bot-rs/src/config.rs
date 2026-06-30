@@ -192,6 +192,8 @@ pub struct ZoneConfig {
     pub cloudflare_zone_id: Option<String>,
     #[serde(default)]
     pub dns_cache_events: bool,
+    #[serde(default)]
+    pub min_pow: u32,
 }
 
 impl Default for ZoneConfig {
@@ -211,6 +213,7 @@ impl Default for ZoneConfig {
             cloudflare_api_token: None,
             cloudflare_zone_id: None,
             dns_cache_events: false,
+            min_pow: 0,
         }
     }
 }
@@ -263,6 +266,7 @@ pub struct PolicyConfig {
     pub max_txt_length: usize,
     #[serde(default)]
     pub test_mode: bool,
+    pub min_pow: u32,
 }
 
 impl Default for PolicyConfig {
@@ -280,6 +284,7 @@ impl Default for PolicyConfig {
             block_private_ip: false,
             max_txt_length: 512,
             test_mode: false,
+            min_pow: 0,
         }
     }
 }
@@ -432,6 +437,7 @@ impl Config {
                 cloudflare_api_token: None,
                 cloudflare_zone_id: None,
                 dns_cache_events: false,
+                min_pow: 0,
             });
         }
 

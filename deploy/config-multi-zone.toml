@@ -33,6 +33,7 @@ rate_limit = 5
 allowed_types = ["A", "AAAA", "CNAME", "TXT", "MX"]
 block_private_ip = true
 max_txt_length = 512
+min_pow = 0
 
 [store]
 path = "records.db"

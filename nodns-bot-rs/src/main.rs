@@ -12,6 +12,7 @@ mod handlers;
 mod nip05;
 mod parser;
 mod payment;
+mod pow;
 #[cfg(test)]
 mod security_tests;
 mod store;

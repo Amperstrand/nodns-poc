@@ -13,6 +13,7 @@ use crate::dns_cache::DnsEventCache;
 use crate::parser;
 use crate::payment;
 use crate::payment::Verifier;
+use crate::pow;
 use crate::store::Store;
 use crate::types::{
     build_fqdn, record_type_to_u16, ClaimRequest, Delegation, Metrics, ParsedEvent, RegistrarKey,
@@ -87,6 +88,26 @@ pub async fn process_nostr_event(
     let event_id = evt.id.to_hex();
     let pubkey_hex = evt.pubkey.to_hex();
     let created_at = evt.created_at.as_secs() as i64;
+
+    let effective_min_pow = cfg
+        .dns
+        .zones
+        .iter()
+        .map(|z| z.min_pow)
+        .max()
+        .unwrap_or(0)
+        .max(cfg.policy.min_pow);
+    if effective_min_pow > 0 && !pow::verify_pow(&event_id, effective_min_pow) {
+        let difficulty = pow::count_leading_zero_bits(&event_id);
+        warn!(
+            event_id = %event_id,
+            difficulty = difficulty,
+            min_pow = effective_min_pow,
+            "event rejected: insufficient PoW"
+        );
+        metrics.events_rejected.fetch_add(1, Ordering::Relaxed);
+        return;
+    }
 
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
