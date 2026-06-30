@@ -8,6 +8,7 @@ use crate::auth::AuthorityChecker;
 use crate::config::ZonePaymentConfig;
 use crate::parser;
 use crate::payment::Verifier;
+use crate::pob;
 use crate::pow;
 use crate::store::Store;
 use crate::types::Delegation;
@@ -1053,4 +1054,161 @@ fn rejects_event_exactly_at_boundary_check() {
     let id = "000006d8c378af1779d2feebc7603a125d99eca0ccf1085959b307f64e5dd358";
     assert_eq!(pow::count_leading_zero_bits(id), 21);
     assert!(!pow::verify_pow(id, 22));
+}
+
+// ===========================================================================
+// SECURITY: Proof of Burn — tag extraction and threshold verification
+// ===========================================================================
+
+#[test]
+fn extract_pob_tag_parses_valid_tag() {
+    let proof_json = r#"{"tx":"abc123","merkle":["a","b"]}"#;
+    let tag = Tag::parse(["pob", "5000", proof_json]).unwrap();
+    let tags = Tags::from_list(vec![tag]);
+    let pob = pob::extract_pob_tag(&tags).expect("should parse pob tag");
+    assert_eq!(pob.amount_sats, 5000);
+    assert_eq!(pob.proof_json, proof_json);
+}
+
+#[test]
+fn extract_pob_tag_returns_none_when_absent() {
+    let tag = Tag::parse(["record", "A", "@", "3600", "1.2.3.4"]).unwrap();
+    let tags = Tags::from_list(vec![tag]);
+    assert!(pob::extract_pob_tag(&tags).is_none());
+}
+
+#[test]
+fn extract_pob_tag_returns_none_for_empty_tags() {
+    let tags = Tags::from_list(vec![]);
+    assert!(pob::extract_pob_tag(&tags).is_none());
+}
+
+#[test]
+fn extract_pob_tag_skips_invalid_amount() {
+    let tag = Tag::parse(["pob", "not-a-number", "{}"]).unwrap();
+    let tags = Tags::from_list(vec![tag]);
+    assert!(pob::extract_pob_tag(&tags).is_none());
+}
+
+#[test]
+fn extract_pob_tag_skips_tag_with_too_few_elements() {
+    let tag = Tag::parse(["pob", "100"]).unwrap();
+    let tags = Tags::from_list(vec![tag]);
+    assert!(pob::extract_pob_tag(&tags).is_none());
+}
+
+#[test]
+fn extract_pob_tag_finds_first_pob_among_other_tags() {
+    let proof_json = r#"{"tx":"burn"}"#;
+    let tags = Tags::from_list(vec![
+        Tag::parse(["record", "A", "@", "3600", "1.2.3.4"]).unwrap(),
+        Tag::parse(["pob", "250", proof_json]).unwrap(),
+        Tag::parse(["pob", "999", r#"{"tx":"other"}"#]).unwrap(),
+    ]);
+    let pob = pob::extract_pob_tag(&tags).expect("should find first pob");
+    assert_eq!(pob.amount_sats, 250);
+}
+
+#[test]
+fn meets_threshold_above() {
+    let proof = pob::PobProof {
+        amount_sats: 1000,
+        proof_json: "{}".to_string(),
+    };
+    assert!(pob::meets_threshold(&proof, 500));
+    assert!(pob::meets_threshold(&proof, 1000));
+}
+
+#[test]
+fn meets_threshold_below() {
+    let proof = pob::PobProof {
+        amount_sats: 100,
+        proof_json: "{}".to_string(),
+    };
+    assert!(!pob::meets_threshold(&proof, 500));
+}
+
+#[test]
+fn meets_threshold_zero_min_always_passes() {
+    let proof = pob::PobProof {
+        amount_sats: 0,
+        proof_json: "{}".to_string(),
+    };
+    assert!(pob::meets_threshold(&proof, 0));
+}
+
+// ===========================================================================
+// SECURITY: PoW OR PoB either/or gate logic
+// ===========================================================================
+
+#[test]
+fn either_or_logic_both_disabled_accepts() {
+    let min_pow: u32 = 0;
+    let min_pob_sats: u64 = 0;
+
+    let no_gate = min_pow == 0 && min_pob_sats == 0;
+    assert!(
+        no_gate,
+        "both disabled should mean no gate (backwards compat)"
+    );
+}
+
+#[test]
+fn either_or_logic_pow_sufficient_alone_passes() {
+    let min_pow: u32 = 20;
+    let min_pob_sats: u64 = 1000;
+
+    let event_id = "000006d8c378af1779d2feebc7603a125d99eca0ccf1085959b307f64e5dd358";
+    let pow_ok = pow::verify_pow(event_id, min_pow);
+    assert!(pow_ok);
+
+    let tags = Tags::from_list(vec![]);
+    let pob_ok = if min_pob_sats > 0 {
+        pob::extract_pob_tag(&tags).is_some()
+    } else {
+        false
+    };
+
+    assert!(pow_ok || pob_ok, "sufficient PoW should pass without PoB");
+}
+
+#[test]
+fn either_or_logic_both_fail_rejects() {
+    let min_pow: u32 = 20;
+    let min_pob_sats: u64 = 100;
+
+    let event_id = "f000000000000000000000000000000000000000000000000000000000000000";
+    let pow_ok = pow::verify_pow(event_id, min_pow);
+    assert!(!pow_ok);
+
+    let tags = Tags::from_list(vec![]);
+    let pob_ok = if min_pob_sats > 0 {
+        pob::extract_pob_tag(&tags).is_some()
+    } else {
+        false
+    };
+
+    assert!(!pow_ok && !pob_ok, "neither PoW nor PoB sufficient");
+    let passes = (min_pow == 0 && min_pob_sats == 0) || pow_ok || pob_ok;
+    assert!(!passes, "should reject when both fail");
+}
+
+#[test]
+fn either_or_logic_pob_threshold_meit_passes() {
+    let proof = pob::PobProof {
+        amount_sats: 500,
+        proof_json: "{}".to_string(),
+    };
+    let min_pob_sats: u64 = 100;
+    assert!(pob::meets_threshold(&proof, min_pob_sats));
+}
+
+#[test]
+fn either_or_logic_pob_threshold_below_fails() {
+    let proof = pob::PobProof {
+        amount_sats: 50,
+        proof_json: "{}".to_string(),
+    };
+    let min_pob_sats: u64 = 100;
+    assert!(!pob::meets_threshold(&proof, min_pob_sats));
 }

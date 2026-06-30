@@ -13,6 +13,7 @@ use crate::dns_cache::DnsEventCache;
 use crate::parser;
 use crate::payment;
 use crate::payment::Verifier;
+use crate::pob;
 use crate::pow;
 use crate::store::Store;
 use crate::types::{
@@ -97,16 +98,41 @@ pub async fn process_nostr_event(
         .max()
         .unwrap_or(0)
         .max(cfg.policy.min_pow);
-    if effective_min_pow > 0 && !pow::verify_pow(&event_id, effective_min_pow) {
-        let difficulty = pow::count_leading_zero_bits(&event_id);
-        warn!(
-            event_id = %event_id,
-            difficulty = difficulty,
-            min_pow = effective_min_pow,
-            "event rejected: insufficient PoW"
-        );
-        metrics.events_rejected.fetch_add(1, Ordering::Relaxed);
-        return;
+
+    let effective_min_pob_sats = cfg.policy.min_pob_sats;
+    let pob_notary_url = cfg.policy.pob_notary_url.as_str();
+
+    if effective_min_pow > 0 || effective_min_pob_sats > 0 {
+        let pow_ok = pow::verify_pow(&event_id, effective_min_pow);
+
+        let pob_ok = if effective_min_pob_sats > 0 {
+            if let Some(proof) = pob::extract_pob_tag(&evt.tags) {
+                if pob::meets_threshold(&proof, effective_min_pob_sats) {
+                    pob::verify_pob(&proof, pob_notary_url)
+                        .await
+                        .unwrap_or(false)
+                } else {
+                    false
+                }
+            } else {
+                false
+            }
+        } else {
+            false
+        };
+
+        if !pow_ok && !pob_ok {
+            let difficulty = pow::count_leading_zero_bits(&event_id);
+            warn!(
+                event_id = %event_id,
+                difficulty = difficulty,
+                min_pow = effective_min_pow,
+                min_pob_sats = effective_min_pob_sats,
+                "event rejected: insufficient PoW or PoB"
+            );
+            metrics.events_rejected.fetch_add(1, Ordering::Relaxed);
+            return;
+        }
     }
 
     let now = SystemTime::now()

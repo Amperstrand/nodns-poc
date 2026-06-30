@@ -34,6 +34,8 @@ allowed_types = ["A", "AAAA", "CNAME", "TXT", "MX"]
 block_private_ip = true
 max_txt_length = 512
 min_pow = 0
+min_pob_sats = 0
+pob_notary_url = "https://notary.electrum.org/n/api"
 
 [store]
 path = "records.db"

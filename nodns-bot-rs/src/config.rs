@@ -267,6 +267,14 @@ pub struct PolicyConfig {
     #[serde(default)]
     pub test_mode: bool,
     pub min_pow: u32,
+    #[serde(default)]
+    pub min_pob_sats: u64,
+    #[serde(default = "default_pob_notary_url")]
+    pub pob_notary_url: String,
+}
+
+fn default_pob_notary_url() -> String {
+    "https://notary.electrum.org/n/api".to_string()
 }
 
 impl Default for PolicyConfig {
@@ -285,6 +293,8 @@ impl Default for PolicyConfig {
             max_txt_length: 512,
             test_mode: false,
             min_pow: 0,
+            min_pob_sats: 0,
+            pob_notary_url: default_pob_notary_url(),
         }
     }
 }

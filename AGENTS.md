@@ -327,6 +327,7 @@ nodns-bot-rs/src/
   subscriber.rs              Nostr relay subscription (nostr-sdk), reconnect backoff
   security_tests.rs          Security regression tests
   pow.rs                     NIP-13 Proof of Work verification (count leading zero bits)
+  pob.rs                     Proof of Burn verification via ThomasV's notary API (either/or with PoW)
   dns_cache.rs               Experimental Nostr-over-DNS event caching (warn-only)
   handlers/
     mod.rs                   Module exports + route registration
@@ -545,6 +546,8 @@ The bot reads a TOML config file (default `/opt/nodns-bot/config.toml`, local: `
 | `[policy]` | `block_private_ip` | `false` | Reject private/loopback IPs in A/AAAA |
 | `[policy]` | `max_txt_length` | `512` | Max TXT record length (chars) |
 | `[policy]` | `min_pow` | `0` | Minimum NIP-13 PoW difficulty (leading zero bits in event ID). 0 = disabled. 20 = ~2-3s mining. Resolver-side policy — each operator/resolver sets their own threshold. |
+| `[policy]` | `min_pob_sats` | `0` | Minimum Proof of Burn in sats. 0 = disabled. Events pass if they have EITHER sufficient PoW OR sufficient PoB. Verified via notary.electrum.org API. |
+| `[policy]` | `pob_notary_url` | `https://notary.electrum.org/n/api` | ThomasV's notary endpoint for PoB proof verification. |
 | `[store]` | `path` | `records.db` | SQLite database path |
 | `[payment]` | `enabled` | `false` | Global payment (legacy, propagates to zones without zone-level config) |
 | `[payment]` | `required_sats` | `250` | Global create price (legacy) |
