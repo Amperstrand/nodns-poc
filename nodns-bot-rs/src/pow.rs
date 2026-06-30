@@ -91,4 +91,66 @@ mod tests {
         let id = "f000000000000000000000000000000000000000000000000000000000000000";
         assert!(verify_pow(id, 0));
     }
+
+    #[test]
+    fn integration_mined_pow_event_accepted() {
+        use nostr_sdk::prelude::*;
+
+        let keys = Keys::generate();
+        let target: u32 = 4;
+
+        for nonce in 0u64..50_000 {
+            let nonce_str = nonce.to_string();
+            let target_str = target.to_string();
+            let tags = vec![
+                Tag::parse(["nonce", nonce_str.as_str(), target_str.as_str()]).unwrap(),
+                Tag::parse(["record", "TXT", "", "pow test"]).unwrap(),
+            ];
+
+            let event = EventBuilder::new(Kind::Custom(11111), "")
+                .tags(tags)
+                .sign_with_keys(&keys)
+                .unwrap();
+
+            let id = event.id.to_hex();
+            let difficulty = count_leading_zero_bits(&id);
+
+            if difficulty >= target {
+                assert!(verify_pow(&id, target));
+                assert!(verify_pow(&id, target.saturating_sub(1)));
+                assert!(!verify_pow(&id, target + 1) || difficulty > target);
+                return;
+            }
+        }
+
+        panic!("failed to mine PoW at difficulty {target} after 50000 attempts");
+    }
+
+    #[test]
+    fn integration_random_event_rejected_at_threshold() {
+        use nostr_sdk::prelude::*;
+
+        let keys = Keys::generate();
+        let event = EventBuilder::new(Kind::Custom(11111), "")
+            .tags(vec![Tag::parse(["record", "TXT", "", "no pow"]).unwrap()])
+            .sign_with_keys(&keys)
+            .unwrap();
+
+        let id = event.id.to_hex();
+        let difficulty = count_leading_zero_bits(&id);
+
+        assert!(verify_pow(&id, 0), "threshold 0 should always accept");
+
+        if difficulty < 16 {
+            assert!(
+                !verify_pow(&id, 16),
+                "random event (difficulty {difficulty}) should be rejected at threshold 16"
+            );
+        }
+
+        assert!(
+            !verify_pow(&id, 20),
+            "random event should essentially never have 20+ leading zero bits"
+        );
+    }
 }
