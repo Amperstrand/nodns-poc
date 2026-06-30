@@ -261,6 +261,8 @@ pub struct PolicyConfig {
     pub allowed_types: Vec<String>,
     pub block_private_ip: bool,
     pub max_txt_length: usize,
+    #[serde(default)]
+    pub test_mode: bool,
 }
 
 impl Default for PolicyConfig {
@@ -277,6 +279,7 @@ impl Default for PolicyConfig {
             ],
             block_private_ip: false,
             max_txt_length: 512,
+            test_mode: false,
         }
     }
 }

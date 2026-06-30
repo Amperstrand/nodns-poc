@@ -1,68 +1,10 @@
 import { SimplePool } from "nostr-tools/pool";
 import type { NostrEvent } from "nostr-tools/pure";
-import {
-  ZONE_HANDLER_KIND,
-  DOH_ENDPOINT,
-  QUERY_MAX_WAIT,
-} from "./constants.js";
+import { parseZoneTxt, fetchDnsTxt } from "@nodns/resolver";
+import { ZONE_HANDLER_KIND, QUERY_MAX_WAIT } from "./constants.js";
 import type { ZoneInfo, ZonePricing, ZoneCheckOutcome } from "./types.js";
 
-export function parseZoneTxt(txt: string): Record<string, string> {
-  const result: Record<string, string> = {};
-  for (const part of txt.split(";")) {
-    const eq = part.indexOf("=");
-    if (eq === -1) continue;
-    const key = part.slice(0, eq).trim();
-    const val = part.slice(eq + 1).trim();
-    if (key) result[key] = val;
-  }
-  return result;
-}
-
-interface DohAnswer {
-  name: string;
-  type: number;
-  TTL: number;
-  data: string;
-}
-
-interface DohResponse {
-  Status: number;
-  Answer?: DohAnswer[];
-}
-
-function isDohResponse(data: unknown): data is DohResponse {
-  return typeof data === "object" && data !== null && "Status" in data;
-}
-
-export async function fetchDnsTxt(zone: string): Promise<string | null> {
-  const name = `_nodns.${zone}`;
-  const url = `${DOH_ENDPOINT}?name=${encodeURIComponent(name)}&type=TXT`;
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 10_000);
-  try {
-    const res = await fetch(url, {
-      headers: { accept: "application/dns-json" },
-      signal: controller.signal,
-    });
-    if (!res.ok) return null;
-    const data: unknown = await res.json();
-    if (!isDohResponse(data) || !data.Answer) return null;
-    for (const answer of data.Answer) {
-      if (answer.type === 16 && typeof answer.data === "string") {
-        return answer.data
-          .replace(/^"/, "")
-          .replace(/"$/, "")
-          .replace(/"\s*"/g, "");
-      }
-    }
-    return null;
-  } catch {
-    return null;
-  } finally {
-    clearTimeout(timeout);
-  }
-}
+export { parseZoneTxt, fetchDnsTxt };
 
 function buildZoneInfo(
   parsed: Record<string, string>,

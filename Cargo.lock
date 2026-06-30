@@ -2464,6 +2464,7 @@ dependencies = [
  "nodns-connectors",
  "nodns-epp",
  "nodns-protocol",
+ "nodns-resolver",
  "nostr-sdk",
  "p256",
  "pkcs8",
@@ -2521,6 +2522,23 @@ version = "0.1.0"
 dependencies = [
  "ipnet",
  "thiserror 2.0.18",
+]
+
+[[package]]
+name = "nodns-resolver"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "base64 0.22.1",
+ "hex",
+ "hickory-client",
+ "hickory-proto",
+ "nostr-sdk",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tokio",
+ "url",
 ]
 
 [[package]]

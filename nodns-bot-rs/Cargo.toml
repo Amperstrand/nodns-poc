@@ -92,5 +92,8 @@ nodns-connectors = { path = "../nodns-connectors" }
 # NoDNS protocol library (kind 11111 record parsing + validation)
 nodns-protocol = { path = "../nodns-protocol" }
 
+# NoDNS resolver SDK (DNS lookup, Nostr event fetch, tripartite verification)
+nodns-resolver = { path = "../nodns-resolver-rs" }
+
 # Error abstraction for DnsConnector trait
 anyhow = "1"

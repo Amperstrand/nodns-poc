@@ -115,8 +115,10 @@ pub fn parse_records(
         if tag.is_empty() || tag[0] != "record" {
             continue;
         }
-        let rec = parse_record(tag, policy)
-            .map_err(|e| ParseError::TagError { index: i, message: e.to_string() })?;
+        let rec = parse_record(tag, policy).map_err(|e| ParseError::TagError {
+            index: i,
+            message: e.to_string(),
+        })?;
         records.push(rec);
     }
 
@@ -146,7 +148,11 @@ pub fn parse_record(tag: &[String], policy: &ValidationPolicy) -> Result<Record,
         return Err(ParseError::Validation("record type cannot be empty".into()));
     }
 
-    let allowed_set: Vec<String> = policy.allowed_types.iter().map(|t| t.to_uppercase()).collect();
+    let allowed_set: Vec<String> = policy
+        .allowed_types
+        .iter()
+        .map(|t| t.to_uppercase())
+        .collect();
     if !allowed_set.is_empty() && !allowed_set.contains(&rtype) {
         return Err(ParseError::Validation(format!(
             "record type {rtype:?} not allowed"
@@ -173,7 +179,12 @@ pub fn parse_record(tag: &[String], policy: &ValidationPolicy) -> Result<Record,
         ttl = DEFAULT_TTL;
     }
 
-    let rec = Record { rtype, name, ttl, rdata };
+    let rec = Record {
+        rtype,
+        name,
+        ttl,
+        rdata,
+    };
     validate_record(&rec, policy)?;
     Ok(rec)
 }
@@ -397,6 +408,21 @@ fn validate_hostname(name: &str) -> Result<(), ParseError> {
     }
 
     Ok(())
+}
+
+/// Check if a kind 11111 event's tags contain NIP-32 test labels.
+///
+/// Events with `["L", "net.nodns"]` and `["l", "test", "net.nodns"]` are
+/// self-declared test records. Production servers should skip them; test
+/// servers should accept them.
+pub fn is_test_event(tags: &[Vec<String>]) -> bool {
+    let has_namespace = tags
+        .iter()
+        .any(|t| t.len() >= 2 && t[0] == "L" && t[1] == "net.nodns");
+    let has_test_label = tags
+        .iter()
+        .any(|t| t.len() >= 3 && t[0] == "l" && t[1] == "test" && t[2] == "net.nodns");
+    has_namespace && has_test_label
 }
 
 // ── Tests ───────────────────────────────────────────────────────────────────
@@ -861,10 +887,7 @@ mod tests {
 
     #[test]
     fn hostname_total_too_long_rejected() {
-        let very_long = (0..5)
-            .map(|_| "x".repeat(63))
-            .collect::<Vec<_>>()
-            .join(".");
+        let very_long = (0..5).map(|_| "x".repeat(63)).collect::<Vec<_>>().join(".");
         assert!(validate_hostname(&very_long).is_err());
     }
 
@@ -887,5 +910,69 @@ mod tests {
     #[test]
     fn hostname_uppercase_allowed() {
         assert!(validate_hostname("Example.COM").is_ok());
+    }
+
+    #[test]
+    fn test_event_detected_with_labels() {
+        let tags = vec![
+            vec![
+                "record".into(),
+                "A".into(),
+                "@".into(),
+                "3600".into(),
+                "1.2.3.4".into(),
+            ],
+            vec!["L".into(), "net.nodns".into()],
+            vec!["l".into(), "test".into(), "net.nodns".into()],
+        ];
+        assert!(is_test_event(&tags));
+    }
+
+    #[test]
+    fn test_event_not_detected_without_labels() {
+        let tags = vec![vec![
+            "record".into(),
+            "A".into(),
+            "@".into(),
+            "3600".into(),
+            "1.2.3.4".into(),
+        ]];
+        assert!(!is_test_event(&tags));
+    }
+
+    #[test]
+    fn test_event_not_detected_partial_labels() {
+        let tags_no_l = vec![
+            vec!["L".into(), "net.nodns".into()],
+            vec![
+                "record".into(),
+                "A".into(),
+                "@".into(),
+                "3600".into(),
+                "1.2.3.4".into(),
+            ],
+        ];
+        assert!(!is_test_event(&tags_no_l));
+
+        let tags_no_L = vec![
+            vec!["l".into(), "test".into(), "net.nodns".into()],
+            vec![
+                "record".into(),
+                "A".into(),
+                "@".into(),
+                "3600".into(),
+                "1.2.3.4".into(),
+            ],
+        ];
+        assert!(!is_test_event(&tags_no_L));
+    }
+
+    #[test]
+    fn test_event_wrong_namespace() {
+        let tags = vec![
+            vec!["L".into(), "other.namespace".into()],
+            vec!["l".into(), "test".into(), "other.namespace".into()],
+        ];
+        assert!(!is_test_event(&tags));
     }
 }

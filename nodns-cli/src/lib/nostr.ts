@@ -127,23 +127,4 @@ export async function signAndPublish(
   return event;
 }
 
-export async function fetchEvents(
-  relays: string[],
-  pubkey: string,
-): Promise<NostrEvent[]> {
-  const pool = new SimplePool();
-  try {
-    const events = await pool.querySync(
-      relays,
-      {
-        kinds: [RECORD_KIND],
-        authors: [pubkey],
-        limit: 100,
-      },
-      { maxWait: 10_000 },
-    );
-    return events.sort((a, b) => b.created_at - a.created_at);
-  } finally {
-    pool.close(relays);
-  }
-}
+export { fetchEvents } from "@nodns/resolver";

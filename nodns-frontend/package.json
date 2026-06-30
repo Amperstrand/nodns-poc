@@ -5,12 +5,13 @@
   "license": "Unlicense",
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint"
   },
   "dependencies": {
     "@base-ui/react": "^1.5.0",
+    "@nodns/resolver": "file:../nodns-resolver",
     "@noble/curves": "^2.2.0",
     "@noble/hashes": "^2.2.0",
     "@peculiar/asn1-schema": "^2.7.0",

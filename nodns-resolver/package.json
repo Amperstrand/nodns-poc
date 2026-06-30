@@ -1,0 +1,27 @@
+{
+  "name": "@nodns/resolver",
+  "version": "0.1.0",
+  "description": "Framework-agnostic nodns resolution SDK — DNS, Nostr, and tripartite verification",
+  "license": "Unlicense",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./dns": "./src/dns.ts",
+    "./nostr": "./src/nostr.ts",
+    "./verify": "./src/verify.ts",
+    "./zones": "./src/zones.ts",
+    "./parse": "./src/parse.ts",
+    "./types": "./src/types.ts",
+    "./resolver": "./src/resolver.ts"
+  },
+  "scripts": {
+    "build": "tsc --noEmit",
+    "check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "nostr-tools": "^2.23.5"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.0"
+  }
+}

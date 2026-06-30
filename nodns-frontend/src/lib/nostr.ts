@@ -4,6 +4,14 @@ import { npubEncode, nsecEncode, decode as nip19Decode } from 'nostr-tools/nip19
 import { bytesToHex } from 'nostr-tools/utils';
 import { RELAYS, PUBLISH_RELAYS } from './constants';
 import type { NostrEvent, KeyPair } from './types';
+import {
+  queryRecordsByPubkey as sdkQueryRecordsByPubkey,
+  queryRecordsByDomain as sdkQueryRecordsByDomain,
+  queryAllRecentRecords as sdkQueryAllRecentRecords,
+} from '@nodns/resolver';
+
+export { parseRecordsFromEvent } from '@nodns/resolver';
+export type { NostrDnsRecord } from '@nodns/resolver';
 
 const pool = new SimplePool();
 
@@ -107,146 +115,25 @@ export function subscribeToDnsEvents(
   };
 }
 
-// --- Relay-based record queries ---
-
-export interface NostrDnsRecord {
-  type: string;
-  name: string;
-  value: string;
-  ttl: number;
-  fqdn: string;
-  pubkey: string;
-  eventId: string;
-  created_at: number;
-}
-
-// Record tag: ["record", TYPE, NAME, RDATA, "", "", "", "", "", "", TTL]
-export function parseRecordsFromEvent(
-  event: NostrEvent,
-  zone: string,
-): NostrDnsRecord[] {
-  const records: NostrDnsRecord[] = [];
-
-  for (const tag of event.tags) {
-    if (tag[0] !== 'record') continue;
-    if (tag.length < 4) continue;
-
-    const type = tag[1];
-    const name = tag[2] || '';
-    const value = tag[3];
-    const ttl = tag.length >= 11 ? parseInt(tag[10], 10) : 3600;
-
-    if (!type || !value) continue;
-
-    const subdomain = name ? `${name}.${event.pubkey}` : event.pubkey;
-    const fqdn = `${subdomain}.${zone}`;
-
-    records.push({
-      type,
-      name: name || '@',
-      value,
-      ttl: isNaN(ttl) ? 3600 : ttl,
-      fqdn,
-      pubkey: event.pubkey,
-      eventId: event.id,
-      created_at: event.created_at,
-    });
-  }
-
-  return records;
-}
-
 export async function queryRecordsByPubkey(
   pubkeyHex: string,
   zone: string,
   opts?: { limit?: number },
-): Promise<NostrDnsRecord[]> {
-  const limit = opts?.limit ?? 100;
-
-  try {
-    const events = await pool.querySync(RELAYS, {
-      kinds: [11111],
-      authors: [pubkeyHex],
-      limit,
-    });
-
-    const allRecords: NostrDnsRecord[] = [];
-    for (const ev of events) {
-      allRecords.push(...parseRecordsFromEvent(ev as unknown as NostrEvent, zone));
-    }
-
-    const seen = new Map<string, NostrDnsRecord>();
-    for (const r of allRecords) {
-      const key = `${r.fqdn}:${r.type}:${r.name}:${r.value}`;
-      const existing = seen.get(key);
-      if (!existing || r.created_at > existing.created_at) {
-        seen.set(key, r);
-      }
-    }
-
-    return Array.from(seen.values()).sort((a, b) => b.created_at - a.created_at);
-  } catch {
-    return [];
-  }
+) {
+  return sdkQueryRecordsByPubkey(pubkeyHex, zone, RELAYS, opts);
 }
 
 export async function queryRecordsByDomain(
   fqdn: string,
   zone: string,
   opts?: { limit?: number },
-): Promise<NostrDnsRecord[]> {
-  const limit = opts?.limit ?? 500;
-
-  try {
-    const events = await pool.querySync(RELAYS, {
-      kinds: [11111],
-      limit,
-    });
-
-    const allRecords: NostrDnsRecord[] = [];
-    for (const ev of events) {
-      const records = parseRecordsFromEvent(ev as unknown as NostrEvent, zone);
-      for (const r of records) {
-        if (r.fqdn === fqdn) {
-          allRecords.push(r);
-        }
-      }
-    }
-
-    const seen = new Map<string, NostrDnsRecord>();
-    for (const r of allRecords) {
-      const key = `${r.type}:${r.name}:${r.value}`;
-      const existing = seen.get(key);
-      if (!existing || r.created_at > existing.created_at) {
-        seen.set(key, r);
-      }
-    }
-
-    return Array.from(seen.values()).sort((a, b) => b.created_at - a.created_at);
-  } catch {
-    return [];
-  }
+) {
+  return sdkQueryRecordsByDomain(fqdn, zone, RELAYS, opts);
 }
 
 export async function queryAllRecentRecords(
   zone: string,
   opts?: { limit?: number },
-): Promise<NostrDnsRecord[]> {
-  const limit = opts?.limit ?? 200;
-
-  try {
-    const events = await pool.querySync(RELAYS, {
-      kinds: [11111],
-      limit,
-    });
-
-    const allRecords: NostrDnsRecord[] = [];
-    for (const ev of events) {
-      allRecords.push(...parseRecordsFromEvent(ev as unknown as NostrEvent, zone));
-    }
-
-    return allRecords.sort((a, b) => b.created_at - a.created_at);
-  } catch {
-    return [];
-  }
+) {
+  return sdkQueryAllRecentRecords(zone, RELAYS, opts);
 }

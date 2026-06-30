@@ -1,4 +1,5 @@
 import * as dns from "node:dns/promises";
+import { queryAllDnsRecordTypes } from "@nodns/resolver";
 import type { ZoneRecord } from "./zone-file.js";
 import { compareRecords } from "./zone-file.js";
 
@@ -21,41 +22,13 @@ async function safeResolve<T>(
 }
 
 export async function queryAllRecords(fqdn: string): Promise<DnsQueryResult[]> {
-  const results: DnsQueryResult[] = [];
-
-  const [aAddrs, aaaaAddrs, cnames, txtRecords, mxRecords] = await Promise.all([
-    safeResolve(() => dns.resolve4(fqdn), [] as string[]),
-    safeResolve(() => dns.resolve6(fqdn), [] as string[]),
-    safeResolve(() => dns.resolveCname(fqdn), [] as string[]),
-    safeResolve(() => dns.resolveTxt(fqdn), [] as string[][]),
-    safeResolve(
-      () => dns.resolveMx(fqdn),
-      [] as { priority: number; exchange: string }[],
-    ),
-  ]);
-
-  for (const addr of aAddrs) {
-    results.push({ name: fqdn, type: "A", ttl: 0, rdata: addr });
-  }
-  for (const addr of aaaaAddrs) {
-    results.push({ name: fqdn, type: "AAAA", ttl: 0, rdata: addr });
-  }
-  for (const cname of cnames) {
-    results.push({ name: fqdn, type: "CNAME", ttl: 0, rdata: cname });
-  }
-  for (const mx of mxRecords) {
-    results.push({
-      name: fqdn,
-      type: "MX",
-      ttl: 0,
-      rdata: `${mx.priority} ${mx.exchange}`,
-    });
-  }
-  for (const txtParts of txtRecords) {
-    results.push({ name: fqdn, type: "TXT", ttl: 0, rdata: txtParts.join("") });
-  }
-
-  return results;
+  const records = await queryAllDnsRecordTypes(fqdn);
+  return records.map((r) => ({
+    name: r.name,
+    type: r.type,
+    ttl: r.ttl,
+    rdata: r.data,
+  }));
 }
 
 export interface ZoneApexResult {

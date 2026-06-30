@@ -267,7 +267,10 @@ impl CloudflareBackend {
                 let msg = body["errors"][0]["message"]
                     .as_str()
                     .unwrap_or("unknown error");
-                return Err(CloudflareError::Api { status: status.as_u16(), message: msg.into() });
+                return Err(CloudflareError::Api {
+                    status: status.as_u16(),
+                    message: msg.into(),
+                });
             }
 
             return Ok(body);
@@ -351,9 +354,9 @@ impl CloudflareBackend {
         {
             Ok(r) => r,
             Err(e) => {
-                return Err(CloudflareError::Request(
-                    format!("health check failed: {e}")
-                ));
+                return Err(CloudflareError::Request(format!(
+                    "health check failed: {e}"
+                )));
             }
         };
 

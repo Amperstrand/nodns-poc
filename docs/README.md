@@ -89,6 +89,7 @@ These docs are the authoritative source for reasoning. `content/consensus.json` 
 | [44-minimal-consensus-roadmap.md](44-minimal-consensus-roadmap.md) | DRAFT | Talk outline, decision table, and docs split plan for the minimal standard |
 | [45-architecture-direction.md](45-architecture-direction.md) | DRAFT | Two-component split: DNS connector + payment processor via NIP-17 |
 | [crash-recovery-audit.md](crash-recovery-audit.md) | ACTIVE | Crash recovery audit of nodns-bot-rs: 8 operations reviewed, failure modes documented |
+| [46-adr-sdk-architecture.md](46-adr-sdk-architecture.md) | ACTIVE | ADR-006: Dual-language SDK (TS + Rust) for nodns name resolution |
 
 ### Competitive
 

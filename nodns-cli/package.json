@@ -11,6 +11,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@nodns/resolver": "file:../nodns-resolver",
     "commander": "^12",
     "nostr-tools": "^2.23.5",
     "@cashu/cashu-ts": "^4.5.1"

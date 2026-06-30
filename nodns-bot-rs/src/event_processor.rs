@@ -117,6 +117,14 @@ pub async fn process_nostr_event(
         }
     };
 
+    if !cfg.policy.test_mode && !parsed.records.is_empty() {
+        let raw_tags: Vec<Vec<String>> = evt.tags.iter().map(|t| t.as_slice().to_vec()).collect();
+        if nodns_protocol::is_test_event(&raw_tags) {
+            debug!(event_id = %event_id, npub = %npub, "skipping test-labeled event (production mode)");
+            return;
+        }
+    }
+
     let event_kind = u64::from(evt.kind.as_u16());
     if let Some(ref d) = parsed.d_tag {
         debug!(

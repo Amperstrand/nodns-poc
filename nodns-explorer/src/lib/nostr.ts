@@ -1,7 +1,8 @@
 import type { NostrEvent } from "nostr-tools/pure";
-import { npubEncode } from "nostr-tools/nip19";
 import { SimplePool } from "nostr-tools/pool";
 import { RELAYS, RECORD_KIND, ZONE_HANDLER_KIND } from "./constants";
+
+export { pubkeyToNpub } from "@nodns/resolver";
 
 export function subscribeToEvents(
   onEvent: (event: NostrEvent) => void,
@@ -28,12 +29,4 @@ export function subscribeToEvents(
     sub.close();
     pool.close(RELAYS);
   };
-}
-
-export function pubkeyToNpub(pubkey: string): string {
-  try {
-    return npubEncode(pubkey);
-  } catch {
-    return pubkey;
-  }
 }

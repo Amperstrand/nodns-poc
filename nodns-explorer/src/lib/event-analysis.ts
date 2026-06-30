@@ -1,16 +1,18 @@
-import type { ExplorerEvent } from "@/lib/types";
+import {
+  parseRecords as sdkParseRecords,
+  parseRecord as sdkParseRecord,
+  checkValidity as sdkCheckValidity,
+  isNpubDerivedName,
+  computeFqdn,
+} from "@nodns/resolver";
 import type { NostrEvent } from "nostr-tools/pure";
 import { npubEncode } from "nostr-tools/nip19";
-import { DEFAULT_ZONE, VALID_RECORD_TYPES } from "@/lib/constants";
+import type { ExplorerEvent } from "@/lib/types";
 
-export interface RecordInfo {
-  type: string;
-  name: string;
-  ttl: number;
-  rdata: string;
-  fqdn: string;
-  isNpubDerived: boolean;
-}
+type AnyEvent = ExplorerEvent | NostrEvent;
+
+export { isNpubDerivedName, computeFqdn };
+export type { RecordInfo, SpecVersion, ValidityInfo } from "@nodns/resolver";
 
 export type PaymentStatus = "paid" | "free" | "unpaid";
 
@@ -22,14 +24,6 @@ export interface PaymentInfo {
   isTestnut: boolean;
 }
 
-export type SpecVersion = "v1" | "v1.1" | "v2";
-
-export interface ValidityInfo {
-  valid: boolean;
-  reason?: string;
-  specVersion: SpecVersion;
-}
-
 function safeNpubEncode(pubkey: string): string {
   try {
     return npubEncode(pubkey);
@@ -38,55 +32,19 @@ function safeNpubEncode(pubkey: string): string {
   }
 }
 
-export function isNpubDerivedName(name: string): boolean {
-  return name === "" || name === "@";
+export function parseRecords(event: AnyEvent) {
+  return sdkParseRecords(event as unknown as NostrEvent);
 }
 
-export function computeFqdn(name: string, pubkey: string, zone: string = DEFAULT_ZONE): string {
-  if (isNpubDerivedName(name)) {
-    return `${safeNpubEncode(pubkey)}.${zone}`;
-  }
-  return `${name}.${zone}`;
+export function parseRecord(event: AnyEvent) {
+  return sdkParseRecord(event as unknown as NostrEvent);
 }
 
-function parseTtl(tag: string[]): number {
-  if (tag.length > 10) {
-    const parsed = parseInt(tag[10], 10);
-    if (!Number.isNaN(parsed) && parsed > 0) return parsed;
-  }
-  if (tag.length > 4) {
-    for (let i = tag.length - 1; i >= 4; i--) {
-      const parsed = parseInt(tag[i], 10);
-      if (!Number.isNaN(parsed) && parsed > 0) return parsed;
-    }
-  }
-  return 3600;
+export function checkValidity(event: AnyEvent) {
+  return sdkCheckValidity(event as unknown as NostrEvent);
 }
 
-export function parseRecords(event: ExplorerEvent | NostrEvent): RecordInfo[] {
-  const tags = event.tags;
-  const pubkey = event.pubkey;
-  const records: RecordInfo[] = [];
-  for (const tag of tags) {
-    if (tag[0] !== "record") continue;
-    if (tag.length < 4) continue;
-    const type = (tag[1] ?? "").toUpperCase();
-    const name = tag[2] ?? "";
-    const rdata = tag[3] ?? "";
-    const ttl = parseTtl(tag);
-    const isNpubDerived = isNpubDerivedName(name);
-    const fqdn = computeFqdn(name, pubkey);
-    records.push({ type, name, ttl, rdata, fqdn, isNpubDerived });
-  }
-  return records;
-}
-
-export function parseRecord(event: ExplorerEvent | NostrEvent): RecordInfo | null {
-  const records = parseRecords(event);
-  return records.length > 0 ? records[0] : null;
-}
-
-export function parsePayment(event: ExplorerEvent | NostrEvent): PaymentInfo {
+export function parsePayment(event: AnyEvent): PaymentInfo {
   const tag = event.tags.find((t) => t[0] === "cashu");
   if (!tag || tag.length < 4) {
     const firstRecord = parseRecord(event);
@@ -110,39 +68,6 @@ export function parsePayment(event: ExplorerEvent | NostrEvent): PaymentInfo {
   };
 }
 
-function detectSpecVersion(tags: string[][]): SpecVersion {
-  const hasAlt = tags.some((t) => t[0] === "alt");
-  const cashuTag = tags.find((t) => t[0] === "cashu");
-  const hasP2PK = cashuTag?.[1]?.includes("P2PK") ?? false;
-  if (hasP2PK) return "v2";
-  if (hasAlt) return "v1.1";
-  return "v1";
-}
-
-export function checkValidity(event: ExplorerEvent | NostrEvent): ValidityInfo {
-  const tags = event.tags;
-  const specVersion = detectSpecVersion(tags);
-  const validTypes = VALID_RECORD_TYPES as readonly string[];
-
-  const recordTags = tags.filter((t) => t[0] === "record");
-
-  if (recordTags.length === 0) {
-    return { valid: false, reason: "no record tags", specVersion };
-  }
-
-  for (const tag of recordTags) {
-    if (tag.length < 4) {
-      return { valid: false, reason: `malformed (${tag.length} fields)`, specVersion };
-    }
-    const type = (tag[1] ?? "").toUpperCase();
-    if (!validTypes.includes(type)) {
-      return { valid: false, reason: `unknown type: ${type}`, specVersion };
-    }
-  }
-
-  return { valid: true, specVersion };
-}
-
 export interface ZoneEventInfo {
   zone: string;
   status?: string;
@@ -154,7 +79,7 @@ export interface ZoneEventInfo {
   dnskeyHash?: string;
 }
 
-export function parseZoneEvent(event: ExplorerEvent | NostrEvent): ZoneEventInfo | null {
+export function parseZoneEvent(event: AnyEvent): ZoneEventInfo | null {
   const tags = event.tags;
   const zoneTag = tags.find((t) => t[0] === "zone" && t[1]);
   if (!zoneTag) return null;
