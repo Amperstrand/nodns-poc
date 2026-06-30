@@ -688,6 +688,8 @@ Hooks are opt-in via `git config core.hooksPath .githooks`. The pre-commit hook 
 
 - **NIP-13 PoW as resolver-side policy**: Proof of Work difficulty is not a protocol constant — it's a local resolver policy. Publishers mine PoW before publishing (default 20 bits via Web Worker in frontend, synchronous in CLI). Each operator/resolver independently decides what minimum difficulty to accept: CI = 0-16 bits, nodns.shop = 20 bits, OpenWrt resolver = 24 bits. For operator-mirrored zones (nodns.shop), Cashu payment is the primary economic incentive — PoW is an optional additional gate. For .nostr resolver-indexed names (no operator), PoW IS the anti-spam mechanism.
 
+- **Proof of Burn via ThomasV's notary (either/or with PoW)**: Events pass if they have EITHER sufficient PoW OR sufficient PoB burn. PoB uses ThomasV's notary service (notary.electrum.org, mainnet) — publisher pays a Lightning invoice, notary burns sats on-chain, proof is verified via HTTP API. Disabled by default (`min_pob_sats = 0`). For premium namespaces where real economic commitment matters.
+
 ## Architecture Direction (2026-06)
 
 The system is moving toward a **two-component split**: DNS connector (Knot/Cloudflare/EPP) + payment processor (NIP-17 DM listener). See `docs/45-architecture-direction.md` for the full spec.
@@ -716,7 +718,7 @@ These are decided. Do not re-litigate without explicit instruction.
 
 ## Known limitations
 
-- **Payment verification is not yet enforced in production**: `deploy/config-multi-zone.toml` has `[payment] enabled = false`. Cashu verification infrastructure (`payment.rs`, CDK integration) is built but disabled pending mint selection and pricing finalization. Anti-spam currently relies on rate limiting and record count caps only.
+- **Payment verification is not yet enforced in production**: `deploy/config-multi-zone.toml` has `[payment] enabled = false`. Cashu verification infrastructure (`payment.rs`, CDK integration) is built but disabled pending mint selection and pricing finalization. Anti-spam for $npub names uses NIP-13 PoW (20 bits enforced on nodns.shop). Custom names remain deferred.
 
 - **No database migrations**: Schema is a single `CREATE TABLE IF NOT EXISTS` block applied on startup. Schema evolution requires code changes + restart. Acceptable now (small dataset, rebuildable from events), but will need a migration framework if the schema stabilizes and in-place upgrades become necessary.
 
