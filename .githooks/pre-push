@@ -27,7 +27,7 @@ fi
 # ---------------------------------------------------------------------------
 if echo "$PUSHED" | grep -q '^nodns-frontend/.*\.\(ts\|tsx\|css\)$'; then
     echo "[pre-push] Frontend: running build check..."
-    (cd "$ROOT/nodns-frontend" && npx next build)
+    (cd "$ROOT/nodns-frontend" && npm run build)
     echo "[pre-push] OK - frontend build passed."
 fi
 
