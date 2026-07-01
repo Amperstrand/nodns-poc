@@ -786,7 +786,7 @@ export function RecordBrowser() {
                         }`}
                         title={`PoW difficulty: ${pow} bits (min ${DEFAULT_POW_DIFFICULTY})`}
                       >
-                        ⚡{pow}
+                        💪{pow}
                       </span>
                       <span className="text-xs text-muted-foreground">
                         {time}

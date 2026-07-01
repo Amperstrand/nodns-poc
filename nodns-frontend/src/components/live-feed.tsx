@@ -94,7 +94,7 @@ export function LiveFeed() {
                     }`}
                     title={`PoW difficulty: ${pow} bits (min ${DEFAULT_POW_DIFFICULTY})`}
                   >
-                    ⚡{pow}
+                    💪{pow}
                   </span>
                   <span className="min-w-0 truncate text-foreground/70">{getRecordSummary(ev)}</span>
                 </div>
