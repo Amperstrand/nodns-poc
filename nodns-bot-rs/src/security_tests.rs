@@ -1057,88 +1057,139 @@ fn rejects_event_exactly_at_boundary_check() {
 }
 
 // ===========================================================================
-// SECURITY: Proof of Burn — tag extraction and threshold verification
+// SECURITY: Proof of Burn — kind 30021 tag parsing
 // ===========================================================================
 
-#[test]
-fn extract_pob_tag_parses_valid_tag() {
-    let proof_json = r#"{"tx":"abc123","merkle":["a","b"]}"#;
-    let tag = Tag::parse(["pob", "5000", proof_json]).unwrap();
-    let tags = Tags::from_list(vec![tag]);
-    let pob = pob::extract_pob_tag(&tags).expect("should parse pob tag");
-    assert_eq!(pob.amount_sats, 5000);
-    assert_eq!(pob.proof_json, proof_json);
+fn make_kind_30021(tags: Vec<Tag>) -> Event {
+    let keys = Keys::generate();
+    EventBuilder::new(Kind::Custom(30021), "")
+        .tags(tags)
+        .sign_with_keys(&keys)
+        .unwrap()
+}
+
+fn n_tag() -> Tag {
+    Tag::parse([
+        "n",
+        "aabbccdd",
+        "800000",
+        "deadbeef",
+        "5000000",
+        "3",
+        "hash1:100,hash2:200",
+    ])
+    .unwrap()
 }
 
 #[test]
-fn extract_pob_tag_returns_none_when_absent() {
-    let tag = Tag::parse(["record", "A", "@", "3600", "1.2.3.4"]).unwrap();
-    let tags = Tags::from_list(vec![tag]);
-    assert!(pob::extract_pob_tag(&tags).is_none());
-}
-
-#[test]
-fn extract_pob_tag_returns_none_for_empty_tags() {
-    let tags = Tags::from_list(vec![]);
-    assert!(pob::extract_pob_tag(&tags).is_none());
-}
-
-#[test]
-fn extract_pob_tag_skips_invalid_amount() {
-    let tag = Tag::parse(["pob", "not-a-number", "{}"]).unwrap();
-    let tags = Tags::from_list(vec![tag]);
-    assert!(pob::extract_pob_tag(&tags).is_none());
-}
-
-#[test]
-fn extract_pob_tag_skips_tag_with_too_few_elements() {
-    let tag = Tag::parse(["pob", "100"]).unwrap();
-    let tags = Tags::from_list(vec![tag]);
-    assert!(pob::extract_pob_tag(&tags).is_none());
-}
-
-#[test]
-fn extract_pob_tag_finds_first_pob_among_other_tags() {
-    let proof_json = r#"{"tx":"burn"}"#;
-    let tags = Tags::from_list(vec![
-        Tag::parse(["record", "A", "@", "3600", "1.2.3.4"]).unwrap(),
-        Tag::parse(["pob", "250", proof_json]).unwrap(),
-        Tag::parse(["pob", "999", r#"{"tx":"other"}"#]).unwrap(),
+fn parse_kind_30021_proof_valid() {
+    let event = make_kind_30021(vec![
+        Tag::parse(["e", "abc123eventid"]).unwrap(),
+        n_tag(),
+        Tag::parse(["chain", "000000000019d6689c085ae165831e93"]).unwrap(),
     ]);
-    let pob = pob::extract_pob_tag(&tags).expect("should find first pob");
-    assert_eq!(pob.amount_sats, 250);
+    let proof = pob::parse_kind_30021_proof(&event).expect("should parse");
+    assert_eq!(proof.event_id, "abc123eventid");
+    assert_eq!(proof.txid, "aabbccdd");
+    assert_eq!(proof.block_height, 800000);
+    assert_eq!(proof.leaf_value, 5000000);
+    assert_eq!(proof.merkle_index, 3);
+    assert_eq!(proof.chain, "000000000019d6689c085ae165831e93");
+}
+
+#[test]
+fn parse_kind_30021_proof_missing_e_tag_returns_none() {
+    let event = make_kind_30021(vec![n_tag()]);
+    assert!(pob::parse_kind_30021_proof(&event).is_none());
+}
+
+#[test]
+fn parse_kind_30021_proof_missing_n_tag_returns_none() {
+    let event = make_kind_30021(vec![
+        Tag::parse(["e", "abc123"]).unwrap(),
+        Tag::parse(["chain", "deadbeef"]).unwrap(),
+    ]);
+    assert!(pob::parse_kind_30021_proof(&event).is_none());
+}
+
+#[test]
+fn parse_kind_30021_proof_n_tag_too_short_returns_none() {
+    let event = make_kind_30021(vec![
+        Tag::parse(["e", "abc123"]).unwrap(),
+        Tag::parse(["n", "txid", "100"]).unwrap(),
+    ]);
+    assert!(pob::parse_kind_30021_proof(&event).is_none());
+}
+
+#[test]
+fn parse_kind_30021_proof_empty_tags_returns_none() {
+    let event = make_kind_30021(vec![]);
+    assert!(pob::parse_kind_30021_proof(&event).is_none());
+}
+
+#[test]
+fn burn_amount_converts_millisats_to_sats() {
+    let proof = pob::NotaryProof {
+        event_id: "evt".to_string(),
+        txid: "tx".to_string(),
+        block_height: 0,
+        nonce: "n".to_string(),
+        leaf_value: 5000000,
+        merkle_index: 0,
+        merkle_hashes: vec![],
+        chain: "btc".to_string(),
+    };
+    assert_eq!(pob::burn_amount_sats(&proof), 5000);
 }
 
 #[test]
 fn meets_threshold_above() {
-    let proof = pob::PobProof {
-        amount_sats: 1000,
-        proof_json: "{}".to_string(),
+    let proof = pob::NotaryProof {
+        event_id: "evt".to_string(),
+        txid: "tx".to_string(),
+        block_height: 0,
+        nonce: "n".to_string(),
+        leaf_value: 5000000,
+        merkle_index: 0,
+        merkle_hashes: vec![],
+        chain: "btc".to_string(),
     };
-    assert!(pob::meets_threshold(&proof, 500));
-    assert!(pob::meets_threshold(&proof, 1000));
+    assert!(pob::meets_threshold(&proof, 5000));
+    assert!(pob::meets_threshold(&proof, 4000));
 }
 
 #[test]
 fn meets_threshold_below() {
-    let proof = pob::PobProof {
-        amount_sats: 100,
-        proof_json: "{}".to_string(),
+    let proof = pob::NotaryProof {
+        event_id: "evt".to_string(),
+        txid: "tx".to_string(),
+        block_height: 0,
+        nonce: "n".to_string(),
+        leaf_value: 100000,
+        merkle_index: 0,
+        merkle_hashes: vec![],
+        chain: "btc".to_string(),
     };
     assert!(!pob::meets_threshold(&proof, 500));
 }
 
 #[test]
 fn meets_threshold_zero_min_always_passes() {
-    let proof = pob::PobProof {
-        amount_sats: 0,
-        proof_json: "{}".to_string(),
+    let proof = pob::NotaryProof {
+        event_id: "evt".to_string(),
+        txid: "tx".to_string(),
+        block_height: 0,
+        nonce: "n".to_string(),
+        leaf_value: 0,
+        merkle_index: 0,
+        merkle_hashes: vec![],
+        chain: "btc".to_string(),
     };
     assert!(pob::meets_threshold(&proof, 0));
 }
 
 // ===========================================================================
-// SECURITY: PoW OR PoB either/or gate logic
+// SECURITY: PoW OR PoB either/or gate logic (store-based PoB)
 // ===========================================================================
 
 #[test]
@@ -1162,9 +1213,9 @@ fn either_or_logic_pow_sufficient_alone_passes() {
     let pow_ok = pow::verify_pow(event_id, min_pow);
     assert!(pow_ok);
 
-    let tags = Tags::from_list(vec![]);
+    let store = setup_store();
     let pob_ok = if min_pob_sats > 0 {
-        pob::extract_pob_tag(&tags).is_some()
+        matches!(store.get_pob_proof(event_id).unwrap(), Some((bs, _)) if bs >= min_pob_sats)
     } else {
         false
     };
@@ -1181,9 +1232,9 @@ fn either_or_logic_both_fail_rejects() {
     let pow_ok = pow::verify_pow(event_id, min_pow);
     assert!(!pow_ok);
 
-    let tags = Tags::from_list(vec![]);
+    let store = setup_store();
     let pob_ok = if min_pob_sats > 0 {
-        pob::extract_pob_tag(&tags).is_some()
+        matches!(store.get_pob_proof(event_id).unwrap(), Some((bs, _)) if bs >= min_pob_sats)
     } else {
         false
     };
@@ -1194,21 +1245,57 @@ fn either_or_logic_both_fail_rejects() {
 }
 
 #[test]
-fn either_or_logic_pob_threshold_meit_passes() {
-    let proof = pob::PobProof {
-        amount_sats: 500,
-        proof_json: "{}".to_string(),
-    };
+fn either_or_logic_pob_in_store_passes() {
+    let store = setup_store();
+    let event_id = "f000000000000000000000000000000000000000000000000000000000000000";
+    store.save_pob_proof(event_id, 500, "txid123").unwrap();
+
     let min_pob_sats: u64 = 100;
-    assert!(pob::meets_threshold(&proof, min_pob_sats));
+    let result = match store.get_pob_proof(event_id).unwrap() {
+        Some((bs, _)) => bs >= min_pob_sats,
+        None => false,
+    };
+    assert!(result, "stored PoB proof should pass threshold");
 }
 
 #[test]
-fn either_or_logic_pob_threshold_below_fails() {
-    let proof = pob::PobProof {
-        amount_sats: 50,
-        proof_json: "{}".to_string(),
-    };
+fn either_or_logic_pob_below_threshold_fails() {
+    let store = setup_store();
+    let event_id = "f000000000000000000000000000000000000000000000000000000000000000";
+    store.save_pob_proof(event_id, 50, "txid123").unwrap();
+
     let min_pob_sats: u64 = 100;
-    assert!(!pob::meets_threshold(&proof, min_pob_sats));
+    let result = match store.get_pob_proof(event_id).unwrap() {
+        Some((bs, _)) => bs >= min_pob_sats,
+        None => false,
+    };
+    assert!(!result, "stored PoB below threshold should fail");
+}
+
+#[test]
+fn either_or_logic_no_stored_pob_fails() {
+    let store = setup_store();
+    let event_id = "f000000000000000000000000000000000000000000000000000000000000000";
+
+    let min_pob_sats: u64 = 100;
+    let result = match store.get_pob_proof(event_id).unwrap() {
+        Some((bs, _)) => bs >= min_pob_sats,
+        None => false,
+    };
+    assert!(!result, "no stored PoB should fail");
+}
+
+#[test]
+fn store_pob_proof_roundtrip() {
+    let store = setup_store();
+    store.save_pob_proof("event_abc", 5000, "txid_def").unwrap();
+    let (burn_sats, txid) = store.get_pob_proof("event_abc").unwrap().unwrap();
+    assert_eq!(burn_sats, 5000);
+    assert_eq!(txid, "txid_def");
+}
+
+#[test]
+fn store_pob_proof_none_when_absent() {
+    let store = setup_store();
+    assert!(store.get_pob_proof("nonexistent").unwrap().is_none());
 }

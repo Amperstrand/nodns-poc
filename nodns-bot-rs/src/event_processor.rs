@@ -86,6 +86,12 @@ pub async fn process_nostr_event(
     metrics: &Metrics,
     epp_pool: Option<&nodns_epp::EppPool>,
 ) {
+    let event_kind = u64::from(evt.kind.as_u16());
+    if event_kind == crate::types::KIND_POB_PROOF {
+        process_pob_proof(evt, cfg, store, metrics).await;
+        return;
+    }
+
     let event_id = evt.id.to_hex();
     let pubkey_hex = evt.pubkey.to_hex();
     let created_at = evt.created_at.as_secs() as i64;
@@ -100,7 +106,6 @@ pub async fn process_nostr_event(
         .max(cfg.policy.min_pow);
 
     let effective_min_pob_sats = cfg.policy.min_pob_sats;
-    let pob_notary_url = cfg.policy.pob_notary_url.as_str();
 
     if effective_min_pow > 0 || effective_min_pob_sats > 0 {
         let pow_ok = if effective_min_pow > 0 {
@@ -110,16 +115,9 @@ pub async fn process_nostr_event(
         };
 
         let pob_ok = if effective_min_pob_sats > 0 {
-            if let Some(proof) = pob::extract_pob_tag(&evt.tags) {
-                if pob::meets_threshold(&proof, effective_min_pob_sats) {
-                    pob::verify_pob(&proof, pob_notary_url)
-                        .await
-                        .unwrap_or(false)
-                } else {
-                    false
-                }
-            } else {
-                false
+            match store.get_pob_proof(&event_id) {
+                Ok(Some((burn_sats, _))) => burn_sats >= effective_min_pob_sats,
+                _ => false,
             }
         } else {
             false
@@ -287,6 +285,61 @@ pub async fn process_nostr_event(
     if let Err(e) = store.set_last_seen(created_at) {
         error!(event_id = %event_id, error = %e, "failed to update last_seen");
     }
+}
+
+// ---------------------------------------------------------------------------
+// process_pob_proof — kind 30021 handler
+// ---------------------------------------------------------------------------
+
+async fn process_pob_proof(evt: &Event, cfg: &Config, store: &Arc<Store>, metrics: &Metrics) {
+    let proof_event_id = evt.id.to_hex();
+
+    let Some(proof) = pob::parse_kind_30021_proof(evt) else {
+        warn!(
+            proof_event_id = %proof_event_id,
+            "kind 30021 event missing required tags, skipping"
+        );
+        metrics.events_rejected.fetch_add(1, Ordering::Relaxed);
+        return;
+    };
+
+    let target_event_id = proof.event_id.clone();
+    let txid = proof.txid.clone();
+    let burn_sats = pob::burn_amount_sats(&proof);
+
+    let verified = pob::verify_or_warn(&proof, &cfg.policy.pob_notary_url).await;
+
+    if !verified {
+        warn!(
+            proof_event_id = %proof_event_id,
+            target_event_id = %target_event_id,
+            txid = %txid,
+            burn_sats = burn_sats,
+            "PoB proof verification failed or notary unreachable"
+        );
+        metrics.events_rejected.fetch_add(1, Ordering::Relaxed);
+        return;
+    }
+
+    if let Err(e) = store.save_pob_proof(&target_event_id, burn_sats, &txid) {
+        error!(
+            proof_event_id = %proof_event_id,
+            target_event_id = %target_event_id,
+            error = %e,
+            "failed to save PoB proof"
+        );
+        metrics.events_rejected.fetch_add(1, Ordering::Relaxed);
+        return;
+    }
+
+    info!(
+        proof_event_id = %proof_event_id,
+        target_event_id = %target_event_id,
+        txid = %txid,
+        burn_sats = burn_sats,
+        "PoB proof verified and stored"
+    );
+    metrics.events_processed.fetch_add(1, Ordering::Relaxed);
 }
 
 // ---------------------------------------------------------------------------

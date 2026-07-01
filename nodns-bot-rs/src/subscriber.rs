@@ -30,7 +30,7 @@ use tokio::task::JoinHandle;
 
 use crate::config::NostrConfig;
 use crate::store::Store;
-use crate::types::{KIND_DNS_RECORD, KIND_DNS_REPLACEABLE};
+use crate::types::{KIND_DNS_RECORD, KIND_DNS_REPLACEABLE, KIND_POB_PROOF};
 
 // ---------------------------------------------------------------------------
 // Error type
@@ -80,6 +80,7 @@ impl Subscriber {
         let mut filter = Filter::new().kinds(vec![
             Kind::Custom(KIND_DNS_RECORD as u16),
             Kind::Custom(KIND_DNS_REPLACEABLE as u16),
+            Kind::Custom(KIND_POB_PROOF as u16),
         ]);
         if last_seen > 0 {
             filter = filter.since(Timestamp::from_secs(last_seen as u64));

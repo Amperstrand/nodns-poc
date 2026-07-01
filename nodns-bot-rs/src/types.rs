@@ -8,6 +8,7 @@ use std::str::FromStr;
 /// DNS record type constants.
 pub const KIND_DNS_RECORD: u64 = 11111;
 pub const KIND_DNS_REPLACEABLE: u64 = 31111;
+pub const KIND_POB_PROOF: u64 = 30021;
 pub const DEFAULT_TTL: u32 = 3600;
 
 /// Check if a Nostr event kind is a recognized DNS record kind (11111 or 31111).

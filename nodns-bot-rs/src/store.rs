@@ -1188,6 +1188,39 @@ impl Store {
         .map_err(|e| StoreError::UpdateAcmeDnsTxt(subdomain.to_string(), e))?;
         Ok(())
     }
+
+    // -----------------------------------------------------------------------
+    // PoB proofs
+    // -----------------------------------------------------------------------
+
+    pub fn save_pob_proof(
+        &self,
+        event_id: &str,
+        burn_sats: u64,
+        txid: &str,
+    ) -> Result<(), StoreError> {
+        let conn = self.conn();
+        conn.execute(
+            "INSERT OR REPLACE INTO pob_proofs (event_id, burn_sats, proof_txid, verified_at)
+             VALUES (?1, ?2, ?3, unixepoch())",
+            params![event_id, burn_sats, txid],
+        )
+        .map_err(StoreError::SetMeta)?;
+        Ok(())
+    }
+
+    pub fn get_pob_proof(&self, event_id: &str) -> Result<Option<(u64, String)>, StoreError> {
+        let conn = self.conn();
+        let result: Option<(i64, String)> = conn
+            .query_row(
+                "SELECT burn_sats, proof_txid FROM pob_proofs WHERE event_id = ?1",
+                params![event_id],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .optional()
+            .map_err(StoreError::GetMeta)?;
+        Ok(result.map(|(s, t)| (s as u64, t)))
+    }
 }
 
 fn run_migrations(conn: &Connection) -> Result<(), StoreError> {
@@ -1363,6 +1396,13 @@ const SCHEMA: &str = r"
 
     CREATE INDEX IF NOT EXISTS idx_epp_orders_delegation ON epp_orders(delegation_domain, delegation_zone);
     CREATE INDEX IF NOT EXISTS idx_epp_orders_cltrid ON epp_orders(epp_cltrid);
+
+    CREATE TABLE IF NOT EXISTS pob_proofs (
+        event_id TEXT PRIMARY KEY,
+        burn_sats INTEGER NOT NULL,
+        proof_txid TEXT NOT NULL,
+        verified_at INTEGER NOT NULL DEFAULT (unixepoch())
+    );
 ";
 
 // ---------------------------------------------------------------------------
