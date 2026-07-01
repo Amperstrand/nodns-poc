@@ -8,7 +8,7 @@ import {
 import { npubEncode, nsecEncode, decode as nip19Decode } from "nostr-tools/nip19";
 import { SimplePool } from "nostr-tools/pool";
 import { minePow } from "nostr-tools/nip13";
-import { RELAYS, PUBLISH_RELAYS } from "./constants";
+import { RELAYS, PUBLISH_RELAYS, DEFAULT_POW_DIFFICULTY } from "./constants";
 
 export function generateKeypair() {
   const sk = generateSecretKey();
@@ -78,7 +78,7 @@ export async function signAndPublish(
   secretKey: Uint8Array | null,
   tags: string[][],
   content: string = "",
-  powDifficulty: number = 20,
+  powDifficulty: number = DEFAULT_POW_DIFFICULTY,
 ): Promise<NostrEvent> {
   let template: EventTemplate = {
     kind: NOSTR_KIND,
