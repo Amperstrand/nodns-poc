@@ -49,7 +49,7 @@ echo "[3/4] Cross-compiling for Linux x86_64..."
 echo "  (This takes ~10 minutes on first run, ~2 minutes incremental)"
 (cd "$BOT_DIR" && cargo zigbuild --release --target "$TARGET")
 
-BINARY="${BOT_DIR}/target/${TARGET}/release/nodns-bot"
+BINARY="${REPO_ROOT}/target/${TARGET}/release/nodns-bot"
 
 if [ ! -f "$BINARY" ]; then
     echo "ERROR: Binary not found at ${BINARY}"
