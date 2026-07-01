@@ -20,10 +20,6 @@ import {
 } from "@/components/publish-pipeline";
 import { CertRequest } from "@/components/cert-request";
 
-interface DemoPublishEvent extends CustomEvent {
-  detail: { message: string };
-}
-
 export function Dashboard() {
   const [keyPair, setKeyPair] = useState<KeyPair | null>(null);
   const [showKeyInput, setShowKeyInput] = useState(false);
@@ -196,48 +192,6 @@ export function Dashboard() {
     },
     [cashuToken, startPipeline, pricing],
   );
-
-  useEffect(() => {
-    const handler = (e: Event) => {
-      const demoEvent = e as DemoPublishEvent;
-      if (!demoEvent.detail?.message) return;
-
-      const message = demoEvent.detail.message;
-      let kp = keyPairRef.current;
-      if (!kp) {
-        kp = generateEphemeralKeyPair();
-        setKeyPair(kp);
-        keyPairRef.current = kp;
-      }
-
-      const records: PendingRecord[] = [
-        {
-          type: "TXT",
-          name: "",
-          value: message,
-          ttl: 300,
-          displayName: "@ (root)",
-        },
-      ];
-
-      publishDnsEvent(records, kp.secretKey, undefined, pricing?.mint_url, pricing?.create_price).then((event) => {
-        setFeedback({
-          message: `Published demo record. Event ID: ${event.id.slice(0, 16)}...`,
-          type: "success",
-        });
-        const fqdn = `${kp!.npub}.${DEFAULT_ZONE}`;
-        setVerifyFqdn(fqdn);
-        startPipeline(fqdn, event.id);
-      }).catch((err) => {
-        const msg = err instanceof Error ? err.message : "Unknown error";
-        setFeedback({ message: `Demo publish failed: ${msg}`, type: "error" });
-        setPipelineStatus("error");
-      });
-    };
-
-    window.addEventListener("nodns-demo-publish", handler);
-    return () => window.removeEventListener("nodns-demo-publish", handler);
-  }, [startPipeline, pricing]);
 
   useEffect(() => {
     return () => {
