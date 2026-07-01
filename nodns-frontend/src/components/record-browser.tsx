@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { RELAYS, DNS_TYPES, DNS_STATUS_CODES, DEFAULT_ZONE, API_BASE } from "@/lib/constants";
+import { RELAYS, DNS_TYPES, DNS_STATUS_CODES, DEFAULT_ZONE, API_BASE, countLeadingZeroBits, DEFAULT_POW_DIFFICULTY } from "@/lib/constants";
 import { queryDoh } from "@/lib/dns";
 import { queryAllRecentRecords, subscribeToDnsEvents } from "@/lib/nostr";
 import type {
@@ -752,6 +752,8 @@ export function RecordBrowser() {
                 recordTags.map((t) => t[1]).join(", ") || "no records";
               const shortPk = ev.pubkey.slice(0, 12) + "...";
               const time = new Date(ev.created_at * 1000).toLocaleString();
+              const pow = countLeadingZeroBits(ev.id);
+              const powPasses = pow >= DEFAULT_POW_DIFFICULTY;
 
               return (
                 <div
@@ -771,10 +773,20 @@ export function RecordBrowser() {
                     }}
                     className="flex cursor-pointer items-center justify-between select-none hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
                   >
-                    <div className="flex items-center gap-2 min-w-0">
+                    <div className="flex items-center gap-2 min-w-0 flex-wrap">
                       <ShieldIcon className="size-3.5 text-primary shrink-0" />
                       <span className="font-mono text-sm font-medium">
                         {shortPk}
+                      </span>
+                      <span
+                        className={`shrink-0 font-mono text-xs px-1.5 py-0.5 rounded font-semibold ${
+                          powPasses
+                            ? "bg-emerald-500/10 text-emerald-400"
+                            : "bg-red-500/10 text-red-400"
+                        }`}
+                        title={`PoW difficulty: ${pow} bits (min ${DEFAULT_POW_DIFFICULTY})`}
+                      >
+                        ⚡{pow}
                       </span>
                       <span className="text-xs text-muted-foreground">
                         {time}

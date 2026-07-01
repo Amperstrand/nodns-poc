@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { subscribeToDnsEvents } from "@/lib/nostr";
+import { countLeadingZeroBits, DEFAULT_POW_DIFFICULTY } from "@/lib/constants";
 import type { NostrEvent } from "@/lib/types";
 
 interface FeedItem {
@@ -76,6 +77,8 @@ export function LiveFeed() {
             visible.map(({ event: ev }) => {
               const time = new Date(ev.created_at * 1000).toLocaleTimeString();
               const shortPk = ev.pubkey.slice(0, 12) + "...";
+              const pow = countLeadingZeroBits(ev.id);
+              const powPasses = pow >= DEFAULT_POW_DIFFICULTY;
               return (
                 <div
                   key={ev.id}
@@ -83,6 +86,16 @@ export function LiveFeed() {
                 >
                   <span className="shrink-0 font-mono text-foreground/70">{time}</span>
                   <span className="shrink-0 font-mono font-medium text-foreground">{shortPk}</span>
+                  <span
+                    className={`shrink-0 font-mono text-xs px-1.5 py-0.5 rounded font-semibold ${
+                      powPasses
+                        ? "bg-emerald-500/10 text-emerald-400"
+                        : "bg-red-500/10 text-red-400"
+                    }`}
+                    title={`PoW difficulty: ${pow} bits (min ${DEFAULT_POW_DIFFICULTY})`}
+                  >
+                    ⚡{pow}
+                  </span>
                   <span className="min-w-0 truncate text-foreground/70">{getRecordSummary(ev)}</span>
                 </div>
               );
