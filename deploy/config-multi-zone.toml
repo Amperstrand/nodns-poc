@@ -24,8 +24,19 @@ tsig_key_secret = "REPLACE_WITH_REAL_SECRET"
 tsig_algorithm = "hmac-sha256"
 dns_cache_events = true
 
+[dns.zones.payment]
+enabled = true
+create_price = 4
+update_price = 0
+delete_price = 0
+npub_names_free = true
+mint_url = "https://testnut.cashu.space"
+mint_filter = "testnut"
+
 [dns.zones.lease]
 operator_lease_expires = "2027-06-04"
+max_lease_days = 365
+grace_period_days = 30
 
 [policy]
 max_records = 20

@@ -963,10 +963,68 @@ async fn process_dns_update(
                 }
             }
 
-            if let Err(e) = authority.check_authority(&fqdn, zone_name, pubkey_hex) {
-                warn!(event_id = %event_id, fqdn = %fqdn, error = %e, "authority check failed");
-                all_ok = false;
-                continue;
+            match authority.check_authority(&fqdn, zone_name, pubkey_hex) {
+                Ok(()) => {}
+                Err(auth::AuthError::NoActiveDelegation { domain, .. }) => {
+                    if parsed.payments.is_empty() || !zone_verifiers.contains_key(zone_name) {
+                        warn!(
+                            event_id = %event_id,
+                            fqdn = %fqdn,
+                            "custom name requires payment — no valid Cashu token found"
+                        );
+                        all_ok = false;
+                        continue;
+                    }
+
+                    let now_secs = SystemTime::now()
+                        .duration_since(UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_secs() as i64;
+
+                    let lease_days = cfg
+                        .dns
+                        .zones
+                        .iter()
+                        .find(|z| z.zone == *zone_name)
+                        .map(|z| z.lease.max_lease_days)
+                        .unwrap_or(365);
+
+                    let valid_until = now_secs + lease_days as i64 * 86400;
+
+                    if let Err(e) = store.save_delegation(
+                        event_id,
+                        &domain,
+                        zone_name,
+                        npub,
+                        pubkey_hex,
+                        now_secs,
+                        valid_until,
+                        valid_until,
+                        pubkey_hex,
+                    ) {
+                        error!(
+                            event_id = %event_id,
+                            fqdn = %fqdn,
+                            error = %e,
+                            "failed to save delegation for custom name registration"
+                        );
+                        all_ok = false;
+                        continue;
+                    }
+
+                    info!(
+                        event_id = %event_id,
+                        fqdn = %fqdn,
+                        npub = %npub,
+                        lease_days = lease_days,
+                        "custom name registered via Cashu payment (first-come-first-served)"
+                    );
+                }
+                Err(e) => {
+                    warn!(event_id = %event_id, fqdn = %fqdn, error = %e, "authority check failed");
+                    all_ok = false;
+                    continue;
+                }
             }
 
             let is_cv = zone_name == "cv" || zone_name.ends_with(".cv");
