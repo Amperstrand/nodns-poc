@@ -331,6 +331,22 @@ Reference a zap receipt as proof of payment.
    a. Verify signer matches bootstrap config or previous registrar key
    b. Store as active registrar for the zone
 
+### Anti-Spam Gates (PoW OR PoB)
+
+Events must satisfy EITHER:
+
+1. **NIP-13 Proof of Work**: Event ID has ≥ `policy.min_pow` leading zero bits. Publisher includes a `["nonce", value, target]` tag. Bot counts leading zero bits in the event ID hash. Default difficulty: 20 bits (~2-3s mining in browser).
+
+2. **Proof of Burn**: A verified burn exists for this event. Burns are **separate kind 30021 Nostr events** published by ThomasV's notary (notary.electrum.org). The bot subscribes to kind 30021, verifies proofs via the notary API, and stores them in a `pob_proofs` table. Burn amount must be ≥ `policy.min_pob_sats`.
+
+**Gate behavior**:
+- `min_pow=0, min_pob_sats=0`: No gate (backwards compatible, all events accepted)
+- `min_pow=20, min_pob_sats=0`: PoW-only mode (current nodns.shop production setting)
+- `min_pow=0, min_pob_sats=1000`: PoB-only mode
+- `min_pow=20, min_pob_sats=1000`: Either/or (event passes with either)
+
+**Resolver-side policy**: PoW difficulty is NOT a protocol constant. Each operator/resolver sets their own threshold. CI = 0 bits, nodns.shop = 20 bits, OpenWrt resolver = 24 bits.
+
 ### Conflict Resolution
 
 - **Same npub, same record type, same name**: Latest event wins (by `created_at`)

@@ -104,7 +104,7 @@ nodns-poc/
 │       ├── auth.rs         # Authority/delegation checking
 │       ├── acme.rs         # ACME (Let's Encrypt) certificate management
 │       ├── classify.rs     # Name/mint classification + enforcement matrix
-│       ├── cloudflare_backend.rs  # Cloudflare API DNS backend (DnsBackend enum)
+│       ├── cloudflare_backend.rs  # Cloudflare API DNS backend (DnsConnector impl)
 │       ├── config.rs       # TOML config with multi-zone, per-zone payment
 │       ├── dns.rs          # DDNS updater (RFC 2136 + TSIG)
 │       ├── dns_cache.rs    # Experimental Nostr-over-DNS event caching

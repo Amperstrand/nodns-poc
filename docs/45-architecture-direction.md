@@ -137,7 +137,7 @@ The current `nodns-bot-rs` already has most of the pieces. Here's what exists, w
 |---|---|---|---|
 | `dns.rs` (`Updater`) | DNS Connector | ✅ Done | Knot DDNS, RFC 2136 + TSIG. Production-tested. |
 | `cloudflare_backend.rs` (`CloudflareBackend`) | DNS Connector | ✅ Done | Cloudflare API backend. |
-| `cloudflare_backend.rs` (`DnsBackend` enum) | DNS Connector | ✅ Done | **The connector abstraction already exists.** Enum with `Ddns` + `Cloudflare` variants. Common interface: `update_record`, `delete_record`, `update_txt_multi`, `append_record`, `test_connection`. |
+| `cloudflare_backend.rs` (`DnsConnector` trait) | DNS Connector | ✅ Done | **The connector abstraction is complete.** Trait-based with Knot DDNS + Cloudflare implementations. Common interface: `update_record`, `delete_record`, `update_txt_multi`, `append_record`, `test_connection`. Lives in `nodns-connectors` workspace crate. |
 | `payment.rs` (`Verifier`) | Payment Processor | ✅ Done | Cashu token verification via CDK `checkstate`. Already modular, separate module. |
 | `subscriber.rs` | Both (shared) | ✅ Done | Relay subscription, signature verification. Pure connector, no coupling. |
 | `parser.rs` | Both (shared) | ✅ Done | Kind 11111 tag parsing, validation. |
@@ -259,7 +259,7 @@ When real value is involved, add P2PK locking with refund deadlines (`docs/43`).
 
 ## Refactor Plan
 
-### Phase 1: Convert DnsBackend to trait (IN PROGRESS)
+### Phase 1: Convert DnsBackend to trait (DONE)
 
 Convert from enum to `DnsConnector` trait with `async_trait`. Makes connectors mockable, testable, and extractable into a separate crate. See issue #75/#73.
 

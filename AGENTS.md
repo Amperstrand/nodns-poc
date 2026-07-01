@@ -226,6 +226,7 @@ The bot uses a single SQLite database (`records.db`) accessed via `rusqlite` wra
 | `acme_dns_registrations` | DNS-01 challenge TXT records published during ACME |
 | `registrar_keys` | Registrar public keys per zone (bootstrap + event-published) |
 | `operator_leases` | Domain lease tracking (zone, operator, expiry) |
+| `pob_proofs` | Verified Proof of Burn proofs (event_id → burn_sats, txid). Populated from kind 30021 events. |
 
 ### ACME key encryption in storage
 
@@ -327,7 +328,7 @@ nodns-bot-rs/src/
   subscriber.rs              Nostr relay subscription (nostr-sdk), reconnect backoff
   security_tests.rs          Security regression tests
   pow.rs                     NIP-13 Proof of Work verification (count leading zero bits)
-  pob.rs                     Proof of Burn verification via ThomasV's notary API (either/or with PoW)
+  pob.rs                     Proof of Burn via ThomasV's notary (kind 30021 events, NotaryProof, verify_pob_with_notary)
   dns_cache.rs               Experimental Nostr-over-DNS event caching (warn-only)
   handlers/
     mod.rs                   Module exports + route registration
@@ -349,8 +350,8 @@ nodns-connectors/              Workspace crate: pluggable DNS backend abstractio
 
 shared/
   relays.ts                   Single source of truth for relay config (PUBLISH_RELAYS, READ_RELAYS)
-                              imported by frontend, registrar, and CLI
   pow.ts                      Default PoW difficulty constant (DEFAULT_POW_DIFFICULTY = 20)
+  notary.ts                   ThomasV's notary API helpers (createBurnRequest, pollForProof, verifyProof)
 
 nodns-clientlog-worker/       Cloudflare Worker for client-side error log ingestion
   src/index.ts                Receives POST /api/client-log, forwards to bot
@@ -365,6 +366,7 @@ nodns-cli/src/                 TypeScript CLI (commander, nostr-tools, @cashu/ca
     list.ts                   List records for an npub
     resolve.ts                Resolve a name via DNS
     refund.ts                 P2PK refund command (experimental)
+    burn.ts                   Proof of Burn via ThomasV's notary (create burn, show invoice, poll for proof)
     conformance.ts            Protocol conformance testing
     zone-check.ts             Zone health check
     zone-export.ts            Export zone records to file
@@ -688,7 +690,7 @@ Hooks are opt-in via `git config core.hooksPath .githooks`. The pre-commit hook 
 
 - **NIP-13 PoW as resolver-side policy**: Proof of Work difficulty is not a protocol constant — it's a local resolver policy. Publishers mine PoW before publishing (default 20 bits via Web Worker in frontend, synchronous in CLI). Each operator/resolver independently decides what minimum difficulty to accept: CI = 0-16 bits, nodns.shop = 20 bits, OpenWrt resolver = 24 bits. For operator-mirrored zones (nodns.shop), Cashu payment is the primary economic incentive — PoW is an optional additional gate. For .nostr resolver-indexed names (no operator), PoW IS the anti-spam mechanism.
 
-- **Proof of Burn via ThomasV's notary (either/or with PoW)**: Events pass if they have EITHER sufficient PoW OR sufficient PoB burn. PoB uses ThomasV's notary service (notary.electrum.org, mainnet) — publisher pays a Lightning invoice, notary burns sats on-chain, proof is verified via HTTP API. Disabled by default (`min_pob_sats = 0`). For premium namespaces where real economic commitment matters.
+- **Proof of Burn via ThomasV's notary (either/or with PoW)**: Events pass if they have EITHER sufficient PoW OR sufficient PoB burn. PoB proofs are **separate kind 30021 Nostr events** (not inline tags) — the notary publishes them after the publisher pays a Lightning invoice. Bot subscribes to kind 30021, verifies via notary.electrum.org API, stores in `pob_proofs` table. Publisher uses `nodns burn <event_id> <sats>` CLI command or notary API directly. Disabled by default (`min_pob_sats = 0`).
 
 ## Architecture Direction (2026-06)
 

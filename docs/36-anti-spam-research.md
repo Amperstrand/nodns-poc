@@ -1,6 +1,6 @@
 # 36 — Anti-Spam Research
 
-> **Status**: DRAFT. Research notes, tabled for later. No implementation planned yet.
+> **Status**: ACTIVE. NIP-13 PoW and Proof of Burn are implemented and deployed.
 
 ## Problem
 
@@ -147,18 +147,27 @@ The rate limiter (5 events/window per npub) and record cap (20 records per subdo
 | Relay moderation | None (if relay accepts) | None | None | Low (relay config) |
 | Reputation | Social capital | None | Find a voucher | High (protocol design) |
 
-## Recommendation (TABLED)
+## Recommendation (IMPLEMENTED — 2026-07)
 
-For the pilot phase, the existing Cashu payment for custom names plus rate limiting is sufficient. The spam surface (free npub-derived names) is low-risk because:
-- npub-derived names are long and ugly (`npub1abc...xyz.nodns.shop`)
-- They're not useful for phishing or typosquatting
-- Rate limiting + record cap limits the blast radius
+NIP-13 PoW and Proof of Burn are both implemented and deployed.
 
-When anti-spam becomes necessary, the recommended path is:
+**Deployed on nodns.shop**: `min_pow = 20` (PoW enforced), `min_pob_sats = 0` (PoB available but not required).
 
-1. **Short-term (easy win):** Require Cashu micro-payment (1 test sat) for ALL names, including npub-derived. Flip `npub_names_free = false`. Zero new code — just a config change.
+### What was implemented
 
-2. **Medium-term (better UX):** Add NIP-13 PoW as an alternative to Cashu. Users can either pay 1 sat OR mine 16 bits of PoW. This gives UX choice: instant payment vs. free-but-slow.
+1. **NIP-13 Proof of Work** (`pow.rs`): Bot counts leading zero bits in event ID. Publishers mine PoW (difficulty 20) via Web Worker (frontend), synchronously (CLI), or before extension signing (registrar). Difficulty is resolver-side policy — each operator/resolver sets their own threshold. Config: `policy.min_pow`.
+
+2. **Proof of Burn** (`pob.rs`): ThomasV's notary at notary.electrum.org. Publisher pays Lightning invoice → notary burns sats on-chain → publishes kind 30021 proof event → bot verifies via notary API → stores in `pob_proofs` table. CLI command: `nodns burn <event_id> <sats>`. Config: `policy.min_pob_sats`, `policy.pob_notary_url`.
+
+3. **Either/or gate**: Events pass if they have EITHER sufficient PoW OR sufficient PoB. Both individually optional. If both thresholds are 0, no gate (backwards compatible).
+
+### Architecture decisions
+
+- PoW difficulty is NOT a protocol constant — it's a local resolver policy
+- PoB proofs are SEPARATE kind 30021 events (not inline tags on kind 11111)
+- Operator zones (nodns.shop): Cashu payment is primary incentive, PoW is anti-spam gate
+- .nostr resolver path: PoW is sole anti-spam (no operator to pay)
+- PoB is for premium namespaces where real economic commitment matters
 
 3. **Long-term (for .cv and premium names):** Proof of Burn for high-value namespaces where real economic commitment is required. Verification via Electrum server or Bitcoin RPC.
 
