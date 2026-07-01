@@ -686,7 +686,7 @@ Hooks are opt-in via `git config core.hooksPath .githooks`. The pre-commit hook 
 
 - **DNSSEC attestation tracks live key**: The bot queries the actual DNSKEY from Knot DNS at startup and attests that (not just the SLIP-10 derived key). If a KSK rollover changes the live key, the attestation automatically tracks it. The SLIP-10 derivation is informational — Knot DNS manages its own keys.
 
-- **Shared relay configuration**: `shared/relays.ts` is the single source of truth for relay config across frontend, registrar, and CLI. All components publish exclusively to `relay.cashu.email`; reading fans out to multiple relays for coverage.
+- **Shared relay configuration**: `shared/relays.ts` is the single source of truth for relay config across frontend, registrar, and CLI. Components publish to 3 relays (`relay.cashu.email`, `relay.damus.io`, `nos.lol`) for redundancy — `relay.cashu.email` rotates events per pubkey, while damus (20h retention) and nos.lol (5-day retention) ensure events survive for bot catch-up after downtime. Reading fans out to 5 relays for coverage. The CLI `--relay` flag overrides to a single relay when needed.
 
 - **NIP-13 PoW as resolver-side policy**: Proof of Work difficulty is not a protocol constant — it's a local resolver policy. Publishers mine PoW before publishing (default 20 bits via Web Worker in frontend, synchronous in CLI). Each operator/resolver independently decides what minimum difficulty to accept: CI = 0-16 bits, nodns.shop = 20 bits, OpenWrt resolver = 24 bits. For operator-mirrored zones (nodns.shop), Cashu payment is the primary economic incentive — PoW is an optional additional gate. For .nostr resolver-indexed names (no operator), PoW IS the anti-spam mechanism.
 
