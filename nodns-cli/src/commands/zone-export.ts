@@ -6,7 +6,7 @@ import {
   fetchApiRecords,
   type ZoneRecord,
 } from "../lib/zone-file.js";
-import { DEFAULT_API_BASE } from "../lib/constants.js";
+import { DEFAULT_API_BASE, readRelays } from "../lib/constants.js";
 
 export const zoneExportCommand = new Command("zone-export")
   .description("Export zone file from relay events or bot API")
@@ -17,8 +17,7 @@ export const zoneExportCommand = new Command("zone-export")
   .option("--no-soa", "Omit SOA record from zone file")
   .action(async (zone: string, opts, cmd: Command) => {
     const o = cmd.optsWithGlobals();
-    const relay = o.relay ?? "wss://relay.cashu.email";
-    const relays = [relay];
+    const relays = readRelays(o.relay);
     const jsonOutput = opts.json as boolean;
     const includeSoa = opts.soa !== false;
     const apiBase = (opts.apiBase as string) || DEFAULT_API_BASE;

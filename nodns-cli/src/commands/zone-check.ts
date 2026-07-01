@@ -1,7 +1,7 @@
 import { Command } from "commander";
 import { parseZoneTxt, fetchDnsTxt } from "../lib/zones.js";
 import { SimplePool } from "nostr-tools/pool";
-import { ZONE_HANDLER_KIND } from "../lib/constants.js";
+import { ZONE_HANDLER_KIND, readRelays } from "../lib/constants.js";
 import type { NostrEvent } from "nostr-tools/pure";
 
 function fmtPricing(info: { createPrice: number; updatePrice: number; deletePrice: number }): string {
@@ -32,8 +32,7 @@ export const zoneCheckCommand = new Command("zone-check")
   .argument("[zone]", "Zone to check")
   .action(async (zoneArg: string | undefined, _opts, cmd: Command) => {
     const o = cmd.optsWithGlobals();
-    const relay = o.relay ?? "wss://relay.cashu.email";
-    const relays = [relay];
+    const relays = readRelays(o.relay);
     const zone = zoneArg ?? o.zone ?? "nodns.shop";
 
     console.error(`Checking zone '${zone}'...\n`);

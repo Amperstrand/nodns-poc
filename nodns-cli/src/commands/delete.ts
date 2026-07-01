@@ -1,6 +1,7 @@
 import { Command } from "commander";
 import { signAndPublish, buildDeleteTag, decodeSec } from "../lib/nostr.js";
 import { checkZone } from "../lib/zones.js";
+import { publishRelays } from "../lib/constants.js";
 
 function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
@@ -15,8 +16,7 @@ export const deleteCommand = new Command("delete")
   .option("--pow <bits>", "PoW difficulty in bits (0 to disable)", "20")
   .action(async (opts, cmd: Command) => {
     const o = cmd.optsWithGlobals();
-    const relay = o.relay ?? "wss://relay.cashu.email";
-    const relays = [relay];
+    const relays = publishRelays(o.relay);
     const zone = o.zone ?? "nodns.shop";
     const sec: string | undefined = o.sec;
     const skipZoneCheck: boolean = o.skipZoneCheck ?? false;

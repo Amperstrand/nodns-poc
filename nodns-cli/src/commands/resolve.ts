@@ -2,7 +2,7 @@ import { Command } from "commander";
 import * as dns from "node:dns/promises";
 import { decode as nip19Decode } from "nostr-tools/nip19";
 import { fetchEvents } from "../lib/nostr.js";
-import { DEFAULT_API_BASE } from "../lib/constants.js";
+import { DEFAULT_API_BASE, readRelays } from "../lib/constants.js";
 import type { DnsRecord } from "../lib/types.js";
 
 function extractNpubFromDomain(domain: string): string | null {
@@ -154,8 +154,7 @@ export const resolveCommand = new Command("resolve")
   .option("--api-base <url>", "Bot API base URL", DEFAULT_API_BASE)
   .action(async (domain: string, opts, cmd: Command) => {
     const o = cmd.optsWithGlobals();
-    const relay = o.relay ?? "wss://relay.cashu.email";
-    const relays = [relay];
+    const relays = readRelays(o.relay);
     const recordType = (opts.type as string).toUpperCase();
     const npubStr = extractNpubFromDomain(domain);
 

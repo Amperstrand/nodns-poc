@@ -10,6 +10,7 @@ import {
   POB_PROOF_KIND,
 } from "../../../shared/pow.js";
 import type { DnsRecord } from "../lib/types.js";
+import { readRelays } from "../lib/constants.js";
 
 const POB_QUERY_MAX_WAIT = 10_000;
 
@@ -82,8 +83,7 @@ export const listCommand = new Command("list")
   .option("--no-pob", "Skip Proof-of-Burn lookup (faster)")
   .action(async (opts, cmd: Command) => {
     const o = cmd.optsWithGlobals();
-    const relay = o.relay ?? "wss://relay.cashu.email";
-    const relays = [relay];
+    const relays = readRelays(o.relay);
     const sec: string | undefined = o.sec;
 
     let pubkeyHex: string;

@@ -9,7 +9,7 @@ import {
   type ZoneRecord,
 } from "../lib/zone-file.js";
 import { queryZoneRecords } from "../lib/dns.js";
-import { DEFAULT_API_BASE } from "../lib/constants.js";
+import { DEFAULT_API_BASE, readRelays } from "../lib/constants.js";
 
 interface DiffResult {
   matchCount: number;
@@ -138,8 +138,7 @@ export const conformanceCommand = new Command("conformance")
   .option("--api-base <url>", "Bot API base URL", DEFAULT_API_BASE)
   .action(async (zone: string, opts, cmd: Command) => {
     const o = cmd.optsWithGlobals();
-    const relay = o.relay ?? "wss://relay.cashu.email";
-    const relays = [relay];
+    const relays = readRelays(o.relay);
     const apiBase = (opts.apiBase as string) || DEFAULT_API_BASE;
 
     console.log(`=== Conformance Test: ${zone} ===\n`);

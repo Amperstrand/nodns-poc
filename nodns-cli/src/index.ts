@@ -17,7 +17,7 @@ program
   .name("nodns")
   .description("Manage DNS records published via Nostr events")
   .version("0.2.0")
-  .option("--relay <url>", "Nostr relay to use", "wss://relay.cashu.email")
+  .option("--relay <url>", "Single relay override (default: all configured relays)")
   .option("--zone <zone>", "Default zone", "nodns.shop")
   .option("--sec <key>", "Secret key (nsec, hex)")
   .option("--skip-zone-check", "Skip zone validation");

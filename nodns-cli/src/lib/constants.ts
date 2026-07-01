@@ -3,6 +3,14 @@ import { DEFAULT_POW_DIFFICULTY as _POW } from "../../../shared/pow";
 
 export const DEFAULT_RELAYS = PUBLISH_RELAYS;
 export const ALL_RELAYS = READ_RELAYS;
+
+export function publishRelays(relayFlag?: string): string[] {
+  return relayFlag ? [relayFlag] : DEFAULT_RELAYS;
+}
+
+export function readRelays(relayFlag?: string): string[] {
+  return relayFlag ? [relayFlag] : ALL_RELAYS;
+}
 export const DEFAULT_ZONE = "nodns.shop";
 export const DEFAULT_MINT_URL = "https://testnut.cashu.space";
 export const RECORD_KIND = 11111;
