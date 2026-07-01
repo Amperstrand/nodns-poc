@@ -98,7 +98,7 @@ export async function fetchPricing(zone: string): Promise<PricingInfo> {
 
 export async function healthCheck(): Promise<boolean> {
   try {
-    const res = await safeFetch(`${API_BASE}/health`);
+    const res = await safeFetch(`${API_BASE}/api/health`);
     return res.ok;
   } catch {
     return false;

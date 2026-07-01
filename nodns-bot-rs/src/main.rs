@@ -685,6 +685,7 @@ async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
                 axum::routing::get(nip05::nip05_handler),
             )
             .route("/health", axum::routing::get(handlers::health_handler))
+            .route("/api/health", axum::routing::get(handlers::health_handler))
             .route("/llms.txt", axum::routing::get(handlers::llms_txt_handler))
             .route(
                 "/llms-full.txt",
