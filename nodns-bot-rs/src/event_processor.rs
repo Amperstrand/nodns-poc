@@ -103,7 +103,11 @@ pub async fn process_nostr_event(
     let pob_notary_url = cfg.policy.pob_notary_url.as_str();
 
     if effective_min_pow > 0 || effective_min_pob_sats > 0 {
-        let pow_ok = pow::verify_pow(&event_id, effective_min_pow);
+        let pow_ok = if effective_min_pow > 0 {
+            pow::verify_pow(&event_id, effective_min_pow)
+        } else {
+            false
+        };
 
         let pob_ok = if effective_min_pob_sats > 0 {
             if let Some(proof) = pob::extract_pob_tag(&evt.tags) {

@@ -87,8 +87,15 @@ export async function signAndPublish(
     created_at: Math.floor(Date.now() / 1000),
   };
 
-  if (powDifficulty > 0 && secretKey) {
-    const pubkey = getPublicKey(secretKey);
+  if (powDifficulty > 0) {
+    let pubkey: string;
+    if (secretKey) {
+      pubkey = getPublicKey(secretKey);
+    } else if (isExtensionAvailable()) {
+      pubkey = await window.nostr!.getPublicKey();
+    } else {
+      throw new Error("No signing method available");
+    }
     const pubkeyTagged = { ...template, pubkey };
     template = minePow(pubkeyTagged, powDifficulty);
   }
