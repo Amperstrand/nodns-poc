@@ -31,7 +31,13 @@ jobs:
         with:
           node-version: 20
           cache: npm
-          cache-dependency-path: nodns-frontend/package-lock.json
+          cache-dependency-path: |
+            nodns-frontend/package-lock.json
+            nodns-resolver/package-lock.json
+
+      - name: Install SDK dependencies
+        working-directory: nodns-resolver
+        run: npm ci
 
       - name: Install dependencies
         working-directory: nodns-frontend
