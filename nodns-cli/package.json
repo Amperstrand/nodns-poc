@@ -6,6 +6,7 @@
     "nodns": "./dist/index.js"
   },
   "scripts": {
+    "prebuild": "cd ../nodns-resolver && npm run build",
     "build": "tsup",
     "dev": "tsx src/index.ts",
     "typecheck": "tsc --noEmit"

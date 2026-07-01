@@ -6,13 +6,6 @@ const nextConfig: NextConfig = {
   images: {
     unoptimized: true,
   },
-  transpilePackages: ["@nodns/resolver"],
-  webpack: (config) => {
-    config.resolve.extensionAlias = {
-      ".js": [".ts", ".js"],
-    };
-    return config;
-  },
 };
 
 export default nextConfig;

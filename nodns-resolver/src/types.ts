@@ -14,6 +14,14 @@ export const DEFAULT_API_BASE = 'https://nodns.shop';
 
 export const DEFAULT_DOH_ENDPOINT = 'https://cloudflare-dns.com/dns-query';
 
+export const DEFAULT_READ_RELAYS: string[] = [
+  'wss://relay.cashu.email',
+  'wss://relay.damus.io',
+  'wss://nos.lol',
+  'wss://relay.nostr.band',
+  'wss://relay.tollgate.me',
+];
+
 export const VALID_RECORD_TYPES: readonly string[] = ['A', 'AAAA', 'CNAME', 'TXT', 'MX'];
 
 export const DNS_TYPE_MAP: Record<number, string> = {

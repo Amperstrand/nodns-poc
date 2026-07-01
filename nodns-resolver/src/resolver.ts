@@ -8,8 +8,7 @@ import type {
   ResolverOptions,
   ReverseResult,
 } from './types.js';
-import { DEFAULT_API_BASE, DEFAULT_DOH_ENDPOINT, DEFAULT_ZONE } from './types.js';
-import { READ_RELAYS } from '../../shared/relays.js';
+import { DEFAULT_API_BASE, DEFAULT_DOH_ENDPOINT, DEFAULT_READ_RELAYS, DEFAULT_ZONE } from './types.js';
 import { queryAllDnsRecordTypes } from './dns.js';
 import { queryRecordsByDomain, queryRecordsByPubkey } from './nostr.js';
 import {
@@ -63,7 +62,7 @@ function extractZoneFromFqdn(fqdn: string, knownZones: string[]): string {
 
 export function createResolver(options?: ResolverOptions): Resolver {
   const mode: ResolutionMode = options?.mode ?? 'dns';
-  const relays = options?.relays ?? READ_RELAYS;
+  const relays = options?.relays ?? DEFAULT_READ_RELAYS;
   const apiBase = options?.apiBase ?? DEFAULT_API_BASE;
   const zone = options?.zone ?? DEFAULT_ZONE;
   const dohEndpoint = options?.dohEndpoint ?? DEFAULT_DOH_ENDPOINT;
