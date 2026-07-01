@@ -9,6 +9,7 @@ import { zoneCheckCommand } from "./commands/zone-check.js";
 import { zoneExportCommand } from "./commands/zone-export.js";
 import { conformanceCommand } from "./commands/conformance.js";
 import { refundCommand } from "./commands/refund.js";
+import { createBurnCommand } from "./commands/burn.js";
 
 const program = new Command();
 
@@ -30,5 +31,6 @@ program.addCommand(zoneCheckCommand);
 program.addCommand(zoneExportCommand);
 program.addCommand(conformanceCommand);
 program.addCommand(refundCommand);
+program.addCommand(createBurnCommand());
 
 program.parse();
