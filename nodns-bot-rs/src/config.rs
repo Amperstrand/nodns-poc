@@ -41,10 +41,28 @@ pub enum ConfigError {
 /// [payment]
 /// [registrar_keys]
 /// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum OperatingMode {
+    #[default]
+    Combined,
+    Registrar,
+    Sync,
+}
+
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct BotConfig {
+    #[serde(default)]
+    pub mode: OperatingMode,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct Config {
     #[serde(default)]
     pub server: ServerConfig,
+
+    #[serde(default)]
+    pub bot: BotConfig,
 
     #[serde(default)]
     pub nostr: NostrConfig,

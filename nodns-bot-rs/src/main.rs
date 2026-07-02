@@ -337,6 +337,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
     let cfg = Config::load(&cli.config)?;
+    info!(mode = ?cfg.bot.mode, "starting nodns-bot");
 
     info!(
         zone = %cfg.nostr.zone,
@@ -835,6 +836,7 @@ async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
                     &ev_metrics.metrics,
                     ev_epp_pool.as_deref(),
                     &ev_client,
+                    ev_cfg.bot.mode,
                 )
                 .await;
             } else {

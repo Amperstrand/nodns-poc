@@ -8,7 +8,7 @@ use nostr_sdk::Event;
 use tracing::{debug, error, info, warn};
 
 use crate::auth;
-use crate::config::Config;
+use crate::config::{Config, OperatingMode};
 use crate::dns_cache::DnsEventCache;
 use crate::parser;
 use crate::payment;
@@ -86,6 +86,7 @@ pub async fn process_nostr_event(
     metrics: &Metrics,
     epp_pool: Option<&nodns_epp::EppPool>,
     client: &nostr_sdk::Client,
+    mode: OperatingMode,
 ) {
     let event_kind = u64::from(evt.kind.as_u16());
     if event_kind == crate::types::KIND_POB_PROOF {
@@ -108,7 +109,7 @@ pub async fn process_nostr_event(
 
     let effective_min_pob_sats = cfg.policy.min_pob_sats;
 
-    if effective_min_pow > 0 || effective_min_pob_sats > 0 {
+    if mode != OperatingMode::Registrar && (effective_min_pow > 0 || effective_min_pob_sats > 0) {
         let pow_ok = if effective_min_pow > 0 {
             pow::verify_pow(&event_id, effective_min_pow)
         } else {
@@ -263,6 +264,7 @@ pub async fn process_nostr_event(
             metrics,
             epp_pool,
             client,
+            mode,
         )
         .await;
     }
@@ -873,6 +875,7 @@ async fn process_dns_update(
     metrics: &Metrics,
     epp_pool: Option<&nodns_epp::EppPool>,
     client: &nostr_sdk::Client,
+    mode: OperatingMode,
 ) {
     if parsed.records.is_empty() {
         return;
@@ -913,21 +916,23 @@ async fn process_dns_update(
     for (zone_name, updater) in updaters.iter() {
         // Per-zone payment verification: skip this zone if payment fails,
         // but allow other zones to proceed independently.
-        if let Some(v) = zone_verifiers.get(zone_name) {
-            if let Err(e) = payment::check_event_payment(
-                &parsed.payments,
-                npub,
-                &parsed.records,
-                zone_name,
-                store,
-                Some(v),
-            )
-            .await
-            {
-                warn!(event_id = %event_id, zone = %zone_name, error = %e, "payment verification failed, skipping zone");
-                metrics.events_rejected.fetch_add(1, Ordering::Relaxed);
-                all_ok = false;
-                continue;
+        if mode != OperatingMode::Sync {
+            if let Some(v) = zone_verifiers.get(zone_name) {
+                if let Err(e) = payment::check_event_payment(
+                    &parsed.payments,
+                    npub,
+                    &parsed.records,
+                    zone_name,
+                    store,
+                    Some(v),
+                )
+                .await
+                {
+                    warn!(event_id = %event_id, zone = %zone_name, error = %e, "payment verification failed, skipping zone");
+                    metrics.events_rejected.fetch_add(1, Ordering::Relaxed);
+                    all_ok = false;
+                    continue;
+                }
             }
         }
 
@@ -1082,6 +1087,11 @@ async fn process_dns_update(
                     all_ok = false;
                     continue;
                 }
+            }
+
+            if mode == OperatingMode::Registrar {
+                debug!(event_id = %event_id, fqdn = %fqdn, "registrar mode — skipping DNS push");
+                continue;
             }
 
             let is_cv = zone_name == "cv" || zone_name.ends_with(".cv");
