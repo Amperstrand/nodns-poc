@@ -20,7 +20,7 @@ function BetaBanner() {
     <div className="bg-destructive/15 border-b border-destructive/40">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-2">
         <p className="text-xs font-medium text-destructive">
-          EXPERIMENTAL PILOT — Not production ready. Use test sats only (testnut.cashu.space). Never send real Cashu tokens.
+          Testnet — use test sats only (testnut.cashu.space). Never send real Cashu tokens.
         </p>
         <button
           className="text-muted-foreground hover:text-foreground"

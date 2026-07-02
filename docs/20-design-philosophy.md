@@ -1,7 +1,7 @@
 # 20 — Design Philosophy
 
-> **Status**: DRAFT. Active experimentation. Everything in this document is subject to change.
-> This is a proof-of-concept exploring whether Nostr can serve as the source of truth for DNS.
+> **Status**: ACTIVE. Deployed on nodns.shop with DNSSEC-signed records.
+> NoDNS uses Nostr events as the source of truth for DNS.
 
 ## The Core Idea
 
@@ -46,7 +46,7 @@ When these conflict (e.g., a court orders the operator to change records), NoDNS
 - **Not a replacement for DNS**: NoDNS augments DNS, it doesn't replace it. Traditional DNS resolution still works.
 - **Not a blockchain**: There is no chain, no consensus mechanism, no mining. Nostr relays are the storage layer.
 - **Not fully trustless**: Delegated names (`alice.nodns.shop`) still trust the operator. Only `$npub.tld` names are trustless.
-- **Not production-ready**: This is a proof-of-concept. Everything is experimental.
+- **Testnet phase**: Using testnut (free test sats) for payments. Real Cashu integration is future work.
 
 ## What NoDNS Is Trying to Explore
 

@@ -14,7 +14,7 @@ NoDNS is a protocol where your Nostr private key controls a DNS subdomain. You p
 
 ### Is this production?
 
-No. The protocol is an experimental draft. `nodns.shop` is a live demo.
+`nodns.shop` is live and serving real DNS records with DNSSEC signing. The protocol uses kind 11111 events — stable and deployed. Custom ($string) names require Cashu payment (testnut test sats). $npub names are free.
 
 ---
 

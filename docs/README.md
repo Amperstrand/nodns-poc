@@ -31,7 +31,7 @@
 
 | Doc | Status | Description |
 |---|---|---|
-| [11-protocol-experimental-draft.md](11-protocol-experimental-draft.md) | ACTIVE (experimental draft) | Wire format: kind 11111, record/delegation/registrar/payment tags |
+| [11-protocol-experimental-draft.md](11-protocol-experimental-draft.md) | ACTIVE | Wire format: kind 11111, record/delegation/registrar/payment tags |
 | [42-kind-31111-migration.md](42-kind-31111-migration.md) | ARCHIVED | Historical 31111 migration note; current protocol stays on kind 11111 |
 
 ### Design Philosophy

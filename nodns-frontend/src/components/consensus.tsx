@@ -8,6 +8,8 @@ type Status =
   | "draft"
   | "proof-of-concept"
   | "thought-experiment"
+  | "live"
+  | "planned"
   | "research-todo";
 
 interface DualResolution {
@@ -89,8 +91,10 @@ const data = consensusData as ConsensusData;
 const STATUS_STYLES: Record<Status, { bg: string; text: string; label: string }> = {
   "external-reference": { bg: "bg-secondary", text: "text-muted-foreground", label: "External" },
   draft: { bg: "bg-blue-950/30", text: "text-blue-400", label: "Draft" },
-  "proof-of-concept": { bg: "bg-emerald-950/30", text: "text-emerald-400", label: "Proof of Concept" },
-  "thought-experiment": { bg: "bg-yellow-950/30", text: "text-yellow-400", label: "Thought Experiment" },
+  "proof-of-concept": { bg: "bg-emerald-950/30", text: "text-emerald-400", label: "Live" },
+  "thought-experiment": { bg: "bg-emerald-950/30", text: "text-emerald-400", label: "Live" },
+  "live": { bg: "bg-emerald-950/30", text: "text-emerald-400", label: "Live" },
+  "planned": { bg: "bg-blue-950/30", text: "text-blue-400", label: "Planned" },
   "research-todo": { bg: "bg-purple-950/30", text: "text-purple-400", label: "Research TODO" },
 };
 

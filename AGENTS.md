@@ -730,6 +730,6 @@ These are decided. Do not re-litigate without explicit instruction.
 
 - **Single-writer SQLite**: `Mutex<Connection>` serializes all database access. At current scale (personal/experimental), this is fine. Under high concurrency (many simultaneous event processing + API requests), this becomes a bottleneck. Mitigation would be connection pooling or moving to PostgreSQL.
 
-- **Frontend is a proof-of-concept**: The GitHub Pages site (`nodns-poc`) is explicitly labeled as a thought experiment. Several pages (discoveries, roadmap) are informational, not functional. The wallet and certificate flows work but are not hardened for production use.
+- **Frontend is functional but evolving**: The GitHub Pages site (`nodns-poc`) serves the live nodns.shop experience. Several pages (discoveries, roadmap) are informational. The wallet, certificate, and registration flows work with testnut test sats.
 
 - **No automated backups**: The SQLite database is not backed up automatically. Since the dataset is rebuildable from Nostr events (replay the relay subscription), data loss is recoverable but requires reprocessing all historical events.

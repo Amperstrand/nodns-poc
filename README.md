@@ -1,10 +1,8 @@
 # NoDNS — DNS Records from Nostr Events
 
-> **A thought experiment in decentralized naming.** Nothing here is production. The protocol is an experimental draft.
+> **Decentralized DNS powered by Nostr.** Publish a signed event, get a live DNS record. No registrar, no account, no KYC.
 
-**Live demo**: [nodns.shop](https://nodns.shop) · **GitHub Pages**: [nodns-poc pages](https://amperstrand.github.io/nodns-poc/)
-
-The [GitHub Pages site](https://amperstrand.github.io/nodns-poc/) explains the thought experiment, consensus rules, and design philosophy. What follows here is purely technical — how to build, configure, and run the software.
+**Live**: [nodns.shop](https://nodns.shop)
 
 ---
 
@@ -262,4 +260,4 @@ path = "records.db"
 
 ## License
 
-Unlicense. This is a thought experiment and an idea. Do whatever you want with it.
+Unlicense. Do whatever you want with it.

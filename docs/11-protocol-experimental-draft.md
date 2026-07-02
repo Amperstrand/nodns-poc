@@ -1,7 +1,6 @@
-# NoDNS Protocol Specification (EXPERIMENTAL DRAFT)
+# NoDNS Protocol Specification
 
-> **Status**: EXPERIMENTAL DRAFT. No version number. Kind numbers chosen arbitrarily. Not discussed with Nostr community.
-> This is a proof-of-concept protocol for Nostr-native DNS management. Nothing here is production.
+> **Status**: Active. Kind 11111 — deployed and serving DNS records on nodns.shop.
 > See also: [Arjen's nodns-nameserver](https://gitworkshop.dev/npub1hw6amg8p24ne08c9gdq8hhpqx0t0pwanpae9z25crn7m9uy7yarse465gr/nos.lol/nodns-nameserver) — the `$npub.nostr` reference implementation.
 
 ## Kind Number

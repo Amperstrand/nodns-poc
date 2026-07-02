@@ -180,10 +180,11 @@ export default function EcosystemPage() {
               <span className="text-primary">protocol</span>
             </h1>
             <p className="max-w-[640px] text-lg text-foreground/70">
-              nodns started as a thought experiment — publish a Nostr event,
-              get a DNS record. The ecosystem around it now spans zone
-              discovery, real-time monitoring, conformance testing, and a
-              CLI that catches discrepancies before users do.
+              nodns turns Nostr events into live DNS records — publish a
+              signed event, get a globally resolvable record in seconds.
+              The ecosystem around it spans zone discovery, real-time
+              monitoring, conformance testing, and a CLI that catches
+              discrepancies before users do.
             </p>
           </section>
 
