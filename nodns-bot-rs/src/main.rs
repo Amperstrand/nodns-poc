@@ -626,7 +626,14 @@ async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // ── HTTP health server ──
-    let nostr_client = nostr_sdk::Client::default();
+    let nostr_client = if cfg.registrar.nsec_hex.is_empty() {
+        nostr_sdk::Client::default()
+    } else {
+        let keys = nostr_sdk::Keys::parse(&cfg.registrar.nsec_hex)
+            .expect("registrar.nsec_hex must be a valid nostr secret key");
+        nostr_sdk::Client::new(keys)
+    };
+    let ev_client = nostr_client.clone();
     let nip05_state = Arc::new(nip05::Nip05State {
         store: store.clone(),
         registrar_pubkeys: cfg.registrar_keys.clone(),
@@ -827,6 +834,7 @@ async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
                     &ev_zone_verifiers,
                     &ev_metrics.metrics,
                     ev_epp_pool.as_deref(),
+                    &ev_client,
                 )
                 .await;
             } else {

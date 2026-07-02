@@ -24,8 +24,8 @@ use thiserror::Error;
 use nodns_protocol::{self, ValidationPolicy};
 
 use crate::types::{
-    is_dns_kind, ClaimRequest, Delegation, DeleteRequest, DnsRecord, ParsedEvent, Payment,
-    RegistrarKey, RenewalRequest,
+    is_dns_kind, ClaimRequest, Delegation, DeleteRequest, DnsRecord, LeaseInfo, ParsedEvent,
+    Payment, RegistrarKey, RenewalRequest, KIND_DNS_REPLACEABLE,
 };
 
 #[cfg(test)]
@@ -78,10 +78,51 @@ pub fn classify_event(
         payments: Vec::new(),
         claim: None,
         renewal: None,
+        lease: None,
         sig: hex::encode(event.sig.serialize()),
         raw_tags: event.tags.iter().map(|t| t.as_slice().to_vec()).collect(),
         d_tag,
     };
+
+    if kind == KIND_DNS_REPLACEABLE {
+        if let Some(lease_expires) = event
+            .tags
+            .iter()
+            .find(|t| {
+                let s = t.as_slice();
+                s.len() >= 2 && s[0] == "lease_expires"
+            })
+            .and_then(|t| t.as_slice().get(1).and_then(|v| v.parse::<i64>().ok()))
+        {
+            let fqdn = result.d_tag.clone().unwrap_or_default();
+            let npub = event
+                .tags
+                .iter()
+                .find(|t| {
+                    let s = t.as_slice();
+                    s.len() >= 2 && s[0] == "lease_npub"
+                })
+                .and_then(|t| t.as_slice().get(1).cloned())
+                .unwrap_or_default();
+            let zone = event
+                .tags
+                .iter()
+                .find(|t| {
+                    let s = t.as_slice();
+                    s.len() >= 2 && s[0] == "lease_zone"
+                })
+                .and_then(|t| t.as_slice().get(1).cloned())
+                .unwrap_or_default();
+
+            result.lease = Some(LeaseInfo {
+                fqdn,
+                zone,
+                npub,
+                lease_expires,
+            });
+            return Ok(result);
+        }
+    }
 
     for (i, tag) in event.tags.iter().enumerate() {
         let slice = tag.as_slice();

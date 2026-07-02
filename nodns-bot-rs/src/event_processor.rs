@@ -17,8 +17,8 @@ use crate::pob;
 use crate::pow;
 use crate::store::Store;
 use crate::types::{
-    build_fqdn, record_type_to_u16, ClaimRequest, Delegation, Metrics, ParsedEvent, RegistrarKey,
-    RenewalRequest,
+    build_fqdn, record_type_to_u16, ClaimRequest, Delegation, LeaseInfo, Metrics, ParsedEvent,
+    RegistrarKey, RenewalRequest,
 };
 use nodns_connectors::connector::DnsConnector;
 
@@ -85,6 +85,7 @@ pub async fn process_nostr_event(
     zone_verifiers: &HashMap<String, Verifier>,
     metrics: &Metrics,
     epp_pool: Option<&nodns_epp::EppPool>,
+    client: &nostr_sdk::Client,
 ) {
     let event_kind = u64::from(evt.kind.as_u16());
     if event_kind == crate::types::KIND_POB_PROOF {
@@ -217,6 +218,10 @@ pub async fn process_nostr_event(
         .await;
     }
 
+    if let Some(ref lease) = parsed.lease {
+        process_lease_event(evt, lease, store, metrics);
+    }
+
     if let Some(ref delegation) = parsed.delegation {
         process_delegation(
             delegation,
@@ -257,6 +262,7 @@ pub async fn process_nostr_event(
             zone_verifiers,
             metrics,
             epp_pool,
+            client,
         )
         .await;
     }
@@ -395,6 +401,34 @@ fn process_delegation(
     }
 
     info!(event_id = %event_id, domain = %delegation.domain, "delegation processed");
+    metrics.events_processed.fetch_add(1, Ordering::Relaxed);
+}
+
+fn process_lease_event(evt: &Event, lease: &LeaseInfo, store: &Arc<Store>, metrics: &Metrics) {
+    let event_id = evt.id.to_hex();
+    let registrar_pubkey = evt.pubkey.to_hex();
+    let created_at = evt.created_at.as_secs() as i64;
+
+    let zone_suffix = format!(".{}", lease.zone);
+    let domain = lease.fqdn.trim_end_matches(&zone_suffix);
+
+    if let Err(e) = store.save_delegation(
+        &event_id,
+        domain,
+        &lease.zone,
+        &lease.npub,
+        &registrar_pubkey,
+        created_at,
+        lease.lease_expires,
+        lease.lease_expires,
+        &registrar_pubkey,
+    ) {
+        warn!(event_id = %event_id, error = %e, fqdn = %lease.fqdn, "failed to update delegation from lease event");
+        metrics.events_rejected.fetch_add(1, Ordering::Relaxed);
+        return;
+    }
+
+    info!(event_id = %event_id, fqdn = %lease.fqdn, npub = %lease.npub, "lease event processed");
     metrics.events_processed.fetch_add(1, Ordering::Relaxed);
 }
 
@@ -838,6 +872,7 @@ async fn process_dns_update(
     zone_verifiers: &HashMap<String, Verifier>,
     metrics: &Metrics,
     epp_pool: Option<&nodns_epp::EppPool>,
+    client: &nostr_sdk::Client,
 ) {
     if parsed.records.is_empty() {
         return;
@@ -1019,6 +1054,28 @@ async fn process_dns_update(
                         lease_days = lease_days,
                         "custom name registered via Cashu payment (first-come-first-served)"
                     );
+
+                    let lease_tags = [
+                        vec!["d".to_string(), fqdn.clone()],
+                        vec!["lease_expires".to_string(), valid_until.to_string()],
+                        vec!["lease_npub".to_string(), npub.to_string()],
+                        vec!["lease_zone".to_string(), zone_name.to_string()],
+                    ];
+                    let builder = nostr_sdk::EventBuilder::new(nostr_sdk::Kind::Custom(31111), "")
+                        .tags(
+                            lease_tags
+                                .iter()
+                                .filter_map(|t| nostr_sdk::Tag::parse(t.clone()).ok())
+                                .collect::<Vec<_>>(),
+                        );
+                    match client.send_event_builder(builder).await {
+                        Ok(id) => {
+                            info!(lease_event_id = %id.to_hex(), fqdn = %fqdn, "lease event published to relays")
+                        }
+                        Err(e) => {
+                            warn!(error = %e, fqdn = %fqdn, "failed to publish lease event (non-fatal — delegation saved in SQLite)")
+                        }
+                    }
                 }
                 Err(e) => {
                     warn!(event_id = %event_id, fqdn = %fqdn, error = %e, "authority check failed");

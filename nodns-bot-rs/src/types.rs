@@ -72,9 +72,19 @@ pub struct ParsedEvent {
     pub payments: Vec<Payment>,
     pub claim: Option<ClaimRequest>,
     pub renewal: Option<RenewalRequest>,
+    pub lease: Option<LeaseInfo>,
     pub sig: String,
     pub raw_tags: Vec<Vec<String>>,
     pub d_tag: Option<String>,
+}
+
+/// A parsed lease event (kind 31111 with `lease_expires` tag).
+#[derive(Debug, Clone)]
+pub struct LeaseInfo {
+    pub fqdn: String,
+    pub zone: String,
+    pub npub: String,
+    pub lease_expires: i64,
 }
 
 /// A stored DNS event record (maps to `events` table).
