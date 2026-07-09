@@ -84,7 +84,7 @@ zone = "nodns.shop"
 backend = "ddns"
 
 [zones.backend_config]
-knot_address = "127.0.0.1:5353"
+knot_address = "127.0.0.1:53"
 tsig_key_name = "nodns-bot"
 tsig_key_secret = "base64-secret"
 tsig_algorithm = "hmac-sha256"
@@ -180,7 +180,7 @@ backend = "ddns"
 operator_npub = "7effcccb48fc9d091a8cab663a566523c8249d7770d5fd3c31c96a0f2b8db9ed"
 
 [zones.backend_config]
-knot_address = "127.0.0.1:5353"
+knot_address = "127.0.0.1:53"
 tsig_key_name = "nodns-bot"
 tsig_key_secret = "REPLACE_WITH_REAL_SECRET"
 

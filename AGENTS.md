@@ -113,7 +113,7 @@ Private keys are encrypted at rest with AES-256-GCM (`store.rs`). If `acme.encry
 |---|---|
 | **Host** | `46.224.104.12` (Ubuntu 24.04 VPS) |
 | **Bot** | `nodns-bot-rs` binary, systemd service `nodns-bot`, binds `127.0.0.1:9090` |
-| **DNS** | Knot DNS 3.3.4, listens on `127.0.0.1:5353`, authoritative for zones |
+| **DNS** | Knot DNS 3.3.4, listens on `0.0.0.0:53` + `::@53` (public — required for authoritative service); bot sends TSIG-signed DDNS updates to `127.0.0.1:53`. Authoritative-only: non-hosted queries return `REFUSED` (no recursion). |
 | **Proxy** | Caddy 2.11.4, reverse-proxies `/api/*` → bot, `*.nodns.shop` → GitHub Pages |
 | **Store** | SQLite at `/opt/nodns-bot/records.db` (rusqlite, `Mutex<Connection>`) |
 | **Config** | `/opt/nodns-bot/config.toml` (deployed from `deploy/config-multi-zone.toml`) |
@@ -183,9 +183,12 @@ When zone payment is enabled, record creation requires a Cashu token:
 
 All dynamic DNS updates to Knot DNS are authenticated via HMAC-SHA256 TSIG:
 
-- Bot connects to `127.0.0.1:5353` (localhost only — never exposed externally)
+- Bot connects to `127.0.0.1:53` (localhost) for DDNS; TSIG authenticates the update (defense in depth on top of the localhost origin)
+- Knot's public listener on `0.0.0.0:53` is **authoritative-only** — it answers queries for hosted zones (`nodns.shop`, `nostr`, `dns4sats.xyz`, etc.) and returns `REFUSED` for anything else. It does NOT do recursion. This public exposure is required (it's an authoritative nameserver; the internet must be able to query it) but is scoped to authoritative answers only.
 - Each zone has its own `tsig_key_name` + `tsig_key_secret` (base64)
 - Config files with real TSIG secrets are gitignored; `config-multi-zone.toml` contains `REPLACE_WITH_REAL_SECRET` placeholders
+
+> **Incident note (2026-07-09):** Knot's `mod-dnsproxy` module was mistakenly attached as a `global-module` on the `default` template, forwarding non-authoritative queries to Cloudflare `1.1.1.1`. This turned the public listener into an open recursive resolver (BSI/Hetzner abuse report, CB-Report 2026-07-07). Fixed by removing the `global-module` line. Never attach a forwarding module to the `default` template on a public-facing authoritative server. See `deploy/DEPLOY.md` → "DNS hardening".
 
 ### DNSSEC
 
@@ -526,7 +529,7 @@ The bot reads a TOML config file (default `/opt/nodns-bot/config.toml`, local: `
 | `[nostr]` | `relays` | *(required, non-empty)* | Nostr relay URLs to subscribe to |
 | `[nostr]` | `zone` | *(required)* | Default zone label (use `"multi"` for multi-zone) |
 | `[[dns.zones]]` | `zone` | *(required)* | Zone name (e.g., `nodns.shop`) |
-| `[[dns.zones]]` | `knot_address` | *(required)* | Knot DNS address (e.g., `127.0.0.1:5353`) |
+| `[[dns.zones]]` | `knot_address` | *(required)* | Knot DNS address (e.g., `127.0.0.1:53`) |
 | `[[dns.zones]]` | `tsig_key_name` | *(required)* | TSIG key name |
 | `[[dns.zones]]` | `tsig_key_secret` | *(required)* | TSIG key secret (base64) |
 | `[[dns.zones]]` | `tsig_algorithm` | `hmac-sha256` | TSIG algorithm |
@@ -674,7 +677,7 @@ Hooks are opt-in via `git config core.hooksPath .githooks`. The pre-commit hook 
 
 - **npm only (pnpm-lock gitignored)**: The project uses npm, not pnpm. `pnpm-lock.yaml` is in `.gitignore`. Decision: npm is the lowest-common-denominator package manager — no contributor needs to install pnpm. Trade-off: slower installs than pnpm, but zero onboarding friction.
 
-- **TSIG localhost-only**: The bot connects to Knot DNS on `127.0.0.1:5353` — never exposed externally. TSIG still signs updates (defense in depth), but the localhost binding means only the bot (and other local processes) can send updates. Caddy exposes only the HTTP API to the outside world.
+- **Knot authoritative-only on public listener, TSIG on localhost DDNS**: Knot DNS listens on `0.0.0.0:53` (public — required, it's an authoritative nameserver) but serves only hosted zones; non-authoritative queries get `REFUSED` (no recursion). The bot sends TSIG-signed DDNS updates to `127.0.0.1:53`. Caddy exposes only the HTTP API to the outside world. The earlier docs claimed Knot was "localhost-only, never exposed externally" — that was factually wrong (it must be public to serve authoritative DNS) and the false framing contributed to the `mod-dnsproxy` open-resolver incident (2026-07-09) going unnoticed. Correct posture: public authoritative listener + localhost TSIG DDNS + no forwarding modules on the default template.
 
 - **operator_lease_expires as config, not runtime**: Domain expiry is a config value (`2027-06-04` for `nodns.shop`), RDAP-verified and CI-checked monthly. The bot doesn't query RDAP at runtime (would add latency and a network dependency). If the lease lapses, the CI check fails loudly rather than the bot silently serving a domain it no longer owns.
 
@@ -733,3 +736,5 @@ These are decided. Do not re-litigate without explicit instruction.
 - **Frontend is functional but evolving**: The GitHub Pages site (`nodns-poc`) serves the live nodns.shop experience. Several pages (discoveries, roadmap) are informational. The wallet, certificate, and registration flows work with testnut test sats.
 
 - **No automated backups**: The SQLite database is not backed up automatically. Since the dataset is rebuildable from Nostr events (replay the relay subscription), data loss is recoverable but requires reprocessing all historical events.
+
+- **Open resolver incident resolved + DNS hardened (2026-07-09)**: A BSI/Hetzner abuse report (CB-Report 2026-07-07) flagged `46.224.104.12` as an open recursive resolver. Root cause: `mod-dnsproxy` attached to Knot's `default` template forwarded non-authoritative queries to Cloudflare `1.1.1.1`. **Fixed** — the `global-module` line was removed; external verification confirmed `google.com` queries now return `REFUSED` with no `ra` flag while `nodns.shop` authoritative service (incl. DNSSEC) is intact. **Additional hardening applied same day**: (1) Response Rate Limiting via the `mod-rrl` module (`rate-limit: 200, slip: 2` — Knot 3.3.4 uses `mod-rrl`, not a `server.response-rate-limiting` key which is invalid in this version); (2) `server.nsid: ""` + `server.version: ""` to suppress the NSID (`inr.cashu.dev`) and version (`Knot DNS 3.3.4`) disclosure. See `deploy/DEPLOY.md` → "DNS hardening".

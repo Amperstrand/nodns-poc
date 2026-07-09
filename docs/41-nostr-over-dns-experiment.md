@@ -102,7 +102,7 @@ Enable per zone in `config.toml`:
 ```toml
 [[dns.zones]]
 zone = "nodns.shop"
-knot_address = "127.0.0.1:5353"
+knot_address = "127.0.0.1:53"
 tsig_key_name = "nodns-bot"
 tsig_key_secret = "base64-secret"
 dns_cache_events = true
