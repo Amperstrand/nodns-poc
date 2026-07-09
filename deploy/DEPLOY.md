@@ -184,21 +184,24 @@ DoH upstream). See `docs/47-resolver-service.md` for the full design.
 
 ### Architecture
 
-Caddy `forward_auth` gates the existing `dnsproxy` DoH endpoint:
+Two-path DoH split: free for hosted zones, paid for full recursion.
 
 ```
-Client → POST dns.nodns.shop/dns-query (X-Subscription header)
-  │
-Caddy → forward_auth → GET 127.0.0.1:9090/api/resolver/auth
-  │                       Bot validates token (not expired, under rate limit)
-  │                       ├─ NO → 402 (Caddy returns this to client)
-  │                       └─ YES → 200
-  │
-Caddy → reverse_proxy → 127.0.0.1:8053 (dnsproxy)
-  │  .nostr → Knot (127.0.0.1:53)
-  │  everything else → Google DoH
+Client → POST dns.nodns.shop/dns-query
+  │                      (FREE — no auth, browser-native)
   ▼
-DNS answer returned
+dnsproxy-free (8053) → Knot (127.0.0.1:53)
+  ├─ .nostr          → authoritative answer
+  ├─ nodns.shop      → authoritative answer
+  ├─ dns4sats.xyz    → authoritative answer
+  └─ everything else → REFUSED (browser falls back to system DNS)
+
+Client → POST dns.nodns.shop/dns-query/premium
+  │                      (PAID — forward_auth + X-Subscription)
+  ▼
+Caddy forward_auth → bot /api/resolver/auth
+  ├─ NO token → 402
+  └─ valid token → dnsproxy-premium (8054) → full recursion (Google DoH)
 ```
 
 The bot never sees DNS query content — only the auth check (token + IP).
@@ -259,12 +262,16 @@ dns.nodns.shop {
 
 ### Deployment status (2026-07-09)
 
-Deployed and verified:
+Deployed and verified with two-path split:
 - Binary: `a460b0a` cross-compiled, deployed to `/opt/nodns-bot/nodns-bot`
-- Config: `[resolver]` section added to `/opt/nodns-bot/config.toml`
-- Caddy: `forward_auth` wired on `dns.nodns.shop/dns-query`
+- Config: `[resolver]` section in `/opt/nodns-bot/config.toml`
+- dnsproxy-free (port 8053): `.nostr` + `nodns.shop` + `dns4sats.xyz` only (Knot upstream, REFUSED for non-hosted)
+- dnsproxy-premium (port 8054): full recursion (Google DoH upstream)
+- Caddy: free `/dns-query` (no auth) + premium `/dns-query/premium` (forward_auth)
 - External tests:
-  - `POST https://dns.nodns.shop/api/resolver/subscribe` (no token) → `402` + `X-Cashu: creqA...` ✅
-  - `POST https://dns.nodns.shop/dns-query` (no subscription) → `402` (forward_auth blocked) ✅
-  - `GET https://nodns.shop/api/health` → `200` ✅
+  - `POST /dns-query` (no auth) → HTTP 400 (dnsproxy accepted, not 402) — free path ungated ✅
+  - `POST /dns-query/premium` (no auth) → HTTP 402 (forward_auth blocked) — premium gated ✅
+  - `POST /api/resolver/subscribe` (no token) → 402 + `X-Cashu: creqA...` ✅
+  - google.com via free DoH → rcode 5 (REFUSED from Knot) — browser fallback works ✅
+  - `GET /api/health` → 200 ✅
   - `dig @46.224.104.12 nodns.shop SOA` → authoritative answer ✅ (unaffected)
