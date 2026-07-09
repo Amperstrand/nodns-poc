@@ -256,3 +256,15 @@ dns.nodns.shop {
 - Every query gated by forward_auth — no resolution without valid subscription
 - testnut-only mint filter — anti-spam via Cashu friction
 - Bot never sees DNS query content — privacy by architecture
+
+### Deployment status (2026-07-09)
+
+Deployed and verified:
+- Binary: `a460b0a` cross-compiled, deployed to `/opt/nodns-bot/nodns-bot`
+- Config: `[resolver]` section added to `/opt/nodns-bot/config.toml`
+- Caddy: `forward_auth` wired on `dns.nodns.shop/dns-query`
+- External tests:
+  - `POST https://dns.nodns.shop/api/resolver/subscribe` (no token) → `402` + `X-Cashu: creqA...` ✅
+  - `POST https://dns.nodns.shop/dns-query` (no subscription) → `402` (forward_auth blocked) ✅
+  - `GET https://nodns.shop/api/health` → `200` ✅
+  - `dig @46.224.104.12 nodns.shop SOA` → authoritative answer ✅ (unaffected)
