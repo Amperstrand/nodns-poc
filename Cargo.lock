@@ -2451,6 +2451,7 @@ dependencies = [
  "base64 0.22.1",
  "cashu",
  "cdk",
+ "ciborium",
  "clap",
  "hex",
  "hickory-client",

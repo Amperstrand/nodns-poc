@@ -171,3 +171,88 @@ applied to `/etc/knot/knot.conf` and verified on Knot DNS 3.3.4:
 Verification post-hardening (external): `version.bind CH TXT` returns empty,
 NSID no longer appears in responses, `nodns.shop` SOA/DNSKEY still resolve
 with `aa`, `google.com` still REFUSED with no `ra` flag.
+
+## Cashu-gated DoH resolver service
+
+### Overview
+
+The bot serves a Cashu-gated DoH resolver at `dns.nodns.shop/dns-query`.
+Users pay testnut Cashu for a time-limited subscription, receive an opaque
+token, and use it as the `X-Subscription` header on DoH queries. The service
+resolves `.nostr` names, `nodns.shop` zones, and the full internet (via Google
+DoH upstream). See `docs/47-resolver-service.md` for the full design.
+
+### Architecture
+
+Caddy `forward_auth` gates the existing `dnsproxy` DoH endpoint:
+
+```
+Client → POST dns.nodns.shop/dns-query (X-Subscription header)
+  │
+Caddy → forward_auth → GET 127.0.0.1:9090/api/resolver/auth
+  │                       Bot validates token (not expired, under rate limit)
+  │                       ├─ NO → 402 (Caddy returns this to client)
+  │                       └─ YES → 200
+  │
+Caddy → reverse_proxy → 127.0.0.1:8053 (dnsproxy)
+  │  .nostr → Knot (127.0.0.1:53)
+  │  everything else → Google DoH
+  ▼
+DNS answer returned
+```
+
+The bot never sees DNS query content — only the auth check (token + IP).
+
+### Enabling
+
+Add to `/opt/nodns-bot/config.toml`:
+
+```toml
+[resolver]
+enabled = true
+price_sats = 10
+mint_url = "https://testnut.cashu.space"
+mint_filter = "testnut"
+duration_days = 30
+daily_query_limit = 10000
+```
+
+Restart the bot. The subscribe endpoint (`POST /api/resolver/subscribe`) and
+auth endpoint (`GET /api/resolver/auth`) are available immediately. The Caddy
+`forward_auth` block must be added separately (see Caddy config below).
+
+### Caddy configuration
+
+Add `forward_auth` to the existing `dns.nodns.shop` route:
+
+```
+dns.nodns.shop {
+    handle /dns-query {
+        forward_auth 127.0.0.1:9090 {
+            uri /api/resolver/auth
+            copy_headers X-Subscription
+        }
+        reverse_proxy https://127.0.0.1:8053 {
+            transport http { tls_insecure_skip_verify }
+        }
+    }
+    handle /api/resolver/* {
+        reverse_proxy 127.0.0.1:9090
+    }
+}
+```
+
+### API endpoints
+
+| Endpoint | Method | Purpose |
+|---|---|---|
+| `/api/resolver/subscribe` | POST | Purchase subscription (X-Cashu header with Cashu token; returns opaque token) |
+| `/api/resolver/auth` | GET | Caddy forward_auth target (X-Subscription header; returns 200 or 402) |
+| `/api/resolver/status` | GET | Check subscription status (X-Subscription header) |
+
+### Safety properties
+
+- DoH only (TCP+TLS) — no amplification possible
+- Every query gated by forward_auth — no resolution without valid subscription
+- testnut-only mint filter — anti-spam via Cashu friction
+- Bot never sees DNS query content — privacy by architecture

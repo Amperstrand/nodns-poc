@@ -104,6 +104,7 @@ pub struct AppState {
     pub nostr_client: nostr_sdk::Client,
     pub relay_urls: Vec<String>,
     pub db_path: std::path::PathBuf,
+    pub resolver_config: Option<config::ResolverConfig>,
 }
 
 // ---------------------------------------------------------------------------
@@ -653,6 +654,11 @@ async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
         nostr_client: nostr_client.clone(),
         relay_urls: cfg.nostr.relays.clone(),
         db_path: std::path::PathBuf::from(&cfg.store.path),
+        resolver_config: if cfg.resolver.enabled {
+            Some(cfg.resolver.clone())
+        } else {
+            None
+        },
     });
     let bind = cfg.server.bind.clone();
     let http_state = app_state.clone();
@@ -749,11 +755,37 @@ async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
                 axum::routing::post(handlers::acmedns_update_handler),
             )
             .layer(GovernorLayer::new(api_limit))
+            .with_state(http_state.clone());
+
+        let resolver_limit = Arc::new(
+            GovernorConfigBuilder::default()
+                .key_extractor(SmartIpKeyExtractor)
+                .per_second(2)
+                .burst_size(5)
+                .finish()
+                .expect("governor: invalid resolver rate limit config"),
+        );
+
+        let resolver_routes = axum::Router::new()
+            .route(
+                "/api/resolver/subscribe",
+                axum::routing::post(handlers::resolver_subscribe_handler),
+            )
+            .route(
+                "/api/resolver/auth",
+                axum::routing::get(handlers::resolver_auth_handler),
+            )
+            .route(
+                "/api/resolver/status",
+                axum::routing::get(handlers::resolver_status_handler),
+            )
+            .layer(GovernorLayer::new(resolver_limit))
             .with_state(http_state);
 
         let app = axum::Router::new()
             .merge(acme_routes)
             .merge(api_routes)
+            .merge(resolver_routes)
             .layer(axum::middleware::from_fn(correlation_id_middleware))
             .layer(SetResponseHeaderLayer::overriding(
                 HeaderName::from_static("x-content-type-options"),

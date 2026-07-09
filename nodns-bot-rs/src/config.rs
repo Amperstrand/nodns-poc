@@ -95,6 +95,9 @@ pub struct Config {
     pub dns_update: DnsUpdateConfig,
 
     #[serde(default)]
+    pub resolver: ResolverConfig,
+
+    #[serde(default)]
     pub epp: nodns_epp::EppConfig,
 }
 
@@ -409,6 +412,30 @@ impl Default for AcmeConfig {
             zerossl_eab_kid: String::new(),
             zerossl_eab_hmac_key: String::new(),
             encryption_key: None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default)]
+pub struct ResolverConfig {
+    pub enabled: bool,
+    pub price_sats: i64,
+    pub mint_url: String,
+    pub mint_filter: String,
+    pub duration_days: u32,
+    pub daily_query_limit: i64,
+}
+
+impl Default for ResolverConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            price_sats: 10,
+            mint_url: "https://testnut.cashu.space".to_string(),
+            mint_filter: "testnut".to_string(),
+            duration_days: 30,
+            daily_query_limit: 10000,
         }
     }
 }

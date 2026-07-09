@@ -97,3 +97,6 @@ nodns-resolver = { path = "../nodns-resolver-rs" }
 
 # Error abstraction for DnsConnector trait
 anyhow = "1"
+
+# CBOR encoding for NUT-18 payment requests (Cashu resolver service)
+ciborium = "0.2"

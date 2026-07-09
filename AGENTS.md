@@ -574,6 +574,12 @@ The bot reads a TOML config file (default `/opt/nodns-bot/config.toml`, local: `
 | `[dns_update]` | `listen` | *(empty)* | DDNS listener bind address |
 | `[dns_update]` | `tsig_key_name` | *(empty)* | DDNS listener TSIG key |
 | `[dns_update]` | `tsig_key_secret` | *(empty)* | DDNS listener TSIG secret |
+| `[resolver]` | `enabled` | `false` | Enable Cashu-gated DoH resolver service |
+| `[resolver]` | `price_sats` | `10` | testnut sats for one subscription period |
+| `[resolver]` | `mint_url` | `https://testnut.cashu.space` | Cashu mint for subscription payments |
+| `[resolver]` | `mint_filter` | `testnut` | Accepted mint hostname filter |
+| `[resolver]` | `duration_days` | `30` | Subscription validity in days |
+| `[resolver]` | `daily_query_limit` | `10000` | Max queries per day per subscription |
 
 ### Frontend environment variables
 

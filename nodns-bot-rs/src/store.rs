@@ -18,6 +18,13 @@ use tracing::info;
 
 use crate::types::{AcmeDnsRegistration, AcmeOrder, AcmeOrderLog, DelegationRecord, EventRecord};
 
+fn now_unix() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0)
+}
+
 // ---------------------------------------------------------------------------
 // AES-256-GCM encryption helpers
 // ---------------------------------------------------------------------------
@@ -91,6 +98,9 @@ pub enum StoreError {
 
     #[error("counting total records: {0}")]
     TotalRecordCount(#[source] rusqlite::Error),
+
+    #[error("resolver subscription operation: {0}")]
+    ResolverSubscription(#[source] rusqlite::Error),
 
     #[error("counting recent events for pubkey {0}: {1}")]
     EventsInLastMinute(String, #[source] rusqlite::Error),
@@ -166,6 +176,17 @@ pub enum StoreError {
 
     #[error("updating acme-dns TXT {0}: {1}")]
     UpdateAcmeDnsTxt(String, #[source] rusqlite::Error),
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct ResolverSubscription {
+    pub token: String,
+    pub npub: Option<String>,
+    pub created_at: i64,
+    pub expires_at: i64,
+    pub queries_today: i64,
+    pub daily_query_limit: i64,
+    pub last_query_at: Option<i64>,
 }
 
 // ---------------------------------------------------------------------------
@@ -446,6 +467,112 @@ impl Store {
             })
             .map_err(StoreError::TotalRecordCount)?;
         Ok(count)
+    }
+
+    pub fn create_resolver_subscription(
+        &self,
+        npub: Option<&str>,
+        expires_at: i64,
+        daily_query_limit: i64,
+        payment_amount: u64,
+    ) -> Result<String, StoreError> {
+        let token = uuid::Uuid::new_v4().to_string();
+        let now = now_unix();
+        let today = now / 86400;
+        let conn = self.conn();
+        conn.execute(
+            "INSERT INTO resolver_subscriptions \
+             (token, npub, expires_at, daily_query_limit, last_reset_day, payment_amount) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            rusqlite::params![
+                token,
+                npub,
+                expires_at,
+                daily_query_limit,
+                today,
+                payment_amount as i64
+            ],
+        )
+        .map_err(StoreError::ResolverSubscription)?;
+        Ok(token)
+    }
+
+    pub fn validate_resolver_subscription(&self, token: &str) -> Result<bool, StoreError> {
+        let now = now_unix();
+        let today = now / 86400;
+        let conn = self.conn();
+
+        let row = conn.query_row(
+            "SELECT expires_at, queries_today, daily_query_limit, last_reset_day \
+                 FROM resolver_subscriptions WHERE token = ?1",
+            rusqlite::params![token],
+            |row| {
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, i64>(1)?,
+                    row.get::<_, i64>(2)?,
+                    row.get::<_, i64>(3)?,
+                ))
+            },
+        );
+
+        let (expires_at, mut queries_today, daily_query_limit, last_reset_day) = match row {
+            Ok(r) => r,
+            Err(rusqlite::Error::QueryReturnedNoRows) => return Ok(false),
+            Err(e) => return Err(StoreError::ResolverSubscription(e)),
+        };
+
+        if now >= expires_at {
+            return Ok(false);
+        }
+
+        if last_reset_day != today {
+            queries_today = 0;
+        }
+
+        if queries_today >= daily_query_limit {
+            return Ok(false);
+        }
+
+        queries_today += 1;
+        conn.execute(
+            "UPDATE resolver_subscriptions \
+             SET queries_today = ?1, last_reset_day = ?2, last_query_at = ?3 \
+             WHERE token = ?4",
+            rusqlite::params![queries_today, today, now, token],
+        )
+        .map_err(StoreError::ResolverSubscription)?;
+
+        Ok(true)
+    }
+
+    pub fn get_resolver_subscription(
+        &self,
+        token: &str,
+    ) -> Result<Option<ResolverSubscription>, StoreError> {
+        let conn = self.conn();
+        let row = conn.query_row(
+            "SELECT token, npub, created_at, expires_at, queries_today, \
+             daily_query_limit, last_query_at \
+             FROM resolver_subscriptions WHERE token = ?1",
+            rusqlite::params![token],
+            |row| {
+                Ok(ResolverSubscription {
+                    token: row.get(0)?,
+                    npub: row.get(1)?,
+                    created_at: row.get(2)?,
+                    expires_at: row.get(3)?,
+                    queries_today: row.get(4)?,
+                    daily_query_limit: row.get(5)?,
+                    last_query_at: row.get(6)?,
+                })
+            },
+        );
+        match row {
+            Ok(sub) => Ok(Some(sub)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(StoreError::ResolverSubscription(e)),
+        }
     }
 
     /// Return the number of events processed for a pubkey in the last 60 seconds.
@@ -1403,6 +1530,20 @@ const SCHEMA: &str = r"
         proof_txid TEXT NOT NULL,
         verified_at INTEGER NOT NULL DEFAULT (unixepoch())
     );
+
+    CREATE TABLE IF NOT EXISTS resolver_subscriptions (
+        token TEXT PRIMARY KEY,
+        npub TEXT,
+        created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+        expires_at INTEGER NOT NULL,
+        queries_today INTEGER NOT NULL DEFAULT 0,
+        daily_query_limit INTEGER NOT NULL,
+        last_reset_day INTEGER NOT NULL DEFAULT 0,
+        last_query_at INTEGER,
+        payment_amount INTEGER NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_resolver_expires ON resolver_subscriptions(expires_at);
 ";
 
 // ---------------------------------------------------------------------------

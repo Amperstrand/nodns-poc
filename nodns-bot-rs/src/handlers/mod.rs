@@ -5,6 +5,7 @@ mod client_log;
 mod dyndns;
 mod health;
 mod llms;
+mod resolver;
 mod tls_check;
 
 // Re-exports to preserve handlers::* API used by main.rs
@@ -18,6 +19,7 @@ pub use client_log::client_log_handler;
 pub use dyndns::dyndns_update_handler;
 pub use health::health_handler;
 pub use llms::{llms_full_txt_handler, llms_txt_handler};
+pub use resolver::{resolver_auth_handler, resolver_status_handler, resolver_subscribe_handler};
 pub use tls_check::tls_check_handler;
 
 #[cfg(test)]
@@ -71,6 +73,7 @@ mod test_helpers {
             nostr_client: nostr_sdk::Client::default(),
             relay_urls: vec![],
             db_path: std::path::PathBuf::from(":memory:"),
+            resolver_config: None,
         })
     }
 
@@ -109,6 +112,7 @@ mod test_helpers {
             nostr_client: nostr_sdk::Client::default(),
             relay_urls: vec![],
             db_path: std::path::PathBuf::from(":memory:"),
+            resolver_config: None,
         })
     }
 

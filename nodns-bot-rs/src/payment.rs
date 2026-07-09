@@ -156,6 +156,22 @@ impl Verifier {
         }
     }
 
+    pub fn new(mint_url: &str, mint_filter: &str, required_sats: i64) -> Self {
+        Self {
+            mint_url: mint_url.trim_end_matches('/').to_string(),
+            required_sats,
+            update_free: true,
+            create_price: required_sats as u64,
+            update_price: 0,
+            npub_names_free: true,
+            mint_filter: if mint_filter.is_empty() {
+                None
+            } else {
+                Some(mint_filter.to_string())
+            },
+        }
+    }
+
     pub fn create_price(&self) -> u64 {
         self.create_price
     }
