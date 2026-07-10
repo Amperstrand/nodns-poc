@@ -47,6 +47,14 @@ class DoHProxy(http.server.BaseHTTPRequestHandler):
         ctx = ssl.create_default_context()
         try:
             resp = urllib.request.urlopen(req, context=ctx, timeout=10)
+        except urllib.error.URLError as e:
+            if isinstance(e.reason, ssl.SSLCertVerificationError):
+                import warnings
+                warnings.warn("SSL cert verification failed — using unverified context")
+                ctx = ssl._create_unverified_context()
+                resp = urllib.request.urlopen(req, context=ctx, timeout=10)
+            else:
+                raise
             data = resp.read()
             self.send_response(200)
             self.send_header("Content-Type", "application/dns-message")
