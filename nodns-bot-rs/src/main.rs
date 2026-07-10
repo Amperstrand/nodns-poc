@@ -396,7 +396,7 @@ async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
                 {
                     let nameserver: SocketAddr = first_zone.knot_address.parse().unwrap_or_else(|_| {
                         warn!(zone = %first_zone.zone, address = %first_zone.knot_address, "invalid knot_address, using derived key");
-                        "127.0.0.1:5353".parse().unwrap()
+                        "127.0.0.1:53".parse().unwrap()
                     });
                     let live_keys =
                         nodns_connectors::dns::query_dnskey_base64(nameserver, &first_zone.zone)

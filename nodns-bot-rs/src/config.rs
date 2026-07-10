@@ -705,7 +705,7 @@ relays = ["wss://relay.example.com"]
 zone = "nodns.shop"
 
 [dns]
-knot_address = "127.0.0.1:5353"
+knot_address = "127.0.0.1:53"
 zone = "nodns.shop"
 tsig_key_name = "key1."
 tsig_key_secret = "c2VjcmV0"
@@ -740,7 +740,7 @@ relays = ["wss://relay.example.com"]
 zone = "nodns.shop"
 
 [dns]
-knot_address = "127.0.0.1:5353"
+knot_address = "127.0.0.1:53"
 zone = "nodns.shop"
 tsig_key_name = "key1."
 tsig_key_secret = "c2VjcmV0"
@@ -755,7 +755,7 @@ path = "test.db"
         assert_eq!(cfg.server.bind, "0.0.0.0:8080");
         assert_eq!(cfg.dns.zones.len(), 1);
         assert_eq!(cfg.dns.zones[0].zone, "nodns.shop");
-        assert_eq!(cfg.dns.zones[0].knot_address, "127.0.0.1:5353");
+        assert_eq!(cfg.dns.zones[0].knot_address, "127.0.0.1:53");
         assert_eq!(cfg.dns.zones[0].default_ttl, 3600); // inherited top-level default
         assert_eq!(cfg.dns.zones[0].tsig_algorithm, "hmac-sha256");
     }
@@ -768,7 +768,7 @@ relays = ["wss://relay.example.com"]
 zone = "nodns.shop"
 
 [[dns.zones]]
-knot_address = "127.0.0.1:5353"
+knot_address = "127.0.0.1:53"
 zone = "nodns.shop"
 tsig_key_name = "key1."
 tsig_key_secret = "secret1"
@@ -824,7 +824,7 @@ relays = ["wss://relay.example.com"]
 zone = "nodns.shop"
 
 [[dns.zones]]
-knot_address = "127.0.0.1:5353"
+knot_address = "127.0.0.1:53"
 zone = "nodns.shop"
 tsig_key_name = "key1."
 tsig_key_secret = "secret1"
@@ -861,7 +861,7 @@ relays = ["wss://relay.example.com"]
 zone = "nodns.shop"
 
 [[dns.zones]]
-knot_address = "127.0.0.1:5353"
+knot_address = "127.0.0.1:53"
 zone = "nodns.shop"
 tsig_key_name = "key1."
 tsig_key_secret = "secret1"
@@ -895,7 +895,7 @@ relays = ["wss://relay.example.com"]
 zone = "nodns.shop"
 
 [[dns.zones]]
-knot_address = "127.0.0.1:5353"
+knot_address = "127.0.0.1:53"
 zone = "nodns.shop"
 tsig_key_name = "key1."
 tsig_key_secret = "secret1"
@@ -948,7 +948,7 @@ relays = ["wss://relay.example.com"]
 zone = "nodns.shop"
 
 [[dns.zones]]
-knot_address = "127.0.0.1:5353"
+knot_address = "127.0.0.1:53"
 zone = "nodns.shop"
 tsig_key_name = "key1."
 tsig_key_secret = "secret1"
@@ -976,7 +976,7 @@ relays = ["wss://relay.example.com"]
 zone = "nodns.shop"
 
 [dns]
-knot_address = "127.0.0.1:5353"
+knot_address = "127.0.0.1:53"
 zone = "nodns.shop"
 tsig_key_name = "key1."
 tsig_key_secret = "secret1"
@@ -1100,7 +1100,7 @@ relays = ["wss://relay.example.com"]
 zone = "nodns.shop"
 
 [[dns.zones]]
-knot_address = "127.0.0.1:5353"
+knot_address = "127.0.0.1:53"
 zone = "nodns.shop"
 tsig_key_name = "key1."
 tsig_key_secret = "secret1"
@@ -1122,7 +1122,7 @@ relays = ["wss://relay.example.com"]
 zone = "nodns.shop"
 
 [[dns.zones]]
-knot_address = "127.0.0.1:5353"
+knot_address = "127.0.0.1:53"
 zone = "nodns.shop"
 tsig_key_name = "key1."
 tsig_key_secret = "secret1"
@@ -1239,7 +1239,7 @@ relays = ["wss://relay.example.com"]
 zone = "nodns.shop"
 
 [[dns.zones]]
-knot_address = "127.0.0.1:5353"
+knot_address = "127.0.0.1:53"
 zone = "nodns.shop"
 tsig_key_name = "key1."
 tsig_key_secret = "secret1"
@@ -1258,7 +1258,7 @@ relays = ["wss://relay.example.com"]
 zone = "multi"
 
 [[dns.zones]]
-knot_address = "127.0.0.1:5353"
+knot_address = "127.0.0.1:53"
 zone = "nodns.shop"
 tsig_key_name = "key1."
 tsig_key_secret = "secret1"
