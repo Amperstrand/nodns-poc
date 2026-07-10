@@ -298,27 +298,97 @@ Browser-native DoH cannot send custom headers, so premium users need a local pro
 
 ## Verified evidence (2026-07-10)
 
-Full end-to-end test with real Cashu tokens from the faucet:
+### Comprehensive test suite — 24/24 passed
 
-| Step | Operation | Result |
-|---|---|---|
-| 1 | Mint 16 testnut sats from faucet.cashu.email | Token received ✅ |
-| 2 | POST /api/resolver/subscribe with token | 200 — subscription `b630fa3e-...` created ✅ |
-| 3 | google.com A via premium DoH (with subscription) | NOERROR, 6 A records (142.251.110.x) ✅ |
-| 4 | nodns.shop SOA via premium DoH | NOERROR, authoritative SOA ✅ |
-| 5 | example.org A via premium DoH | NOERROR, 2 A records ✅ |
-| 6 | google.com A via free DoH (no subscription) | REFUSED, 0 answers (browser fallback) ✅ |
-| 7 | Subscription status check | active=True, queries_today=3 ✅ |
+Full automated test suite run against production. Rate-limited tests spaced
+1s apart to avoid hitting the 2/sec burst-5 governor.
 
-All free-tier queries also verified via `dnspython`:
-- `nodns.shop SOA` → NOERROR, 1 answer
-- `dns4sats.xyz SOA` → NOERROR, 1 answer
-- `google.com A` → REFUSED, 0 answers
+**Free tier — hosted zone resolution (4 tests):**
 
-Existing services verified unaffected:
-- `GET /api/health` → 200
-- `dig @46.224.104.12 nodns.shop SOA` → authoritative answer
-- Bot processing Nostr events normally
+| Query | rcode | Answers | Result |
+|---|---|---|---|
+| `nodns.shop SOA` | NOERROR | 1 | ✅ |
+| `dns4sats.xyz SOA` | NOERROR | 1 | ✅ |
+| `nodns.shop NS` | NOERROR | 1 | ✅ |
+| `nodns.shop DNSKEY` | NOERROR | 1 (3 records) | ✅ (DNSSEC intact) |
+
+**Free tier — non-hosted REFUSED / browser fallback (4 tests):**
+
+| Query | rcode | Answers | Result |
+|---|---|---|---|
+| `google.com A` | REFUSED | 0 | ✅ browser falls back to system DNS |
+| `example.org A` | REFUSED | 0 | ✅ |
+| `github.com A` | REFUSED | 0 | ✅ |
+| `cloudflare.com A` | REFUSED | 0 | ✅ |
+
+**Free tier — HTTP status (1 test):**
+
+| Check | Result |
+|---|---|
+| `POST /dns-query` (no auth) | HTTP 400 (dnsproxy accepted, NOT 402) ✅ |
+
+**Premium tier — gating without subscription (3 tests):**
+
+| Check | Result |
+|---|---|
+| `POST /dns-query/premium` (no header) | HTTP 402 ✅ |
+| `POST /dns-query/premium` (fake token) | HTTP 402 ✅ |
+| `POST /dns-query/premium` (empty token) | HTTP 402 ✅ |
+
+**Subscribe — NUT-24 challenge (3 tests):**
+
+| Check | Result |
+|---|---|
+| `POST /subscribe` (no token) → 402 | ✅ |
+| 402 body has `accepts.cashu` JSON | ✅ |
+| 402 has `X-Cashu: creqA...` header (NUT-18) | ✅ |
+
+**Subscribe — invalid token rejection (2 tests):**
+
+| Check | Result |
+|---|---|
+| Invalid Cashu token (`cashuBinvalid`) → 400 | ✅ |
+| Garbage token (`garbage`) → 400 | ✅ |
+
+**Status — edge cases (2 tests):**
+
+| Check | Result |
+|---|---|
+| Status without token → 400 | ✅ |
+| Status with nonexistent token → 404 | ✅ |
+
+**Full Cashu round-trip (manually verified, 2026-07-10):**
+
+| Step | Result |
+|---|---|
+| Mint 16 testnut sats from faucet.cashu.email | Token received ✅ |
+| POST /subscribe with token → 200 | Subscription `b630fa3e-...` ✅ |
+| google.com A via premium DoH | NOERROR, 6 A records ✅ |
+| nodns.shop SOA via premium DoH | NOERROR, authoritative SOA ✅ |
+| example.org A via premium DoH | NOERROR, 2 A records ✅ |
+| google.com A via free DoH | REFUSED (browser fallback) ✅ |
+| Subscription counter after 3 premium queries | queries_today=3 ✅ |
+
+**Regression — existing services (4 tests):**
+
+| Check | Result |
+|---|---|
+| `GET /api/health` → 200 | ✅ |
+| `dig @46.224.104.12 nodns.shop SOA` | Authoritative answer ✅ |
+| `dig @46.224.104.12 nodns.shop DNSKEY` | 3 DNSKEY records ✅ |
+| `dig @46.224.104.12 google.com A` → empty (REFUSED) | Open resolver still closed ✅ |
+
+**Rate limiting (1 test):**
+
+| Check | Result |
+|---|---|
+| 15 rapid requests → rate limiter triggers | 11× 429, confirms governor active ✅ |
+
+**Rate limit parameters:**
+- Resolver routes: `per_second(2), burst_size(5)` via `tower_governor`
+- ACME routes: `per_second(1), burst_size(3)`
+- API routes: `per_second(1), burst_size(30)`
+- Tests must space resolver requests ≥1s apart to avoid 429
 
 ## Design decisions
 
