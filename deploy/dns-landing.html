@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>nodns DoH Resolver — Free .nostr DNS + Cashu-gated full recursion</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;background:#0a0a0a;color:#e0e0e0;min-height:100vh;padding:2rem 1rem;line-height:1.6}
+.container{max-width:720px;margin:0 auto}
+h1{font-size:1.8rem;color:#fff;margin-bottom:.25rem}
+h1 span{color:#ff6b35}
+.tagline{color:#888;font-size:.95rem;margin-bottom:2rem}
+h2{font-size:1.1rem;color:#ff6b35;margin:2rem 0 .75rem;text-transform:uppercase;letter-spacing:.05em}
+.card{background:#141414;border:1px solid #222;border-radius:10px;padding:1.5rem;margin-bottom:1rem}
+.card p{color:#bbb;margin-bottom:.75rem}
+.card p:last-child{margin-bottom:0}
+code{background:#1a1a1a;padding:.15rem .4rem;border-radius:4px;font-size:.9rem;color:#ff6b35;word-break:break-all}
+input,button,textarea{font-family:inherit;font-size:.9rem}
+input[type=text],textarea{width:100%;background:#0a0a0a;border:1px solid #333;border-radius:6px;padding:.6rem .8rem;color:#e0e0e0;outline:none}
+input[type=text]:focus{border-color:#ff6b35}
+textarea{resize:vertical;min-height:60px}
+button{background:#ff6b35;color:#0a0a0a;border:none;border-radius:6px;padding:.6rem 1.5rem;font-weight:600;cursor:pointer;margin-top:.5rem}
+button:hover{background:#ff8055}
+button:disabled{background:#555;cursor:default}
+.hint{color:#666;font-size:.8rem;margin-top:.4rem}
+.result{margin-top:1rem;padding:1rem;background:#0a0a0a;border-radius:6px;border:1px solid #333;font-size:.85rem;display:none}
+.result.show{display:block}
+.result-ok{color:#4ade80}
+.result-err{color:#f87171}
+.badge{display:inline-block;padding:.15rem .5rem;border-radius:4px;font-size:.75rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em}
+.badge-free{background:#1a3a1a;color:#4ade80}
+.badge-premium{background:#3a2a1a;color:#ff6b35}
+.step{color:#666;font-size:.8rem;text-transform:uppercase;margin-bottom:.3rem;letter-spacing:.05em}
+a{color:#ff6b35}
+.copy-btn{font-size:.8rem;padding:.3rem .6rem;margin-top:0;margin-left:.5rem;background:#222;color:#e0e0e0}
+.copy-btn:hover{background:#333}
+.divider{border:0;border-top:1px solid #222;margin:2rem 0}
+</style>
+</head>
+<body>
+<div class="container">
+<h1>nodns <span>DoH Resolver</span></h1>
+<p class="tagline">Free .nostr DNS resolution + Cashu-gated full internet recursion</p>
+
+<div class="card">
+<p><span class="badge badge-free">Free</span> <strong>.nostr resolution for your browser.</strong> Point your browser's DoH at the URL below. Your browser will resolve .nostr names (and nodns.shop zones) through our Knot DNS server. Everything else falls back to your system resolver automatically.</p>
+<p>DoH URL: <code>https://dns.nodns.shop/dns-query</code><button class="copy-btn" onclick="copyText('https://dns.nodns.shop/dns-query')">copy</button></p>
+<div class="step">Firefox</div>
+<p>Settings &rarr; Privacy &amp; Security &rarr; DNS over HTTPS &rarr; Max Protection &rarr; Custom Provider &rarr; paste the URL above</p>
+<div class="step">Chrome / Edge</div>
+<p>Settings &rarr; Privacy and security &rarr; Security &rarr; Use secure DNS &rarr; With (Custom) &rarr; paste the URL above</p>
+</div>
+
+<div class="card">
+<p><span class="badge badge-premium">Premium</span> <strong>Full internet DNS via Cashu.</strong> All your DNS queries routed through nodns instead of your ISP. No account, no tracking. Pay with testnut Cashu (free test tokens).</p>
+
+<div class="step">Step 1 — Get test tokens</div>
+<p>Visit <a href="https://faucet.cashu.email" target="_blank">faucet.cashu.email</a>, select testnut.cashu.space, mint 16+ sats, copy the token.</p>
+
+<div class="step">Step 2 — Subscribe</div>
+<textarea id="cashu-token" placeholder="Paste your cashuB... token here"></textarea>
+<button id="subscribe-btn" onclick="subscribe()">Subscribe (10 testnut sats / 30 days)</button>
+<div id="sub-result" class="result"></div>
+</div>
+
+<div class="card">
+<div class="step">Step 3 — Use premium DoH</div>
+<p>Browser DoH doesn't support custom headers. Use our local proxy to inject your subscription token:</p>
+<p><code>python3 doh-proxy.py --token YOUR_TOKEN</code></p>
+<p>Then configure your browser DoH to: <code>http://localhost:5353/dns-query</code></p>
+<p class="hint">Download: <a href="https://raw.githubusercontent.com/Amperstrand/nodns-poc/main/tools/doh-proxy.py">doh-proxy.py</a> (requires Python 3, no dependencies)</p>
+</div>
+
+<div class="divider"></div>
+
+<div class="card">
+<p><strong>How it works.</strong> The free tier resolves .nostr, nodns.shop, and dns4sats.xyz via Knot DNS (authoritative-only). Non-hosted queries return REFUSED — your browser falls back to your system resolver, so normal browsing is unaffected.</p>
+<p>The premium tier adds full internet recursion via Google DoH. Payment is Cashu ecash (NUT-24 HTTP 402). No account, no identity link. The bot never sees your DNS queries — privacy is enforced by Caddy's forward_auth architecture.</p>
+<p><strong>Safety:</strong> DoH runs over TCP+TLS. No UDP, no amplification, no DDoS reflection. This service cannot be weaponized.</p>
+<p><a href="https://github.com/Amperstrand/nodns-poc/blob/main/docs/47-resolver-service.md">Full documentation &rarr;</a></p>
+</div>
+</div>
+
+<script>
+function copyText(t){navigator.clipboard.writeText(t)}
+
+async function subscribe(){
+  const token=document.getElementById('cashu-token').value.trim()
+  const result=document.getElementById('sub-result')
+  const btn=document.getElementById('subscribe-btn')
+  if(!token){result.className='result result-err show';result.textContent='Paste a Cashu token first';return}
+  btn.disabled=true;btn.textContent='Verifying...'
+  result.className='result show';result.textContent='Verifying Cashu token via mint checkstate...'
+  try{
+    const r=await fetch('/api/resolver/subscribe',{method:'POST',headers:{'X-Cashu':token}})
+    if(r.status===200){
+      const d=await r.json()
+      const expiry=new Date(d.expires_at*1000).toLocaleDateString()
+      result.className='result result-ok show'
+      result.innerHTML=`<strong>Subscription active!</strong><br>Token: <code>${d.token}</code><br>Expires: ${expiry}<br>Daily limit: ${d.daily_query_limit} queries<br><br>Use this token with the local proxy: <code>python3 doh-proxy.py --token ${d.token}</code>`
+    }else if(r.status===402){
+      const d=await r.json()
+      result.className='result result-err show'
+      result.innerHTML=`Payment required. Get free tokens from <a href="https://faucet.cashu.email" target="_blank">faucet.cashu.email</a>.<br>${JSON.stringify(d.accepts)}`
+    }else{
+      const t=await r.text()
+      result.className='result result-err show'
+      result.textContent=`Error (${r.status}): ${t}`
+    }
+  }catch(e){result.className='result result-err show';result.textContent='Network error: '+e.message}
+  btn.disabled=false;btn.textContent='Subscribe (10 testnut sats / 30 days)'
+}
+</script>
+</body>
+</html>
