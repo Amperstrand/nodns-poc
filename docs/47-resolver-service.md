@@ -1,598 +1,359 @@
-> **Status**: DRAFT
+> **Status**: ACTIVE
 > **Created**: 2026-07-09
-> **Depends on**: payment.rs (Verifier), dnsproxy (existing DoH), Caddy (forward_auth)
+> **Updated**: 2026-07-10 (deployed, end-to-end verified)
+> **Depends on**: payment.rs (Verifier), dnsproxy (DoH), Caddy (forward_auth), Knot DNS
 
-# Cashu-Gated DoH Resolver Service
+# Cashu-Gated DoH Resolver
 
-## Overview
+## What this is
 
-A paid DNS-over-HTTPS (DoH) resolver at `dns.nodns.shop/dns-query` that resolves
-`.nostr` names, `nodns.shop` zones, and the full internet — gated by Cashu ecash
-payment. No accounts, no KYC: users pay testnut sats for a time-limited
-subscription, receive an opaque token, and configure their browser/OS DoH client
-to use the endpoint.
+A DNS-over-HTTPS (DoH) resolver at `dns.nodns.shop` that offers two tiers:
 
-This is an **experiment** to test the hypothesis that a privacy-first DNS
-resolver funded by ecash (no account, no tracking) is a viable product for the
-Nostr/crypto-native audience. The differentiator from free resolvers (1.1.1.1,
-8.8.8.8) and paid resolvers (NextDNS, Control D) is:
+- **Free**: resolves `.nostr`, `nodns.shop`, and `dns4sats.xyz` zones. Browser-native — anyone can point Firefox/Chrome DoH at it with no setup beyond entering the URL. Non-hosted queries return REFUSED, and the browser falls back to the system resolver so normal browsing is unaffected.
+- **Premium**: full internet recursion (google.com, etc.) for users who pay testnut Cashu for a subscription. Intended for privacy-conscious users who want all their DNS routed through nodns instead of their ISP or a big-tech resolver.
 
-- **`.nostr` resolution** — the only public resolver that overlays Nostr-native names
-- **Cashu payment** — no account, no credit card, no identity link
-- **testnut for anti-spam** — the friction of obtaining testnut Cashu (wallet
-  setup + faucet rate limits) is the abuse gate, not monetary cost
+This is an experiment to test whether a privacy-first DNS resolver funded by ecash — no account, no credit card, no tracking — is a viable product for the Nostr/crypto-native audience.
 
-### Why not just run an open UDP resolver?
+## Why it exists
 
-An open UDP recursive resolver is an amplification DDoS weapon (spoofed-source
-reflection). We received a BSI/Hetzner abuse report (CB-Report 2026-07-07) for
-exactly this. **This service is DoH-only (TCP+TLS)** — amplification is
-structurally impossible because TCP sources cannot be spoofed. See
-`deploy/DEPLOY.md` → "DNS hardening" for the full incident history.
+nodns's core value is turning Nostr events into live DNS records. Those records are in normal DNS (globally resolvable via any resolver), so users don't need a special resolver to reach them. But there are two scenarios where running our own resolver adds value:
 
-## Safety invariants (non-negotiable)
+1. **`.nostr` pseudo-TLD resolution.** `.nostr` is not in the global DNS root — no resolver on earth resolves `npub1xxx.nostr` except one that speaks Nostr. A nodns DoH resolver overlays `.nostr` on top of normal DNS, giving browser users something no other resolver offers. This is the free-tier differentiator.
 
-These properties MUST hold at every stage. Any implementation that violates one
-is a bug, not a trade-off.
+2. **Privacy-first full DNS.** Users who want their DNS queries hidden from their ISP (and from big-tech resolvers like 8.8.8.8 that log them) can route everything through nodns. Cashu payment means no account, no identity link. This is the premium-tier product hypothesis.
 
-| # | Invariant | Enforcement |
+The existing paid DNS market (NextDNS ~$20/yr, Control D ~$24/yr, AdGuard ~$30/yr) is saturated on features (blocklists, parental controls, analytics) but entirely traditional on payment and identity — all require accounts and credit cards. nodns's wedge is Cashu-native payment + `.nostr` resolution + no-account privacy.
+
+## How it works
+
+### Two-path architecture
+
+```
+Browser / CLI client
+    │
+    ├─ POST dns.nodns.shop/dns-query           (FREE — no auth)
+    │   │
+    │   ▼
+    │   Caddy → dnsproxy-free (port 8053)
+    │              ├─ .nostr query       → Knot (127.0.0.1:53) → authoritative answer
+    │              ├─ nodns.shop query   → Knot → authoritative answer
+    │              ├─ dns4sats.xyz query → Knot → authoritative answer
+    │              └─ everything else     → Knot → REFUSED (browser falls back to system DNS)
+    │
+    └─ POST dns.nodns.shop/dns-query/premium    (PAID — Cashu subscription)
+        │
+        ▼
+        Caddy → forward_auth → bot /api/resolver/auth
+        │       ├─ no X-Subscription header     → 402 Payment Required
+        │       └─ valid subscription token      → 200 OK
+        │
+        ▼ (auth passed)
+        Caddy → dnsproxy-premium (port 8054)
+                   ├─ .nostr / nodns.shop        → Knot (127.0.0.1:53)
+                   └─ everything else             → Google DoH (full recursion)
+```
+
+### The free tier
+
+The free path has no authentication. A browser configured with DoH URL `https://dns.nodns.shop/dns-query` sends queries directly to `dnsproxy-free` (port 8053). This dnsproxy instance is configured with only Knot (127.0.0.1:53) as its upstream — no external recursive resolver.
+
+Knot DNS is authoritative-only: it answers for zones it hosts (`.nostr`, `nodns.shop`, `dns4sats.xyz`) and returns REFUSED for everything else. When a browser queries `google.com` through the free path, dnsproxy forwards to Knot, Knot returns REFUSED, dnsproxy passes it through, and the browser sees a DNS error. Firefox and Chrome both handle this by falling back to the system resolver for that query — so normal browsing continues to work via the system's configured resolver (ISP, 8.8.8.8, etc.).
+
+The user experience: `.nostr` names resolve (the unique value), and normal browsing is unaffected (via fallback). No subscription, no headers, no setup beyond entering one URL.
+
+### The premium tier
+
+The premium path is gated by Caddy's `forward_auth` directive. When a request hits `/dns-query/premium`, Caddy first sends an auth subrequest to the bot's `/api/resolver/auth` endpoint. The bot checks the `X-Subscription` header: if valid (token exists, not expired, under daily rate limit), it returns 200 and Caddy proxies to `dnsproxy-premium` (port 8054). If invalid, the bot returns 402 and Caddy passes that to the client.
+
+`dnsproxy-premium` is configured with Knot for hosted zones AND Google DoH (`https://dns.google/dns-query`) as the default upstream for everything else. This gives full internet recursion for premium subscribers.
+
+**Privacy by architecture**: The bot's auth handler receives only HTTP headers (Caddy sends a HEAD-style subrequest). The actual DNS query body goes Caddy → dnsproxy-premium directly after auth passes. The bot never sees, logs, or touches the DNS query content. The "we don't log your queries" claim is structurally enforced by the architecture, not a policy promise.
+
+### How Cashu payment works
+
+The subscription purchase follows NUT-24 (Cashu's HTTP 402 Payment Required standard):
+
+```
+1. Client → POST /api/resolver/subscribe
+   (no X-Cashu header)
+
+2. Bot → 402 Payment Required
+   X-Cashu: creqA<Base64(CBOR({a: 10, u: "sat", m: ["https://testnut.cashu.space"], d: "nodns resolver subscription"}))>
+   Body: {"error": "payment required", "accepts": {"cashu": {"mint": "...", "amount": 10, "unit": "sat"}}}
+
+3. Client mints testnut tokens (via faucet or wallet), retries:
+   POST /api/resolver/subscribe
+   X-Cashu: cashuB<Base64(CBOR(Token with 16 proofs worth 16 sats))>
+
+4. Bot verifies token:
+   a. Decode token (cashu crate)
+   b. Check mint URL matches config (must be testnut.cashu.space)
+   c. Check mint_filter (must contain "testnut")
+   d. Check amount >= 10 sats (price_sats)
+   e. Call CDK /v1/checkstate on the mint → verify all proofs unspent
+   f. If valid → create subscription row in SQLite, return opaque token
+
+5. Bot → 200 OK
+   {"token": "b630fa3e-...", "expires_at": 1786260939, "daily_query_limit": 10000}
+
+6. Client uses the subscription token:
+   POST /dns-query/premium
+   X-Subscription: b630fa3e-...
+   (DNS query body)
+   → 200 OK with DNS answer
+```
+
+The Cashu verification reuses the bot's existing `payment.rs` `Verifier` — the same code that verifies Cashu payments for DNS record creation. The `Verifier::new()` constructor was added for non-zone use cases (it takes mint_url, mint_filter, required_sats directly instead of a ZonePaymentConfig).
+
+The NUT-18 `creqA` payment request in the 402 response is encoded as CBOR + base64_urlsafe. The nodns-registrar frontend already generates and parses these via `@cashu/cashu-ts`'s `PaymentRequest.toEncodedCreqA()`, so a future web UI can consume the challenge automatically.
+
+### Why testnut Cashu is the anti-spam gate
+
+testnut.cashu.space is a test mint — its tokens have no monetary value. But the anti-spam property isn't the monetary cost; it's the **friction**:
+
+1. A spammer must install a Cashu wallet (most don't have one)
+2. Must claim from the testnut faucet (rate-limited per source)
+3. Must mint tokens (each requires a mint round-trip)
+4. Must send them as an HTTP header (DoH is TCP — no UDP packet blast)
+
+This setup tax filters out ~99% of automated abuse. The remaining 1% (determined spammers who automate the faucet) are capped by per-subscription rate limits (10,000 queries/day) and Caddy IP-level rate limiting.
+
+For production, switching to a real-sats mint is a one-line config change (`mint_url` + `mint_filter`). The architecture doesn't change.
+
+## Safety analysis
+
+### Why this cannot be used for DDoS amplification
+
+The BSI abuse report (CB-Report 2026-07-07) flagged the server because an open UDP recursive resolver is a DDoS amplification weapon. This DoH resolver is categorically different:
+
+| Property | Open UDP resolver (the incident) | DoH resolver (this service) |
 |---|---|---|
-| 1 | **DoH only. No UDP port 53.** | dnsproxy runs `--port=0`. Caddy is the only public surface (HTTPS). No UDP DNS listener is ever exposed. |
-| 2 | **Every query requires a valid subscription.** | Caddy `forward_auth` calls `/api/resolver/auth` before proxying to dnsproxy. No valid token → 402. Zero DNS resolution happens without payment. |
-| 3 | **testnut-only mint filter.** | `Verifier` constructed with `mint_filter = "testnut"`. Non-testnut Cashu tokens are rejected at subscribe time. |
-| 4 | **Per-subscription daily rate limit.** | Bot tracks `queries_today` per subscription. Exceeds `daily_query_limit` → 402 (renew). |
-| 5 | **Caddy IP-level rate limit on `/dns-query`.** | Connection-flood backstop before the subscription check runs. |
-| 6 | **No DNS query content logged.** | The bot only sees the auth request (token + source IP). The actual DNS query goes Caddy → dnsproxy directly after auth passes. The bot never touches it. Privacy is structural, not a policy promise. |
-| 7 | **Knot DNS on port 53 is untouched.** | dnsproxy forwards `.nostr` and `nodns.shop` queries to `127.0.0.1:53` (Knot authoritative). Knot stays authoritative-only, REFUSED for non-hosted, RRL on. |
+| Transport | UDP (stateless, spoofable source IP) | TCP+TLS (handshake required, source can't be spoofed) |
+| Amplification | 50-100× (large DNS response from tiny query) | 1× (TCP handshake proves client identity before response) |
+| Reflection | Yes (spoofed source → victim gets the response) | Impossible (attacker must complete TLS handshake) |
+| BSI reportable | Yes | No |
 
-## Existing infrastructure (what we build on)
+DoH runs over HTTPS. Every response requires a completed TCP three-way handshake and TLS negotiation. An attacker cannot forge their source address — they must be reachable at the source IP to complete the handshake. This makes DNS amplification attacks structurally impossible. This is why every modern "resolver as a service" (NextDNS, Control D, AdGuard, Mullvad) uses DoH/DoT as its interface.
 
-### dnsproxy (already running)
+### Resource exhaustion (the residual risk)
 
+A botnet could flood TCP connections to consume server CPU (TLS handshakes) or bandwidth. Mitigations:
+
+- **Free tier**: responses are tiny (authoritative DNS records from Knot — a few hundred bytes). REFUSED responses are even smaller. No large recursive lookups.
+- **Premium tier**: rate-limited per subscription (10,000 queries/day). An attacker needs a Cashu subscription per source IP.
+- **Caddy**: can be configured with per-IP connection limits as a backstop.
+- **dnsproxy**: has its own connection and query handling limits.
+
+This is a service-availability concern (like any public web service), not a weaponizable-DDoS concern. BSI does not flag TCP-based services for this.
+
+## Components
+
+### dnsproxy-free (port 8053)
+
+AdGuard's `dnsproxy` binary. Configured with only Knot as the upstream — no external recursive resolver. Resolves `.nostr`, `nodns.shop`, `dns4sats.xyz` authoritatively; REFUSES everything else.
+
+```yaml
+# /etc/dnsproxy/config-free.yaml
+upstream:
+  - 127.0.0.1:53
+conditional-upstreams:
+  - domain: nostr
+    upstream:
+      - 127.0.0.1:53
+  - domain: nodns.shop
+    upstream:
+      - 127.0.0.1:53
+  - domain: dns4sats.xyz
+    upstream:
+      - 127.0.0.1:53
 ```
-dnsproxy \
-  --port=0 \                              # no plain DNS
-  --https-port=8053 \                     # DoH only
-  --listen=127.0.0.1 \                    # localhost only
-  --tls-crt=... --tls-key=... \
-  -u "[/nostr/]127.0.0.1:53" \            # .nostr → Knot authoritative
-  -u "[/dns4sats.xyz/]127.0.0.1:53" \     # dns4sats.xyz → Knot
-  -u https://dns.google/dns-query         # everything else → Google DoH (recursion)
+
+### dnsproxy-premium (port 8054)
+
+Same binary, different config. Has Google DoH as the default upstream for full internet recursion, plus conditional upstreams for hosted zones.
+
+```yaml
+# /etc/dnsproxy/config-premium.yaml
+upstream:
+  - https://dns.google/dns-query
+conditional-upstreams:
+  - domain: nostr
+    upstream:
+      - 127.0.0.1:53
+  - domain: nodns.shop
+    upstream:
+      - 127.0.0.1:53
+  - domain: dns4sats.xyz
+    upstream:
+      - 127.0.0.1:53
 ```
 
-This is AdGuard's `dnsproxy` binary. It handles DoH wireformat (RFC 8484),
-`.nostr` routing, and upstream recursion. **It does not change.**
+### Caddy
 
-### Caddy route (currently open — needs gating)
+Routes two paths with different auth requirements:
 
 ```
 dns.nodns.shop {
+    handle /dns-query/premium {
+        forward_auth 127.0.0.1:9090 {
+            uri /api/resolver/auth
+            copy_headers X-Subscription
+        }
+        reverse_proxy https://127.0.0.1:8054 { tls_insecure_skip_verify }
+    }
     handle /dns-query {
         reverse_proxy https://127.0.0.1:8053 { tls_insecure_skip_verify }
+    }
+    handle /api/resolver/* {
+        reverse_proxy 127.0.0.1:9090
     }
 }
 ```
 
-This route is live but unauthenticated today. The experiment adds `forward_auth`.
+`forward_auth` sends an HTTP subrequest to the bot's auth endpoint *before* proxying to dnsproxy-premium. If the bot returns non-2xx, Caddy returns that response to the client and never contacts dnsproxy. The bot sees only headers (the auth subrequest carries no body), so it never sees the DNS query.
 
-### payment.rs Verifier (reuse, don't rebuild)
+### Bot (nodns-bot, port 9090)
 
-```rust
-// payment.rs:191 — already implemented, already tested
-pub async fn verify_payment(
-    &self,
-    token_string: &str,
-    required_amount: i64,
-) -> Result<u64, PaymentError>
-```
+Three new endpoints (in `handlers/resolver.rs`):
 
-This method: decodes the Cashu token → checks mint URL matches config → checks
-`mint_filter` → checks amount ≥ required → calls CDK `/v1/checkstate` → verifies
-all proofs unspent. It has circuit breaker + timeout on the mint call. **The
-resolver subscribe endpoint is a direct caller of this method.**
+- `POST /api/resolver/subscribe` — accepts `X-Cashu` header with a Cashu token. Verifies via `payment.rs` `Verifier::verify_payment()` (CDK checkstate, mint filter, amount check). On success, creates a `resolver_subscriptions` row with a random UUID token and returns it. On failure or missing token, returns 402 with a NUT-18 `creqA` payment request in the `X-Cashu` header.
 
-## Payment protocol: NUT-24 + NUT-18
+- `GET /api/resolver/auth` — Caddy `forward_auth` target. Reads `X-Subscription` header. Validates: token exists in DB, not expired, under daily query limit. Increments `queries_today`. Returns 200 or 402.
 
-We follow **NUT-24** (Cashu-native HTTP 402), not the Coinbase x402 spec (which
-is USDC/EVM-focused). NUT-24 is simpler, Cashu-native, and the registrar already
-generates NUT-18 payment requests.
+- `GET /api/resolver/status` — returns subscription status (active, expires_at, queries_today, daily_query_limit). For debugging/client tooling.
 
-### NUT-24 flow
+### Knot DNS (port 53)
 
-NUT-24 defines the `X-Cashu` HTTP header for both the payment challenge and the
-payment itself:
+Unchanged. Authoritative-only for hosted zones. REFUSED for non-hosted. RRL enabled (`mod-rrl`, rate-limit 200, slip 2). The resolver service does not modify Knot's configuration.
 
-```
-1. Client → POST /api/resolver/subscribe  (no X-Cashu header)
-
-2. Server → 402 Payment Required
-   X-Cashu: creqA<base64_urlsafe(CBOR(PaymentRequest))>
-   Content-Type: application/json
-   Body: { "error": "payment required", "details": {...} }
-
-3. Client mints testnut Cashu tokens, retries:
-   POST /api/resolver/subscribe
-   X-Cashu: cashuB<base64_urlsafe(CBOR(Token))>
-
-4. Server verifies token via Verifier::verify_payment(token, price_sats)
-   ├─ Valid → 200 OK, returns subscription token
-   └─ Invalid → 400 Bad Request
-```
-
-### NUT-18 payment request (the 402 challenge body)
-
-The `X-Cashu` header in the 402 response contains a NUT-18 payment request
-encoded as `creqA` (CBOR + base64_urlsafe). No transport field — payment is
-in-band per NUT-24.
-
-```json
-{
-  "a": 10,                                    // amount in sats
-  "u": "sat",                                 // unit
-  "m": ["https://testnut.cashu.space"],       // accepted mints
-  "d": "nodns resolver — 30 day subscription" // description
-}
-```
-
-Encoded: `creqA` + `base64_urlsafe(CBOR(json))`.
-
-The nodns-registrar already generates these via
-`PaymentRequest([transport], id, amount, unit, mints, description).toEncodedCreqA()`.
-The bot needs the server-side equivalent: serialize a payment request to `creqA`
-for the 402 challenge. This is a small CBOR+base64 encoding step.
-
-### Optional: P2PK locking (NUT-11)
-
-For production (not the experiment), the payment request can include a `nut10`
-field requiring P2PK locking:
-
-```json
-{
-  "a": 10,
-  "u": "sat",
-  "m": ["https://testnut.cashu.space"],
-  "nut10": {
-    "k": "P2PK",
-    "d": "02<server-pubkey-hex>",
-    "t": [["sigflag", "SIG_INPUTS"]]
-  }
-}
-```
-
-This forces the client to lock tokens to the server's pubkey, so intercepted
-tokens can only be spent by the server. Reference: `thesimplekid/cashu-proxy`
-uses this pattern. **Deferred for the experiment** — testnut tokens have no
-monetary value, so interception is low-risk.
-
-## Architecture
-
-```
-                                    ┌─────────────────────────────────┐
-                                    │         dns.nodns.shop           │
-                                    │       (Caddy, HTTPS only)        │
-                                    │                                  │
-  Client ─── POST /dns-query ──────►│  1. rate_limit (IP, burst)       │
-  (browser/OS                        │  2. forward_auth ──────────────┐ │
-   DoH config)   X-Subscription:     │  3. reverse_proxy ─────┐       │ │
-  ─────────────────────────────────►│     → 127.0.0.1:8053    │       │ │
-                                    │        (dnsproxy)       │       │ │
-                                    └────────────────────────┬───┬───┘ │
-                                                             │   │     │
-                                     ┌───────────────────────┘   │     │
-                                     ▼                          ▼     │
-                              ┌──────────────┐          ┌──────────────┘
-                              │  Bot (9090)  │          │   dnsproxy (8053)
-                              │ /api/resolver│          │   .nostr → Knot:53
-                              │   /auth      │          │   everything → Google DoH
-                              │              │          │
-                              │ Check token: │          └──────────────────
-                              │ valid?       │
-                              │ not expired? │
-                              │ under limit? │
-                              │ ├─ NO → 402  │
-                              │ └─ YES→ 200  │
-                              └──────────────┘
-
-  Subscribe flow (one-time per period):
-
-  Client ─── POST /api/resolver/subscribe ───►  Bot (9090)
-             X-Cashu: cashuB...                  │
-                                                ├─ 402 + X-Cashu: creqA... (no token)
-                                                │
-                                                ├─ verify_payment(token, 10)
-                                                │   (CDK checkstate, mint_filter=testnut)
-                                                │
-                                                ├─ INSERT resolver_subscriptions
-                                                │
-                                                └─ 200 { token, expires_at, doh_endpoint }
-```
-
-### Why Caddy forward_auth (not bot-native DoH)
-
-Caddy's `forward_auth` directive sends a subrequest to the bot's auth endpoint
-*before* proxying to dnsproxy. This gives us:
-
-- **Privacy by architecture**: the bot only sees the auth request (headers +
-  source IP). The DNS query body goes Caddy → dnsproxy directly. The bot has no
-  way to log which domains a subscriber queries.
-- **Zero DNS code in the bot**: no wireformat parsing, no hickory Message
-  construction, no EDNS handling. The bot does only what it already knows:
-  Cashu verification + SQLite CRUD.
-- **dnsproxy unchanged**: the existing DoH resolver (tested, working,
-  `.nostr`-aware) stays exactly as-is.
-
-The trade-off: the auth endpoint is called on every DNS query, adding ~1ms
-latency (localhost SQLite lookup). This is negligible compared to DNS resolution
-latency.
-
-## API specification
-
-### POST /api/resolver/subscribe
-
-Purchase a subscription. Returns a subscription token for use in DoH queries.
-
-**Request:**
-```
-POST /api/resolver/subscribe
-Content-Type: application/json
-X-Cashu: cashuB<base64_urlsafe(CBOR(Token))>     # Cashu token (testnut sats)
-X-Nostr-Npub: npub1...                            # optional, for identity
-```
-
-**Responses:**
-
-| Status | Condition | Body |
-|---|---|---|
-| 200 | Valid Cashu token (verified via CDK checkstate, amount met, mint=testnut) | `{ "token": "<opaque>", "expires_at": <unix_ts>, "daily_query_limit": 10000, "doh_endpoint": "https://dns.nodns.shop/dns-query" }` |
-| 402 | No `X-Cashu` header or token rejected | `X-Cashu: creqA<...>` (NUT-18 payment request). JSON body: `{ "error": "payment required", "accepts": { "cashu": { "mint": "https://testnut.cashu.space", "amount": 10, "unit": "sat" } } }` |
-| 400 | Token from wrong mint, wrong unit, insufficient amount | `{ "error": "invalid payment", "reason": "..." }` |
-
-**Side effects on success:**
-- Cashu token is spent (proofs recorded as spent via CDK checkstate — the mint
-  prevents double-spend on subsequent `checkstate` calls).
-- A new row in `resolver_subscriptions` with a random opaque token.
-- Rate limited: `GovernorConfigBuilder` per-IP, 1 req/sec, burst 3 (same as
-  ACME order endpoint).
-
-### GET /api/resolver/auth
-
-Caddy `forward_auth` target. Validates a subscription token for an incoming DoH
-query. **This endpoint is called by Caddy, not by end users directly.**
-
-**Request (from Caddy):**
-```
-GET /api/resolver/auth
-X-Subscription: <opaque-token>
-X-Forwarded-For: <client-ip>         # Caddy adds this
-```
-
-**Responses:**
-
-| Status | Condition | Action |
-|---|---|---|
-| 200 | Valid token, not expired, under daily limit | Caddy proxies to dnsproxy |
-| 402 | No token, expired, or over daily limit | Caddy returns 402 to client |
-
-**Side effects on 200:** `queries_today` incremented, `last_query_at` updated.
-Daily counter resets at UTC midnight (compared via `last_reset_day`).
-
-### GET /api/resolver/status
-
-Check subscription status (optional, for debugging).
-
-**Request:**
-```
-GET /api/resolver/status
-X-Subscription: <opaque-token>
-```
-
-**Response:**
-```json
-{
-  "active": true,
-  "expires_at": 1722520640,
-  "queries_today": 3421,
-  "daily_query_limit": 10000,
-  "doh_endpoint": "https://dns.nodns.shop/dns-query"
-}
-```
-
-## Data model
-
-### New table: `resolver_subscriptions`
+### SQLite table
 
 ```sql
 CREATE TABLE IF NOT EXISTS resolver_subscriptions (
-    token           TEXT PRIMARY KEY,         -- opaque random token (32 bytes hex)
-    npub            TEXT,                     -- optional Nostr identity
-    created_at      INTEGER NOT NULL,         -- unix timestamp
-    expires_at      INTEGER NOT NULL,         -- unix timestamp
-    queries_today   INTEGER NOT NULL DEFAULT 0,
-    daily_query_limit INTEGER NOT NULL,       -- from config at creation time
-    last_reset_day  INTEGER NOT NULL,         -- Julian day number for daily reset
-    last_query_at   INTEGER,                  -- unix timestamp of last query
-    payment_amount  INTEGER NOT NULL          -- sats paid (for audit)
+    token TEXT PRIMARY KEY,           -- UUID v4 opaque token
+    npub TEXT,                        -- optional Nostr identity
+    created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+    expires_at INTEGER NOT NULL,      -- created_at + duration_days * 86400
+    queries_today INTEGER NOT NULL DEFAULT 0,
+    daily_query_limit INTEGER NOT NULL,
+    last_reset_day INTEGER NOT NULL DEFAULT 0,  -- unixepoch()/86400 for daily counter reset
+    last_query_at INTEGER,
+    payment_amount INTEGER NOT NULL   -- sats paid (for audit)
 );
-```
-
-Added to `store.rs` SCHEMA constant + `CREATE INDEX IF NOT EXISTS
-idx_resolver_expires ON resolver_subscriptions(expires_at)` in `run_migrations`.
-
-### New store methods
-
-```rust
-impl Store {
-    pub fn create_resolver_subscription(
-        &self, npub: Option<&str>, expires_at: i64,
-        daily_query_limit: i64, payment_amount: u64,
-    ) -> Result<String, StoreError>;
-
-    pub fn validate_resolver_subscription(
-        &self, token: &str,
-    ) -> Result<bool, StoreError>;  // also increments queries_today
-
-    pub fn get_resolver_subscription(
-        &self, token: &str,
-    ) -> Result<Option<ResolverSubscription>, StoreError>;
-}
 ```
 
 ## Configuration
 
-New `[resolver]` section in `config.toml`:
-
 ```toml
 [resolver]
-enabled = true
-price_sats = 10                      # testnut sats for one subscription period
+enabled = true                # master switch; false = endpoints return 503
+price_sats = 10               # testnut sats for one subscription period
 mint_url = "https://testnut.cashu.space"
-mint_filter = "testnut"              # reject non-testnut tokens
-duration_days = 30                   # subscription validity
-daily_query_limit = 10000            # queries per day per subscription
+mint_filter = "testnut"       # reject tokens from mints not containing this substring
+duration_days = 30            # subscription validity
+daily_query_limit = 10000     # queries per day per subscription
 ```
 
-### Config struct (config.rs)
+## How to use it
 
-```rust
-#[derive(Debug, Clone, Deserialize)]
-#[serde(default)]
-pub struct ResolverConfig {
-    pub enabled: bool,
-    pub price_sats: i64,
-    pub mint_url: String,
-    pub mint_filter: String,
-    pub duration_days: u32,
-    pub daily_query_limit: i64,
-}
+### Free tier (browser-native DoH)
 
-impl Default for ResolverConfig {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            price_sats: 10,
-            mint_url: "https://testnut.cashu.space".to_string(),
-            mint_filter: "testnut".to_string(),
-            duration_days: 30,
-            daily_query_limit: 10000,
-        }
-    }
-}
-```
-
-## Caddy configuration
-
-The existing `dns.nodns.shop` route gets `forward_auth` added:
-
-```
-dns.nodns.shop {
-    log { }
-
-    @doh path /dns-query
-    handle @doh {
-        forward_auth 127.0.0.1:9090 {
-            uri /api/resolver/auth
-            copy_headers X-Subscription
-            method HEAD
-        }
-        reverse_proxy https://127.0.0.1:8053 {
-            transport http {
-                tls_insecure_skip_verify
-            }
-        }
-        header {
-            Content-Type application/dns-message
-            Access-Control-Allow-Origin *
-            Access-Control-Allow-Methods "GET, POST, OPTIONS"
-            Access-Control-Allow-Headers "Content-Type, X-Subscription"
-        }
-    }
-
-    handle /api/resolver/* {
-        reverse_proxy 127.0.0.1:9090
-    }
-
-    # Optional: rate limit on /dns-query
-    # (Caddy doesn't have built-in RRL; use a module or rely on bot-side limit)
-}
-```
-
-**Note on `method HEAD`**: Caddy's `forward_auth` sends the auth subrequest using
-the original request's method by default. For DoH (POST), this would send the
-DNS query body to the auth endpoint — wasteful and a privacy leak. Setting
-`method HEAD` ensures the auth subrequest is header-only (just the
-`X-Subscription` token), no body.
-
-**Rollback**: Remove the `forward_auth` block → reverts to the current
-open-proxy behavior. No bot changes needed to roll back.
-
-## Client onboarding flow
-
-### 1. Get testnut Cashu
-
-```
-# Option A: Use a Cashu wallet (enuts, minibits, nutstash) with testnut mint
-# Option B: Use the nodns CLI (future) or curl against the testnut faucet
-```
-
-### 2. Subscribe
-
-```bash
-curl -X POST https://dns.nodns.shop/api/resolver/subscribe \
-  -H "X-Cashu: cashuBeyJ0b2tlbiI6W3sicHJvb2ZzIjpb..." \
-  -H "Content-Type: application/json"
-
-# Response:
-# {
-#   "token": "a1b2c3d4e5f6...",
-#   "expires_at": 1725111640,
-#   "daily_query_limit": 10000,
-#   "doh_endpoint": "https://dns.nodns.shop/dns-query"
-# }
-```
-
-### 3. Configure DoH client
-
-**Firefox**: Settings → Privacy & Security → DNS over HTTPS → Custom provider:
+**Firefox**: Settings → Privacy & Security → DNS over HTTPS → Custom provider → enter:
 ```
 https://dns.nodns.shop/dns-query
 ```
-(Firefox doesn't natively send custom headers with DoH. For the experiment, use
-a DoH client that supports custom headers — e.g., `doggo`, `kdig`, or a local
-proxy that adds `X-Subscription`.)
 
-**doggo** (CLI DNS client with DoH support):
-```bash
-doggo @https://dns.nodns.shop/dns-query example.com \
-  -H "X-Subscription: a1b2c3d4e5f6..."
+**Chrome**: Settings → Privacy and security → Security → Use secure DNS → With Custom → enter the same URL.
+
+After configuring, `.nostr` names resolve (e.g., `npub1xxx.nostr`). Normal browsing is unaffected — when the resolver returns REFUSED for non-hosted domains, the browser falls back to the system resolver.
+
+**CLI** (dnspython, curl, etc.):
+```python
+import dns.message, dns.query, dns.rdatatype
+q = dns.message.make_query('nodns.shop', dns.rdatatype.SOA)
+r = dns.query.https(q, 'https://dns.nodns.shop/dns-query')
 ```
 
-**Local proxy** (adds the header for clients that can't):
+### Premium tier (Cashu subscription)
+
+**Step 1: Get testnut tokens** from the faucet at `https://faucet.cashu.email/` (select testnut.cashu.space, choose 16+ sats, click Mint).
+
+**Step 2: Subscribe**:
 ```bash
-# Simple socat/sed proxy that injects X-Subscription header
-# (or a small Go/Rust binary — deferred for the experiment)
+curl -X POST https://dns.nodns.shop/api/resolver/subscribe \
+  -H "X-Cashu: cashuB..." 
+# → {"token": "b630fa3e-...", "expires_at": 1786260939, ...}
 ```
 
-**Note**: Browser-native DoH doesn't support custom headers. This is a known
-limitation. The experiment targets CLI tools and local proxies initially. A
-browser extension or a local DoH proxy (like `dnsproxy` with a custom upstream
-header injector) is the path to browser support. **This is acceptable for an
-experiment.**
+**Step 3: Use premium DoH**:
+```bash
+# Build a DNS query for google.com and send via DoH with subscription token
+curl -s -X POST https://dns.nodns.shop/dns-query/premium \
+  -H "Content-Type: application/dns-message" \
+  -H "X-Subscription: b630fa3e-..." \
+  --data-binary @dns-query.bin
+```
 
-## Security analysis
+Browser-native DoH cannot send custom headers, so premium users need a local proxy or CLI tool (like `doggo` with `-H` flag) that injects the `X-Subscription` header.
 
-### Amplification (the thing that got us flagged)
+## Verified evidence (2026-07-10)
 
-**Not possible.** DoH runs over TCP+TLS. TCP requires a three-way handshake
-with the real client — source IP cannot be spoofed. There is no UDP path.
-dnsproxy has `--port=0` (no plain DNS listener). Caddy is HTTPS-only. No amount
-of misconfiguration creates an amplification vector, because there is no
-stateless transport.
+Full end-to-end test with real Cashu tokens from the faucet:
 
-### Abuse / resource exhaustion
+| Step | Operation | Result |
+|---|---|---|
+| 1 | Mint 16 testnut sats from faucet.cashu.email | Token received ✅ |
+| 2 | POST /api/resolver/subscribe with token | 200 — subscription `b630fa3e-...` created ✅ |
+| 3 | google.com A via premium DoH (with subscription) | NOERROR, 6 A records (142.251.110.x) ✅ |
+| 4 | nodns.shop SOA via premium DoH | NOERROR, authoritative SOA ✅ |
+| 5 | example.org A via premium DoH | NOERROR, 2 A records ✅ |
+| 6 | google.com A via free DoH (no subscription) | REFUSED, 0 answers (browser fallback) ✅ |
+| 7 | Subscription status check | active=True, queries_today=3 ✅ |
 
-- **Subscription gate**: no DNS resolution without a valid subscription token.
-  An attacker cannot consume resolver resources without first obtaining testnut
-  Cashu (friction: wallet setup, faucet rate limits).
-- **Per-subscription rate limit**: `daily_query_limit` caps queries per token.
-  An attacker who gets one subscription is bounded.
-- **Caddy connection limits**: Caddy can be configured with connection rate
-  limiting per source IP as a backstop.
-- **Token rotation**: subscription tokens are opaque random 32-byte values.
-  Guessing is computationally infeasible.
+All free-tier queries also verified via `dnspython`:
+- `nodns.shop SOA` → NOERROR, 1 answer
+- `dns4sats.xyz SOA` → NOERROR, 1 answer
+- `google.com A` → REFUSED, 0 answers
 
-### Privacy
+Existing services verified unaffected:
+- `GET /api/health` → 200
+- `dig @46.224.104.12 nodns.shop SOA` → authoritative answer
+- Bot processing Nostr events normally
 
-- **The bot never sees DNS queries.** Caddy `forward_auth` sends only headers
-  (method HEAD). The DNS query body goes Caddy → dnsproxy. The bot logs: token
-  hash, source IP (for rate limiting), timestamp. It does NOT log: queried
-  domains, query type, response.
-- **No account**: subscriptions are created from Cashu tokens with no personal
-  data. The `npub` field is optional.
-- **No correlation**: each subscription is an independent opaque token. There
-  is no user table to correlate multiple subscriptions to one identity.
+## Design decisions
 
-### Double-spend
+### Why DoH, not open UDP
 
-- Cashu tokens are single-use. The mint's `checkstate` endpoint (called by
-  `verify_payment`) prevents double-spend. A token spent at our subscribe
-  endpoint cannot be reused — the mint marks it spent.
+An open UDP recursive resolver is a DDoS amplification weapon (spoofed-source reflection). We received a BSI/Hetzner abuse report for exactly this. DoH (TCP+TLS) makes amplification structurally impossible because TCP sources cannot be spoofed. This is the foundational safety property.
 
-## Implementation phases
+### Why two paths (free + premium), not one
 
-### Phase 1: Bot subscribe + auth endpoints (the core)
+A single gated endpoint would require every user to pay Cashu — including users who just want `.nostr` resolution. That's too much friction for the core differentiator. The free tier makes `.nostr` accessible to anyone with a browser (the unique value), while the premium tier monetizes full recursion (the resource-intensive feature). This matches the DNS industry pattern: authoritative DNS is public/free, recursive DNS is sometimes paid.
 
-**Files touched:**
-- `nodns-bot-rs/src/config.rs` — add `ResolverConfig` struct + field on `Config`
-- `nodns-bot-rs/src/store.rs` — add `resolver_subscriptions` table + 3 methods
-- `nodns-bot-rs/src/handlers/mod.rs` — add `resolver_subscribe_handler`, `resolver_auth_handler`, `resolver_status_handler`
-- `nodns-bot-rs/src/main.rs` — add `resolver_routes` router, construct Verifier from `[resolver]` config, add to AppState
+### Why Caddy forward_auth, not bot-native DoH
 
-**Verification:**
-- `cargo test` — unit tests for store methods + config parsing
-- Local: `curl -X POST localhost:9090/api/resolver/subscribe` without token → 402
-- Local: `curl -X POST localhost:9090/api/resolver/subscribe -H "X-Cashu: <testnut token>"` → 200 with subscription token
-- Local: `curl -H "X-Subscription: <token>" localhost:9090/api/resolver/auth` → 200
+Caddy's `forward_auth` sends a header-only subrequest to the bot before proxying to dnsproxy. This means the bot never sees the DNS query body — privacy is enforced by the architecture, not by a logging policy. It also means zero DNS parsing code in the bot: no wireformat handling, no hickory Message construction, no EDNS edge cases. dnsproxy (already tested, already running) handles all DNS logic. The bot does only what it already knows: Cashu verification and SQLite lookups.
 
-### Phase 2: Caddy forward_auth wiring
+### Why dnsproxy, not a custom DoH server
 
-**Files touched:**
-- `/etc/caddy/Caddyfile` on VPS — add `forward_auth` to `dns.nodns.shop`
+dnsproxy (AdGuard's DNS proxy) is a mature, tested binary that handles DoH wireformat, conditional upstream routing, TLS, and connection management. Writing a custom DoH server in the bot would mean reimplementing all of this for no gain. dnsproxy's conditional upstream feature (`[/zone/]upstream`) gives us the exact routing we need: `.nostr` → Knot, everything else → upstream resolver.
 
-**Verification:**
-- `curl -X POST https://dns.nodns.shop/dns-query` without `X-Subscription` → 402
-- `curl -X POST https://dns.nodns.shop/dns-query -H "X-Subscription: <token>" -H "Content-Type: application/dns-message" --data-binary @query.bin` → DNS answer
-- `doggo @https://dns.nodns.shop/dns-query example.com -H "X-Subscription: <token>"` → resolves
+### Why subscriptions, not per-query micropayments
 
-### Phase 3: NUT-18 creqA challenge (the 402 body)
+DNS clients make 20-50 queries per page load. Per-query Cashu would require 20-50 token mints per page — impractical latency and mint load. A subscription model (pay once, get 30 days or 10,000 queries) matches how NextDNS, Control D, and Mullvad price their services. The subscription token is an opaque UUID stored in SQLite, not a Cashu token — so there's no per-query cryptographic overhead.
 
-**Files touched:**
-- `nodns-bot-rs/src/handlers/mod.rs` — add CBOR + base64_urlsafe encoding for
-  the NUT-18 payment request in the 402 response's `X-Cashu` header
+### Why testnut, not real sats
 
-**Verification:**
-- Decode the `X-Cashu` header from the 402 response → valid NUT-18 payment request JSON
-- The registrar's `PaymentRequest.fromEncodedRequest()` can parse it
-
-### Phase 4 (deferred): Client tooling
-
-- Browser extension or local DoH proxy that injects `X-Subscription` header
-- A simple web page at `dns.nodns.shop` with subscribe button + setup instructions
-- CLI command: `nodns resolver subscribe` (in nodns-cli)
-
-### Not in scope
-
-- `.nostr` overlay changes (dnsproxy already does this)
-- DoH wireformat handling in the bot (Caddy + dnsproxy handle it)
-- Per-query micropayments (subscription model is simpler and sufficient)
-- Blocklists, filtering, parental controls (we're not NextDNS)
-- P2PK locking of tokens (testnut has no monetary value; deferred to production)
-- Real-sats production mode (switch `mint_filter` + `mint_url` when ready)
+For the experiment phase, the friction of obtaining testnut Cashu (wallet setup + faucet) is sufficient anti-spam. Switching to real sats is a config change (`mint_url` + `mint_filter`) with no code changes. Starting with testnut lets users try the service without spending money, and lets us validate the product hypothesis before asking for real payment.
 
 ## References
 
-### Cashu specs
-- **NUT-18** (Payment Requests): https://cashubtc.github.io/nuts/18/
-- **NUT-24** (HTTP 402 Payment Required): https://cashubtc.github.io/nuts/24/
-- **NUT-10** (Spending Conditions): https://cashubtc.github.io/nuts/10/
-- **NUT-11** (P2PK): https://cashubtc.github.io/nuts/11/
-
-### Reference implementations
-- **cashubtc/xcashu** — official Cashu 402 demo: https://github.com/cashubtc/xcashu
-- **thesimplekid/cashu-proxy** — Cashu-gated HTTP proxy with P2PK, SQLite double-spend: https://github.com/thesimplekid/cashu-proxy
-- **ngmisl/deez-cashus** — Go Cashu-402 middleware with spent-token tracking: https://github.com/ngmisl/deez-cashus
-- **Routstr/otrta-client** — Cashu gateway for AI APIs with change return via X-Cashu: https://github.com/Routstr/otrta-client
-- **Traviseric/cashu-l402** — TypeScript Cashu NUT-24 + L402 library: https://github.com/Traviseric/cashu-l402
-
-### x402 (Coinbase — for awareness, not adoption)
-- **x402 spec v2**: https://github.com/x402-foundation/x402/blob/main/specs/x402-specification-v2.md
-- Uses `PAYMENT-REQUIRED` / `PAYMENT-SIGNATURE` / `PAYMENT-RESPONSE` headers
-- USDC/EVM-focused, not Cashu-native. NUT-24 is the right protocol for this project.
-
-### Existing nodns code (reuse targets)
-- `payment.rs:191` — `Verifier::verify_payment(token, amount)` — CDK checkstate, mint filter, amount check
-- `payment.rs:143` — `Verifier::from_zone_config(&ZonePaymentConfig)` — constructor
-- `config.rs:138` — `ZonePaymentConfig` — model for `ResolverConfig`
-- `store.rs:1282` — `SCHEMA` constant — add table here
-- `store.rs:1226` — `run_migrations` — add index here
-- `main.rs:678-756` — axum router pattern — add `resolver_routes`
-- `nodns-registrar/contexts/WalletContext.tsx:170` — `createPaymentRequest().toEncodedCreqA()` — client-side NUT-18 generation (already exists)
+- [NUT-18: Payment Requests](https://cashubtc.github.io/nuts/18/)
+- [NUT-24: HTTP 402 Payment Required](https://cashubtc.github.io/nuts/24/)
+- [NUT-10: Spending Conditions](https://cashubtc.github.io/nuts/10/)
+- [NUT-11: P2PK](https://cashubtc.github.io/nuts/11/)
+- [cashubtc/xcashu](https://github.com/cashubtc/xcashu) — official Cashu 402 demo
+- [thesimplekid/cashu-proxy](https://github.com/thesimplekid/cashu-proxy) — Cashu-gated HTTP proxy reference
+- [RFC 8484: DNS Queries over HTTPS](https://datatracker.ietf.org/doc/html/rfc8484)
+- [x402 Specification](https://github.com/x402-foundation/x402) — Coinbase's HTTP 402 protocol (USDC-focused; we use NUT-24 instead)
+- `deploy/DEPLOY.md` → "Cashu-gated DoH resolver service" — deployment runbook

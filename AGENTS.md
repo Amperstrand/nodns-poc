@@ -341,7 +341,9 @@ nodns-bot-rs/src/
     client_log.rs            Client-side error log receiver (POST /api/client-log)
     dyndns.rs                Dynamic DNS update endpoints
     health.rs                Health check endpoint (/api/health)
-    tls_check.rs             TLS certificate verification endpoint
+    tls_check.rs            TLS certificate verification endpoint
+    health.rs                Health check endpoint (/api/health)
+    resolver.rs              Cashu-gated DoH resolver: subscribe (NUT-24 402), auth (forward_auth), status
 
 nodns-connectors/              Workspace crate: pluggable DNS backend abstraction
   src/

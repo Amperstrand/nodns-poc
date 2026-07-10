@@ -90,7 +90,7 @@ These docs are the authoritative source for reasoning. `content/consensus.json` 
 | [45-architecture-direction.md](45-architecture-direction.md) | DRAFT | Two-component split: DNS connector + payment processor via NIP-17 |
 | [crash-recovery-audit.md](crash-recovery-audit.md) | ACTIVE | Crash recovery audit of nodns-bot-rs: 8 operations reviewed, failure modes documented |
 | [46-adr-sdk-architecture.md](46-adr-sdk-architecture.md) | ACTIVE | ADR-006: Dual-language SDK (TS + Rust) for nodns name resolution |
-| [47-resolver-service.md](47-resolver-service.md) | DRAFT | Cashu-gated DoH resolver: NUT-24 payment, Caddy forward_auth, testnut anti-spam. Privacy-first DNS funded by ecash. |
+| [47-resolver-service.md](47-resolver-service.md) | ACTIVE | Cashu-gated DoH resolver: free .nostr tier + premium full-recursion tier. NUT-24 payment, Caddy forward_auth, testnut anti-spam. Deployed and end-to-end verified. |
 
 ### Competitive
 
