@@ -32,6 +32,12 @@ User publishes kind 11111 Nostr event to relay
 
   Caddy (reverse proxy) ── /api/* → bot (127.0.0.1:9090)
                            *.nodns.shop → GitHub Pages
+                           dns.nodns.shop/dns-query → dnsproxy-free (8053)
+                           dns.nodns.shop/dns-query/premium → forward_auth → dnsproxy-premium (8054)
+
+  DoH Resolver (Cashu-gated) ── dnsproxy-free + dnsproxy-premium
+        free tier: .nostr/nodns.shop zones via Knot (browser-native, REFUSED fallback)
+        premium tier: full recursion via Google DoH (Cashu subscription required)
 
   Frontend (Next.js static export) ── GitHub Pages
         publishes events directly from browser via nostr-tools
@@ -114,7 +120,9 @@ Private keys are encrypted at rest with AES-256-GCM (`store.rs`). If `acme.encry
 | **Host** | `46.224.104.12` (Ubuntu 24.04 VPS) |
 | **Bot** | `nodns-bot-rs` binary, systemd service `nodns-bot`, binds `127.0.0.1:9090` |
 | **DNS** | Knot DNS 3.3.4, listens on `0.0.0.0:53` + `::@53` (public — required for authoritative service); bot sends TSIG-signed DDNS updates to `127.0.0.1:53`. Authoritative-only: non-hosted queries return `REFUSED` (no recursion). |
-| **Proxy** | Caddy 2.11.4, reverse-proxies `/api/*` → bot, `*.nodns.shop` → GitHub Pages |
+| **Proxy** | Caddy 2.11.4, reverse-proxies `/api/*` → bot, `*.nodns.shop` → GitHub Pages, `dns.nodns.shop/dns-query` → dnsproxy-free (8053), `dns.nodns.shop/dns-query/premium` → forward_auth → dnsproxy-premium (8054) |
+| **DoH (free)** | dnsproxy on `127.0.0.1:8053`, systemd `dnsproxy.service`. Resolves `.nostr`/`nodns.shop`/`dns4sats.xyz` via Knot. Non-hosted → REFUSED. No auth. |
+| **DoH (premium)** | dnsproxy on `127.0.0.1:8054`, systemd `dnsproxy-premium.service`. Full recursion via Google DoH. Gated by Caddy `forward_auth` + Cashu subscription (`X-Subscription` header). |
 | **Store** | SQLite at `/opt/nodns-bot/records.db` (rusqlite, `Mutex<Connection>`) |
 | **Config** | `/opt/nodns-bot/config.toml` (deployed from `deploy/config-multi-zone.toml`) |
 
@@ -746,3 +754,5 @@ These are decided. Do not re-litigate without explicit instruction.
 - **No automated backups**: The SQLite database is not backed up automatically. Since the dataset is rebuildable from Nostr events (replay the relay subscription), data loss is recoverable but requires reprocessing all historical events.
 
 - **Open resolver incident resolved + DNS hardened (2026-07-09)**: A BSI/Hetzner abuse report (CB-Report 2026-07-07) flagged `46.224.104.12` as an open recursive resolver. Root cause: `mod-dnsproxy` attached to Knot's `default` template forwarded non-authoritative queries to Cloudflare `1.1.1.1`. **Fixed** — the `global-module` line was removed; external verification confirmed `google.com` queries now return `REFUSED` with no `ra` flag while `nodns.shop` authoritative service (incl. DNSSEC) is intact. **Additional hardening applied same day**: (1) Response Rate Limiting via the `mod-rrl` module (`rate-limit: 200, slip: 2` — Knot 3.3.4 uses `mod-rrl`, not a `server.response-rate-limiting` key which is invalid in this version); (2) `server.nsid: ""` + `server.version: ""` to suppress the NSID (`inr.cashu.dev`) and version (`Knot DNS 3.3.4`) disclosure. See `deploy/DEPLOY.md` → "DNS hardening".
+
+- **DoH resolver service (experimental, 2026-07-10)**: A Cashu-gated DoH resolver is deployed at `dns.nodns.shop`. Free tier resolves `.nostr`/`nodns.shop` zones (browser-native, no auth). Premium tier (`/dns-query/premium`) provides full internet recursion gated by Cashu subscription (NUT-24). Uses testnut Cashu (no monetary value) — anti-spam via friction, not cost. Browser DoH doesn't support custom headers, so premium users need a CLI tool or local proxy for the `X-Subscription` header. See `docs/47-resolver-service.md`.

@@ -16,7 +16,8 @@
 | **nodns-registrar** | Vite + Preact (static) | Domain registration UI with Cashu wallet — deployed to Cloudflare Pages |
 | **nodns-explorer** | Vite + Preact (static) | DNS event explorer: live feed, zone monitoring, DNS lookups |
 | **Knot DNS** | 3.3.4 | Authoritative nameserver with DNSSEC signing (ECDSAP256SHA256) |
-| **Caddy** | Reverse proxy | Proxies `/api/*` to bot, redirects `*.nodns.shop` to GitHub Pages |
+| **DoH Resolver** | dnsproxy (Cashu-gated) | Free `.nostr` DoH + premium full-recursion DoH at `dns.nodns.shop` |
+| **Caddy** | Reverse proxy | Proxies `/api/*` to bot, DoH routing with Cashu `forward_auth` |
 
 ```
 User publishes kind 11111 event to Nostr relay

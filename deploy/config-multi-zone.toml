@@ -107,3 +107,15 @@ enabled = true
 ca = "letsencrypt-production"
 contact_email = "cert@nodns.shop"
 challenge_ttl = 300
+
+# Cashu-gated DoH resolver service
+# Free tier (dns.nodns.shop/dns-query): resolves .nostr/nodns.shop zones, no auth
+# Premium tier (dns.nodns.shop/dns-query/premium): full recursion, Cashu subscription
+# See docs/47-resolver-service.md for architecture and safety analysis
+[resolver]
+enabled = true
+price_sats = 10
+mint_url = "https://testnut.cashu.space"
+mint_filter = "testnut"
+duration_days = 30
+daily_query_limit = 10000
