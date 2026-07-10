@@ -1,0 +1,19 @@
+[Unit]
+Description=dnsproxy - FREE DoH resolver (.nostr + nodns.shop zones only)
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/dnsproxy \
+  --config-path /etc/dnsproxy/config-free.yaml \
+  --port=0 \
+  --https-port=8053 \
+  --listen=127.0.0.1 \
+  --tls-crt=/etc/dnsproxy/doh.crt \
+  --tls-key=/etc/dnsproxy/doh.key
+Restart=on-failure
+RestartSec=5
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

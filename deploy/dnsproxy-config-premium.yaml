@@ -1,0 +1,12 @@
+upstream:
+  - https://dns.google/dns-query
+conditional-upstreams:
+  - domain: nostr
+    upstream:
+      - 127.0.0.1:53
+  - domain: nodns.shop
+    upstream:
+      - 127.0.0.1:53
+  - domain: dns4sats.xyz
+    upstream:
+      - 127.0.0.1:53

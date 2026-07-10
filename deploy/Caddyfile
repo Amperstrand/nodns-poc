@@ -1,0 +1,312 @@
+# Caddyfile for nodns production VPS (46.224.104.12)
+# Deploy to /etc/caddy/Caddyfile
+#
+# This file contains ALL Caddy routes for the VPS, including:
+# - nodns.shop API + frontend redirect
+# - dns.nodns.shop DoH resolver (free + premium tiers)
+# - Cashu ecosystem services (vipps.cashu.exchange, faucet, etc.)
+# - EV charging infrastructure (opencpo, farm)
+#
+# Secrets: Caddyfile contains no secrets (TLS is on-demand via Let's Encrypt).
+# The on_demand_tls ask endpoint validates domain ownership via the bot.
+
+{
+	on_demand_tls {
+		ask http://127.0.0.1:9090/api/tls-check
+	}
+}
+
+vipps.cashu.exchange {
+	log {
+	}
+	root * /var/www/vipps.cashu.exchange
+
+	@html path /index.html
+	header @html Cache-Control "no-cache, no-store, must-revalidate"
+	header @html Pragma "no-cache"
+	header @html Expires "0"
+
+	@assets path /assets/*
+	header @assets Cache-Control "public, max-age=31536000, immutable"
+
+	handle /v1/* {
+		reverse_proxy localhost:8085
+	}
+
+	handle /assets/* {
+		file_server
+		respond 404
+	}
+
+	handle /mint-proxy/* {
+		uri strip_prefix /mint-proxy
+		reverse_proxy https://testnut.cashu.space {
+			header_up Host testnut.cashu.space
+		}
+		header {
+			Access-Control-Allow-Origin *
+			Access-Control-Allow-Methods "GET, POST, OPTIONS"
+			Access-Control-Allow-Headers "Content-Type"
+		}
+	}
+
+	handle {
+		try_files {path} {path}/index.html /index.html
+		file_server
+	}
+}
+
+wallet.cashu.exchange {
+	log {
+	}
+	redir https://temporarywallet.cashu.exchange{uri} permanent
+}
+
+temporarywallet.cashu.exchange {
+	log {
+	}
+	root * /var/www/vipps.cashu.exchange
+
+	@html path /index.html
+	header @html Cache-Control "no-cache, no-store, must-revalidate"
+	header @html Pragma "no-cache"
+	header @html Expires "0"
+
+	@assets path /assets/*
+	header @assets Cache-Control "public, max-age=31536000, immutable"
+
+	handle /v1/* {
+		reverse_proxy localhost:8085
+	}
+
+	handle /assets/* {
+		file_server
+	}
+
+	handle /mint-proxy/* {
+		uri strip_prefix /mint-proxy
+		reverse_proxy https://testnut.cashu.space {
+			header_up Host testnut.cashu.space
+		}
+		header {
+			Access-Control-Allow-Origin *
+			Access-Control-Allow-Methods "GET, POST, OPTIONS"
+			Access-Control-Allow-Headers "Content-Type"
+		}
+	}
+
+	handle {
+		try_files {path} {path}/index.html /index.html
+		file_server
+	}
+}
+
+ws.vipps.cashu.exchange {
+	log {
+	}
+	reverse_proxy localhost:50052
+}
+
+nodns.shop {
+	log {
+	}
+	handle /.well-known/* {
+		reverse_proxy 127.0.0.1:9090
+	}
+
+	handle /v1/* {
+		reverse_proxy localhost:8094
+	}
+
+	handle /vms/* {
+		reverse_proxy localhost:8094
+	}
+
+	handle /mint/* {
+		uri strip_prefix /mint
+		reverse_proxy localhost:3341
+	}
+
+	handle /api/payment/* {
+		reverse_proxy localhost:8094
+	}
+
+	handle /api/* {
+		reverse_proxy 127.0.0.1:9090
+	}
+
+	header /api/* {
+		Access-Control-Allow-Origin *
+		Access-Control-Allow-Methods "GET, POST, OPTIONS"
+		Access-Control-Allow-Headers "Content-Type, X-Nostr-Npub"
+		Access-Control-Max-Age 3600
+	}
+
+	handle /api/mint {
+		reverse_proxy localhost:8095
+	}
+
+	handle /webssh/* {
+		uri strip_prefix /webssh
+		reverse_proxy localhost:8092 {
+			flush_interval -1
+		}
+	}
+
+	handle /ws {
+		reverse_proxy localhost:7682 {
+			flush_interval -1
+		}
+	}
+	handle {
+		redir https://amperstrand.github.io/nodns-poc{uri} permanent
+	}
+}
+
+ssh.nodns.shop {
+	log {
+	}
+	tls {
+		on_demand
+	}
+	reverse_proxy localhost:8092
+}
+
+ocpi.nodns.shop {
+	log {
+	}
+	tls {
+		on_demand
+	}
+	reverse_proxy 127.0.0.1:8093
+}
+
+*.nodns.shop {
+	log {
+	}
+	tls {
+		on_demand
+	}
+
+	redir https://amperstrand.github.io/nodns-poc/search?q={host} permanent
+}
+
+# ============================================================================
+# DoH Resolver — dns.nodns.shop
+# ============================================================================
+# Two-path architecture:
+#   /dns-query          → FREE (no auth, .nostr/nodns.shop zones only via Knot)
+#   /dns-query/premium  → PAID (forward_auth + Cashu subscription, full recursion)
+#   /api/resolver/*     → bot (subscribe, auth, status endpoints)
+#   /                   → landing page (deploy/dns-landing.html)
+# See docs/47-resolver-service.md for full architecture and safety analysis.
+
+dns.nodns.shop {
+	log {
+	}
+	tls {
+		on_demand
+	}
+	handle / {
+		root * /var/www/dns-nodns-shop
+		try_files {path} /index.html
+		file_server
+	}
+
+	handle /dns-query/premium {
+		forward_auth 127.0.0.1:9090 {
+			uri /api/resolver/auth
+			copy_headers X-Subscription
+		}
+		reverse_proxy https://127.0.0.1:8054 {
+			transport http {
+				tls_insecure_skip_verify
+			}
+		}
+		header {
+			Content-Type application/dns-message
+			Access-Control-Allow-Origin *
+			Access-Control-Allow-Methods "GET, POST, OPTIONS"
+			Access-Control-Allow-Headers "Content-Type, X-Subscription"
+		}
+	}
+	handle /dns-query {
+		reverse_proxy https://127.0.0.1:8053 {
+			transport http {
+				tls_insecure_skip_verify
+			}
+		}
+		header {
+			Content-Type application/dns-message
+			Access-Control-Allow-Origin *
+			Access-Control-Allow-Methods "GET, POST, OPTIONS"
+			Access-Control-Allow-Headers "Content-Type"
+		}
+	}
+	handle /api/resolver/* {
+		reverse_proxy 127.0.0.1:9090
+	}
+}
+
+http://dns4sats.xyz {
+	root * /var/www/dns4sats-liar
+	encode gzip
+	try_files {path} /index.html
+	file_server
+}
+
+ssh.cashu.email {
+	log {
+	}
+	reverse_proxy localhost:8092 {
+		flush_interval -1
+	}
+}
+
+faucet.cashu.email {
+	log {
+	}
+	root * /opt/cashu-tollgate/faucet
+	file_server
+	try_files {path} /index.html
+}
+
+opencpo.nodns.shop {
+	log {
+	}
+	tls {
+		on_demand
+	}
+	reverse_proxy 127.0.0.1:8080
+}
+
+farm.nodns.shop {
+	log {
+	}
+	tls {
+		on_demand
+	}
+	reverse_proxy 127.0.0.1:8087
+}
+
+eur-mint.nodns.shop {
+	log {
+	}
+	tls {
+		on_demand
+	}
+	@blocked path /v1/mint/* /v1/swap/*
+	handle @blocked {
+		respond 403
+	}
+	handle {
+		reverse_proxy 127.0.0.1:3340
+	}
+}
+
+credits.nodns.shop {
+		tls {
+		on_demand
+	}
+	reverse_proxy localhost:8093
+}

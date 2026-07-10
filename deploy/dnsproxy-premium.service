@@ -1,0 +1,19 @@
+[Unit]
+Description=dnsproxy - PREMIUM DoH resolver (full recursion, gated by Cashu subscription)
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/dnsproxy \
+  --config-path /etc/dnsproxy/config-premium.yaml \
+  --port=0 \
+  --https-port=8054 \
+  --listen=127.0.0.1 \
+  --tls-crt=/etc/dnsproxy/doh.crt \
+  --tls-key=/etc/dnsproxy/doh.key
+Restart=on-failure
+RestartSec=5
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target
