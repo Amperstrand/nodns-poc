@@ -477,12 +477,33 @@ DNS clients make 20-50 queries per page load. Per-query Cashu would require 20-5
 
 For the experiment phase, the friction of obtaining testnut Cashu (wallet setup + faucet) is sufficient anti-spam. Switching to real sats is a config change (`mint_url` + `mint_filter`) with no code changes. Starting with testnut lets users try the service without spending money, and lets us validate the product hypothesis before asking for real payment.
 
-## NIP-05 identity verification (already working)
+## NIP-05 identity verification (works with correct key mapping)
 
 Users with records at `npub1xxx.nodns.shop` can use their npub name as a NIP-05
-identifier in Nostr clients (Damus, Amethyst, etc.). The bot already serves
-`/.well-known/nostr.json` which maps npub names to hex pubkeys. Set your NIP-05
-to your full npub followed by `.nodns.shop` — verified automatically.
+identifier in Nostr clients (Damus, Amethyst, etc.). The bot serves
+`/.well-known/nostr.json` which maps npub names to hex pubkeys.
+
+**Verified** (2026-07-11): `GET /.well-known/nostr.json?name=npub1hw6amg...` returns
+`{"names": {"npub1hw6amg...": "bbb5dda0e155..."}}`. The queried name is used as
+the key (fixed from a bug where `"_"` was hardcoded).
+
+To use: set your NIP-05 in your Nostr client to your full npub followed by
+`.nodns.shop` (e.g., `npub1abc...xyz.nodns.shop`). The client verifies by
+querying `https://nodns.shop/.well-known/nostr.json?name=npub1abc...xyz` and
+matching the returned hex pubkey against your key.
+
+## Security audit (2026-07-11)
+
+| Check | Result |
+|---|---|
+| DNSSEC chain of trust | DS at registrar → DNSKEY at Knot → `ad` flag from 8.8.8.8 ✅ |
+| Zone transfer (AXFR) | Restricted (NOTAUTH) — only puck.nether.net allowed ✅ |
+| Private IP in A records | None — `block_private_ip` blocks RFC 1918 ✅ |
+| ANY query amplification | 1 line response — no amplification vector ✅ |
+| Health endpoint leak | No sensitive data (db_size_bytes only, no paths/tokens) ✅ |
+| NSEC3 zone enumeration | Protected — NSEC3 with 0 iterations per RFC 9276 ✅ |
+| Premium auth bypass | Fake/expired tokens → 402 ✅ |
+| NIP-05 key mapping | Queried name used as key (fixed from `_` bug) ✅ |
 
 ## Nutpay compatibility (one-click subscribe)
 
