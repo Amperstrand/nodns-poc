@@ -19,7 +19,10 @@ pub use client_log::client_log_handler;
 pub use dyndns::dyndns_update_handler;
 pub use health::health_handler;
 pub use llms::{llms_full_txt_handler, llms_txt_handler};
-pub use resolver::{resolver_auth_handler, resolver_status_handler, resolver_subscribe_handler};
+pub use resolver::{
+    resolver_auth_handler, resolver_stats_handler, resolver_status_handler,
+    resolver_subscribe_handler,
+};
 pub use tls_check::tls_check_handler;
 
 #[cfg(test)]

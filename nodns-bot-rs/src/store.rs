@@ -189,6 +189,13 @@ pub struct ResolverSubscription {
     pub last_query_at: Option<i64>,
 }
 
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct ResolverStats {
+    pub active_subscriptions: i64,
+    pub total_subscriptions: i64,
+    pub queries_today: i64,
+}
+
 // ---------------------------------------------------------------------------
 // Store
 // ---------------------------------------------------------------------------
@@ -573,6 +580,39 @@ impl Store {
             Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
             Err(e) => Err(StoreError::ResolverSubscription(e)),
         }
+    }
+
+    pub fn resolver_stats(&self) -> Result<ResolverStats, StoreError> {
+        let now = now_unix();
+        let conn = self.conn();
+
+        let active: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM resolver_subscriptions WHERE expires_at > ?1",
+                rusqlite::params![now],
+                |row| row.get(0),
+            )
+            .unwrap_or(0);
+
+        let total: i64 = conn
+            .query_row("SELECT COUNT(*) FROM resolver_subscriptions", [], |row| {
+                row.get(0)
+            })
+            .unwrap_or(0);
+
+        let queries_today: i64 = conn
+            .query_row(
+                "SELECT COALESCE(SUM(queries_today), 0) FROM resolver_subscriptions",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap_or(0);
+
+        Ok(ResolverStats {
+            active_subscriptions: active,
+            total_subscriptions: total,
+            queries_today,
+        })
     }
 
     /// Return the number of events processed for a pubkey in the last 60 seconds.

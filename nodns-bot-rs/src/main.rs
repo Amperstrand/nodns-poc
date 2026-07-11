@@ -779,6 +779,10 @@ async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
                 "/api/resolver/status",
                 axum::routing::get(handlers::resolver_status_handler),
             )
+            .route(
+                "/api/resolver/stats",
+                axum::routing::get(handlers::resolver_stats_handler),
+            )
             .layer(GovernorLayer::new(resolver_limit))
             .with_state(http_state);
 

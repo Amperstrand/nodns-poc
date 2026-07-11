@@ -27,6 +27,19 @@ pub struct HealthResponse {
     zone_records: i64,
     last_event_at: Option<i64>,
     db_size_bytes: u64,
+    resolver: Option<ResolverHealth>,
+}
+
+#[derive(Serialize)]
+pub struct ResolverHealth {
+    enabled: bool,
+    active_subscriptions: i64,
+    total_subscriptions: i64,
+    queries_today: i64,
+    subscribes_total: i64,
+    subscribe_failures_total: i64,
+    auth_checks_total: i64,
+    auth_rejected_total: i64,
 }
 
 pub async fn health_handler(AxumState(state): AxumState<Arc<AppState>>) -> Json<HealthResponse> {
@@ -67,6 +80,32 @@ pub async fn health_handler(AxumState(state): AxumState<Arc<AppState>>) -> Json<
         "ok".to_string()
     };
 
+    let resolver = if state.resolver_config.is_some() {
+        let stats = state
+            .store
+            .resolver_stats()
+            .unwrap_or(crate::store::ResolverStats {
+                active_subscriptions: 0,
+                total_subscriptions: 0,
+                queries_today: 0,
+            });
+        Some(ResolverHealth {
+            enabled: true,
+            active_subscriptions: stats.active_subscriptions,
+            total_subscriptions: stats.total_subscriptions,
+            queries_today: stats.queries_today,
+            subscribes_total: state.metrics.resolver_subscribes.load(Ordering::Relaxed),
+            subscribe_failures_total: state
+                .metrics
+                .resolver_subscribe_failures
+                .load(Ordering::Relaxed),
+            auth_checks_total: state.metrics.resolver_auth_checks.load(Ordering::Relaxed),
+            auth_rejected_total: state.metrics.resolver_auth_rejected.load(Ordering::Relaxed),
+        })
+    } else {
+        None
+    };
+
     Json(HealthResponse {
         status,
         uptime_seconds: state.start_time.elapsed().as_secs(),
@@ -80,5 +119,6 @@ pub async fn health_handler(AxumState(state): AxumState<Arc<AppState>>) -> Json<
         zone_records,
         last_event_at,
         db_size_bytes,
+        resolver,
     })
 }

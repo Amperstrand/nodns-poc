@@ -1,3 +1,4 @@
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use axum::extract::State as AxumState;
@@ -9,6 +10,7 @@ use serde_json::json;
 use tracing::{info, warn};
 
 use crate::payment::Verifier;
+use crate::store::ResolverStats;
 use crate::AppState;
 
 #[derive(Serialize)]
@@ -107,6 +109,10 @@ pub async fn resolver_subscribe_handler(
         Ok(amount) => amount,
         Err(e) => {
             warn!(error = %e, "resolver subscription payment verification failed");
+            state
+                .metrics
+                .resolver_subscribe_failures
+                .fetch_add(1, Ordering::Relaxed);
             return (
                 StatusCode::BAD_REQUEST,
                 Json(json!({"error": "invalid payment", "reason": e.to_string()})),
@@ -135,6 +141,10 @@ pub async fn resolver_subscribe_handler(
                 price_sats = cfg.price_sats,
                 "resolver subscription created"
             );
+            state
+                .metrics
+                .resolver_subscribes
+                .fetch_add(1, Ordering::Relaxed);
             Json(json!({
                 "token": token,
                 "expires_at": expires_at,
@@ -163,7 +173,16 @@ pub async fn resolver_auth_handler(
         .and_then(|v| v.to_str().ok())
         .unwrap_or("");
 
+    state
+        .metrics
+        .resolver_auth_checks
+        .fetch_add(1, Ordering::Relaxed);
+
     if token.is_empty() {
+        state
+            .metrics
+            .resolver_auth_rejected
+            .fetch_add(1, Ordering::Relaxed);
         return StatusCode::PAYMENT_REQUIRED.into_response();
     }
 
@@ -176,7 +195,13 @@ pub async fn resolver_auth_handler(
             );
             response
         }
-        Ok(false) => StatusCode::PAYMENT_REQUIRED.into_response(),
+        Ok(false) => {
+            state
+                .metrics
+                .resolver_auth_rejected
+                .fetch_add(1, Ordering::Relaxed);
+            StatusCode::PAYMENT_REQUIRED.into_response()
+        }
         Err(e) => {
             warn!(error = %e, "resolver auth check failed");
             StatusCode::INTERNAL_SERVER_ERROR.into_response()
@@ -229,4 +254,24 @@ pub async fn resolver_status_handler(
                 .into_response()
         }
     }
+}
+
+pub async fn resolver_stats_handler(AxumState(state): AxumState<Arc<AppState>>) -> Response {
+    let stats = state.store.resolver_stats().unwrap_or(ResolverStats {
+        active_subscriptions: 0,
+        total_subscriptions: 0,
+        queries_today: 0,
+    });
+
+    Json(json!({
+        "active_subscriptions": stats.active_subscriptions,
+        "total_subscriptions": stats.total_subscriptions,
+        "queries_today": stats.queries_today,
+        "subscribes_total": state.metrics.resolver_subscribes.load(Ordering::Relaxed),
+        "subscribe_failures_total": state.metrics.resolver_subscribe_failures.load(Ordering::Relaxed),
+        "auth_checks_total": state.metrics.resolver_auth_checks.load(Ordering::Relaxed),
+        "auth_rejected_total": state.metrics.resolver_auth_rejected.load(Ordering::Relaxed),
+        "resolver_enabled": state.resolver_config.is_some(),
+    }))
+    .into_response()
 }
