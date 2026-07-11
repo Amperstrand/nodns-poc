@@ -131,7 +131,7 @@ fn lookup_by_npub(state: &Nip05State, name: &str) -> Option<Response> {
 
     for record in &records {
         if record.npub == name {
-            return Some(build_match(&state.relays, &record.pubkey));
+            return Some(build_match(name, &state.relays, &record.pubkey));
         }
     }
     None
@@ -151,7 +151,7 @@ fn lookup_by_pubkey_prefix(state: &Nip05State, prefix: &str) -> Option<Response>
 
     for record in &records {
         if record.pubkey.to_lowercase().starts_with(&prefix_lower) {
-            return Some(build_match(&state.relays, &record.pubkey));
+            return Some(build_match(prefix, &state.relays, &record.pubkey));
         }
     }
     None
@@ -161,18 +161,18 @@ fn lookup_by_pubkey_prefix(state: &Nip05State, prefix: &str) -> Option<Response>
 fn lookup_by_delegation(state: &Nip05State, name: &str) -> Option<Response> {
     for zone in &state.zones {
         if let Ok(Some(del)) = state.store.get_active_delegation(name, zone) {
-            return Some(build_match(&state.relays, &del.pubkey));
+            return Some(build_match(name, &state.relays, &del.pubkey));
         }
     }
     None
 }
 
 /// Build a NIP-05 match response for a single user.
-fn build_match(relays: &[String], hex_pubkey: &str) -> Response {
+fn build_match(name: &str, relays: &[String], hex_pubkey: &str) -> Response {
     let mut names = HashMap::new();
     let mut relay_map = HashMap::new();
 
-    names.insert("_".to_string(), hex_pubkey.to_string());
+    names.insert(name.to_string(), hex_pubkey.to_string());
     if !relays.is_empty() {
         relay_map.insert(hex_pubkey.to_string(), relays.to_vec());
     }
