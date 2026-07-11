@@ -103,7 +103,9 @@ jobs:
 
   deploy-bot:
     needs: build-bot
-    if: github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_bot == 'true'
+    if: |
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_bot == 'true') ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -135,8 +137,10 @@ jobs:
             chmod +x /opt/nodns-bot/nodns-bot
             rmdir /opt/nodns-bot/bot-binary 2>/dev/null || true
             systemctl restart nodns-bot
-            sleep 2
-            systemctl is-active nodns-bot && echo "Bot deployed successfully" || (echo "Bot failed to start" && journalctl -u nodns-bot --no-pager -n 20)
+            sleep 5
+            systemctl is-active nodns-bot || (echo "Bot failed to start" && journalctl -u nodns-bot --no-pager -n 20 && exit 1)
+            curl -sf http://127.0.0.1:9090/api/health | grep -q '"ok"' && echo "Health check passed" || (echo "Health check failed" && journalctl -u nodns-bot --no-pager -n 20 && exit 1)
+            echo "Bot deployed successfully"
 
   build-ts-cli:
     runs-on: ubuntu-latest
