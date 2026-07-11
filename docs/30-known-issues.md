@@ -3,6 +3,22 @@
 Issues that are documented but not yet resolved. Each links to the corresponding
 GitHub issue for tracking.
 
+## relay.cashu.email retention for kind 11111 (data resilience)
+
+**Status**: Open — requires nosflare Worker configuration change.
+
+`relay.cashu.email` runs [nosflare](https://github.com/Spl0itable/nosflare) v7.9.45
+(Cloudflare Workers-based relay) and evicts old events. Since this is the relay
+the bot relies on for event replay after downtime, extended retention for kind
+11111 events would eliminate the need for Litestream database backups.
+
+**Recommended config**: Retain kind 11111 events with PoW ≥ 20 bits for 1 year
+(31536000 seconds) in the nosflare Worker's KV TTL logic. Events below the PoW
+threshold can use the default retention.
+
+**Current state**: Verified that relay.cashu.email evicts kind 11111 events
+older than ~30 days. Recent events are present and queryable.
+
 ## No VPS database backup (cashu-cf#4)
 
 **Risk**: If the VPS disk fails, the SQLite database at

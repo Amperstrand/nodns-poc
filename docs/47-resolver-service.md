@@ -477,6 +477,20 @@ DNS clients make 20-50 queries per page load. Per-query Cashu would require 20-5
 
 For the experiment phase, the friction of obtaining testnut Cashu (wallet setup + faucet) is sufficient anti-spam. Switching to real sats is a config change (`mint_url` + `mint_filter`) with no code changes. Starting with testnut lets users try the service without spending money, and lets us validate the product hypothesis before asking for real payment.
 
+## NIP-05 identity verification (already working)
+
+Users with records at `npub1xxx.nodns.shop` can use their npub name as a NIP-05
+identifier in Nostr clients (Damus, Amethyst, etc.). The bot already serves
+`/.well-known/nostr.json` which maps npub names to hex pubkeys. Set your NIP-05
+to your full npub followed by `.nodns.shop` — verified automatically.
+
+## Nutpay compatibility (one-click subscribe)
+
+The subscribe endpoint is compatible with [Nutpay](https://github.com/babdbtc/nutpay)
+(Chrome extension for auto-paying HTTP 402 responses). Users with Nutpay + testnut
+tokens can click "Subscribe" and the extension handles payment automatically.
+See `docs/48-nut24-reference.md` for the full NUT-24 pattern.
+
 ## References
 
 - [NUT-18: Payment Requests](https://cashubtc.github.io/nuts/18/)
