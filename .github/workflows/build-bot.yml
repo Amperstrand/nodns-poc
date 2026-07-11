@@ -152,6 +152,10 @@ jobs:
         with:
           node-version: 20
 
+      - name: Build nodns-resolver SDK
+        working-directory: nodns-resolver
+        run: npm ci && npm run build
+
       - name: Install dependencies
         working-directory: nodns-cli
         run: npm ci
@@ -182,6 +186,10 @@ jobs:
         with:
           node-version: 20
 
+      - name: Build nodns-resolver SDK
+        working-directory: nodns-resolver
+        run: npm ci && npm run build
+
       - name: Install dependencies
         working-directory: nodns-registrar
         run: npm ci
@@ -203,6 +211,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+
+      - name: Build nodns-resolver SDK
+        working-directory: nodns-resolver
+        run: npm ci && npm run build
 
       - name: Install dependencies
         working-directory: nodns-explorer
