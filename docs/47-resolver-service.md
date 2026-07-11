@@ -390,7 +390,68 @@ Full automated test suite run against production. Rate-limited tests spaced
 - API routes: `per_second(1), burst_size(30)`
 - Tests must space resolver requests ≥1s apart to avoid 429
 
-## Design decisions
+## Failure modes (verified 2026-07-10)
+
+Each component can fail independently without cascading. No data loss in any
+scenario. All services have `systemd Restart=on-failure`.
+
+| Component fails | User impact | Data loss? | Recovery |
+|---|---|---|---|
+| **dnsproxy-free (8053)** | Free DoH returns HTTP 502. Subscribe + health still work (bot independent). | None | Automatic on restart. DoH resolves immediately after. |
+| **dnsproxy-premium (8054)** | Premium DoH returns HTTP 502 (after auth passes). Free tier unaffected. | None | Automatic on restart. |
+| **Bot (9090)** | Subscribe/auth/stats return 502. DNS records already in Knot continue resolving. Free DoH still works (dnsproxy → Knot, no bot needed). | None — SQLite persists | Automatic on restart. New subscriptions available again. |
+| **Cashu mint unreachable** | Subscribe returns 400 (mint checkstate timeout). Circuit breaker (`MINT_CIRCUITS`) prevents repeated timeouts. Existing subscriptions unaffected. | None | Automatic when mint recovers. Circuit breaker resets. |
+| **Nostr relay disconnect** | Bot stops receiving new events. Existing records stay in DNS. Reconnection handled by `subscriber.rs` with backoff. | None | Automatic when relay recovers. Missed events replayed from relay. |
+
+**Key isolation properties:**
+- Knot DNS is independent of the bot — existing DNS records survive bot crashes
+- dnsproxy is independent of the bot — free DoH works without the bot
+- The Cashu Verifier has a bounded timeout + circuit breaker — mint failures don't cascade
+- All state is in SQLite (bot) or zone files (Knot) — no in-memory-only state that's lost on crash
+
+## Observability
+
+### Health endpoint (`GET /api/health`)
+
+Returns system status with a nested `resolver` object when the resolver is enabled:
+
+```json
+{
+  "status": "ok",
+  "resolver": {
+    "enabled": true,
+    "active_subscriptions": 1,
+    "total_subscriptions": 1,
+    "queries_today": 7,
+    "subscribes_total": 0,
+    "subscribe_failures_total": 0,
+    "auth_checks_total": 0,
+    "auth_rejected_total": 0
+  }
+}
+```
+
+In-memory counters (subscribes, failures, auth_checks) reset on bot restart.
+Persistent stats (active/total subscriptions, queries_today) survive restarts
+(stored in SQLite).
+
+### Stats endpoint (`GET /api/resolver/stats`)
+
+Dedicated resolver stats at `dns.nodns.shop/api/resolver/stats`. Same data
+as the health endpoint's resolver section, in a flat format.
+
+### Checking system state
+
+```bash
+# One-line system health
+curl -s https://nodns.shop/api/health | python3 -m json.tool
+
+# Resolver-specific stats
+curl -s https://dns.nodns.shop/api/resolver/stats | python3 -m json.tool
+
+# Bot logs (resolver events)
+ssh root@46.224.104.12 'journalctl -u nodns-bot --since "1 hour ago" | grep resolver'
+```
 
 ### Why DoH, not open UDP
 
