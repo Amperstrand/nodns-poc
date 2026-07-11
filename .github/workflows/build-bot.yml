@@ -42,7 +42,7 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            nodns-bot-rs/target
+            target
           key: ${{ runner.os }}-cargo-bot-${{ hashFiles('nodns-bot-rs/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-bot-
 
@@ -71,7 +71,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: nodns-bot-linux-x86_64
-          path: nodns-bot-rs/target/release/nodns-bot
+          path: target/release/nodns-bot
           retention-days: 30
 
   build-workspace:
