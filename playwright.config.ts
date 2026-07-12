@@ -60,5 +60,10 @@ export default defineConfig({
       testDir: "./tests",
       testMatch: "security.spec.ts",
     },
+    {
+      name: "doh-resolver",
+      testDir: "./tests",
+      testMatch: "doh-resolver.spec.ts",
+    },
   ],
 });
