@@ -258,6 +258,10 @@ path = "records.db"
 ## Related
 
 - **Arjen's nodns-nameserver** — The `$npub.nostr` reference implementation ([gitworkshop.dev](https://gitworkshop.dev/npub1hw6amg8p24ne08c9gdq8hhpqx0t0pwanpae9z25crn7m9uy7yarse465gr/nos.lol/nodns-nameserver))
+- **DNN (Decentralized Naming Network)** — Bitcoin-anchored naming via Nostr events (kinds 60600-64600). Different anchoring model (on-chain self-transfer vs. off-chain Nostr signatures). ([GitHub](https://github.com/Freakoverse/dnn-node))
+- **nodns_bip353** — Nostr DNS + BIP353/BOLT12 silent payments. Maps DNS records to Bitcoin silent payment addresses for addressless Bitcoin payments. ([GitHub](https://github.com/bencoin21/nodns_bip353_bolt12_silentpayment))
+- **sec-6 (Decentralized DNS for Nostr)** — Namecoin-based Nostr identity resolution. Uses Namecoin merge-mining for on-chain security. ([GitHub](https://github.com/ethicnology/sec-6-decentralized-dns-nostr))
+- **ngit** — Decentralized Git over Nostr (NIP-34). Not DNS-related, but shares the Nostr infrastructure thesis. ([ngit.dev](https://ngit.dev))
 
 ## License
 
