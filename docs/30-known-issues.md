@@ -19,6 +19,28 @@ threshold can use the default retention.
 **Current state**: Verified that relay.cashu.email evicts kind 11111 events
 older than ~30 days. Recent events are present and queryable.
 
+## BIP-353 Bitcoin payment instructions via DNS (future opportunity)
+
+**Status**: Not yet implemented — high-potential future feature.
+
+[BIP-353](https://github.com/bitcoin/bips/blob/master/bip-0353.mediawiki) maps
+human-readable names to Bitcoin payment instructions via DNS TXT records:
+```
+user._bitcoin-payment.nodns.shop  TXT  "bitcoin:?lno=bolt12offer..."
+```
+
+nodns already has everything BIP-353 requires: DNSSEC-signed zones, TXT record
+support, Nostr identity (NIP-05), and global DNS resolution. A user could
+publish a kind 11111 event with a BOLT-12 offer or Silent Payment address,
+and any BIP-353-compatible wallet (Sparrow, Phoenix) could resolve it via
+`₿user@nodns.shop`.
+
+The abandoned [bencoin21/nodns_bip353](https://github.com/bencoin21/nodns_bip353_bolt12_silentpayment)
+project demonstrated this concept but lacked DNSSEC and production infrastructure.
+nodns is uniquely positioned to be the production BIP-353 + Nostr provider.
+
+**Reference**: [bencoin21/nodns_bip353](https://github.com/bencoin21/nodns_bip353_bolt12_silentpayment) (abandoned PoC, Oct 2025)
+
 ## No VPS database backup (cashu-cf#4)
 
 **Risk**: If the VPS disk fails, the SQLite database at
