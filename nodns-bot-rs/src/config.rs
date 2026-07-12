@@ -146,6 +146,8 @@ pub struct ZonePaymentConfig {
     pub npub_names_free: bool,
     pub mint_url: String,
     pub mint_filter: String,
+    pub mint_allowlist: Vec<String>,
+    pub mint_denylist: Vec<String>,
 }
 
 impl Default for ZonePaymentConfig {
@@ -158,6 +160,8 @@ impl Default for ZonePaymentConfig {
             npub_names_free: true,
             mint_url: "https://testnut.cashu.space".to_string(),
             mint_filter: "testnut".to_string(),
+            mint_allowlist: vec![],
+            mint_denylist: vec![],
         }
     }
 }

@@ -130,45 +130,63 @@ pub enum PaymentError {
 /// - `required_sats` → sats required per new DNS record (0 = disabled)
 /// - `update_free`   → if true, updates to existing records are free
 pub struct Verifier {
-    mint_url: String,
+    mint_allowlist: Vec<String>,
+    mint_denylist: Vec<String>,
     required_sats: i64,
     update_free: bool,
     create_price: u64,
     update_price: u64,
     npub_names_free: bool,
-    mint_filter: Option<String>,
+}
+
+fn normalize_mint(url: &str) -> String {
+    url.trim_end_matches('/').to_lowercase()
 }
 
 impl Verifier {
     pub fn from_zone_config(config: &ZonePaymentConfig) -> Self {
+        let allowlist = if !config.mint_allowlist.is_empty() {
+            config
+                .mint_allowlist
+                .iter()
+                .map(|m| normalize_mint(m))
+                .collect()
+        } else if !config.mint_url.is_empty() {
+            vec![normalize_mint(&config.mint_url)]
+        } else {
+            vec![]
+        };
+
+        let denylist = config
+            .mint_denylist
+            .iter()
+            .map(|m| normalize_mint(m))
+            .collect();
+
         Self {
-            mint_url: config.mint_url.trim_end_matches('/').to_string(),
+            mint_allowlist: allowlist,
+            mint_denylist: denylist,
             required_sats: config.create_price as i64,
             update_free: config.update_price == 0,
             create_price: config.create_price,
             update_price: config.update_price,
             npub_names_free: config.npub_names_free,
-            mint_filter: if config.mint_filter.is_empty() {
-                None
-            } else {
-                Some(config.mint_filter.clone())
-            },
         }
     }
 
-    pub fn new(mint_url: &str, mint_filter: &str, required_sats: i64) -> Self {
+    pub fn new(mint_url: &str, _mint_filter: &str, required_sats: i64) -> Self {
         Self {
-            mint_url: mint_url.trim_end_matches('/').to_string(),
+            mint_allowlist: if mint_url.is_empty() {
+                vec![]
+            } else {
+                vec![normalize_mint(mint_url)]
+            },
+            mint_denylist: vec![],
             required_sats,
             update_free: true,
             create_price: required_sats as u64,
             update_price: 0,
             npub_names_free: true,
-            mint_filter: if mint_filter.is_empty() {
-                None
-            } else {
-                Some(mint_filter.to_string())
-            },
         }
     }
 
@@ -213,26 +231,24 @@ impl Verifier {
         let token =
             Token::from_str(token_string).map_err(|e| PaymentError::TokenDecode(e.to_string()))?;
 
-        // 2. Check mint URL matches
+        // 2. Check mint policy (allowlist / denylist / permissive)
         let token_mint = token
             .mint_url()
             .map_err(|e| PaymentError::TokenDecode(e.to_string()))?;
-        let token_mint_str = token_mint.to_string().trim_end_matches('/').to_string();
-        let configured_mint = self.mint_url.trim_end_matches('/').to_string();
-        if token_mint_str != configured_mint {
+        let token_mint_str = normalize_mint(&token_mint.to_string());
+
+        if self.mint_denylist.contains(&token_mint_str) {
             return Err(PaymentError::MintMismatch {
                 token_mint: token_mint_str,
-                configured_mint,
+                configured_mint: "denied by denylist".to_string(),
             });
         }
 
-        if let Some(filter) = &self.mint_filter {
-            if !token_mint_str.contains(filter) {
-                return Err(PaymentError::MintMismatch {
-                    token_mint: token_mint_str,
-                    configured_mint: format!("(filter: must contain '{filter}')"),
-                });
-            }
+        if !self.mint_allowlist.is_empty() && !self.mint_allowlist.contains(&token_mint_str) {
+            return Err(PaymentError::MintMismatch {
+                token_mint: token_mint_str,
+                configured_mint: format!("allowlist: {:?}", self.mint_allowlist),
+            });
         }
 
         // 3. Check amount
@@ -261,16 +277,16 @@ impl Verifier {
 
         // 5. Call mint checkstate endpoint (POST /v1/checkstate)
         // Guard: skip mints the circuit breaker has tripped (issue #62).
-        if !MINT_CIRCUITS.is_available(&self.mint_url) {
-            warn!(mint = %self.mint_url, "circuit open, skipping checkstate");
+        if !MINT_CIRCUITS.is_available(&token_mint_str) {
+            warn!(mint = %token_mint_str, "circuit open, skipping checkstate");
             return Err(PaymentError::MintUnavailable {
-                mint: self.mint_url.clone(),
+                mint: token_mint_str.clone(),
             });
         }
 
-        let url = format!("{}/v1/checkstate", self.mint_url.trim_end_matches('/'));
+        let url = format!("{}/v1/checkstate", token_mint_str);
         let request_body = CheckStateRequest { ys };
-        let client = get_mint_client(&self.mint_url)?;
+        let client = get_mint_client(&token_mint_str)?;
 
         // Bound the full round-trip (connect + send + body + deserialize)
         // with tokio::time::timeout (issue #60). The cached reqwest client
@@ -282,25 +298,25 @@ impl Verifier {
         .await
         {
             Ok(Ok(response)) => {
-                MINT_CIRCUITS.record_success(&self.mint_url);
+                MINT_CIRCUITS.record_success(&token_mint_str);
                 response
             }
             Ok(Err(e)) => {
                 error!(
-                    mint = %self.mint_url,
+                    mint = %token_mint_str,
                     error = %e,
                     "mint checkstate request failed"
                 );
-                MINT_CIRCUITS.record_failure(&self.mint_url);
+                MINT_CIRCUITS.record_failure(&token_mint_str);
                 return Err(PaymentError::MintCheckFailed(e.to_string()));
             }
             Err(_elapsed) => {
                 warn!(
-                    mint = %self.mint_url,
+                    mint = %token_mint_str,
                     timeout_secs = CHECKSTATE_TIMEOUT.as_secs(),
                     "mint checkstate timed out"
                 );
-                MINT_CIRCUITS.record_failure(&self.mint_url);
+                MINT_CIRCUITS.record_failure(&token_mint_str);
                 return Err(PaymentError::MintCheckFailed(format!(
                     "checkstate timed out after {}s",
                     CHECKSTATE_TIMEOUT.as_secs()
@@ -321,7 +337,7 @@ impl Verifier {
         info!(
             amount = token_amount,
             proofs = secrets.len(),
-            mint = %self.mint_url,
+            mint = %token_mint_str,
             "cashu token verified"
         );
 
@@ -459,31 +475,56 @@ mod tests {
             npub_names_free: true,
             mint_url: "https://testnut.cashu.space/".to_string(),
             mint_filter: "testnut".to_string(),
+            mint_allowlist: vec![],
+            mint_denylist: vec![],
         };
         let v = Verifier::from_zone_config(&cfg);
-        assert_eq!(v.mint_url, "https://testnut.cashu.space");
+        assert_eq!(v.mint_allowlist, vec!["https://testnut.cashu.space"]);
     }
 
     #[test]
-    fn from_zone_config_sets_mint_filter() {
+    fn from_zone_config_permissive_when_both_empty() {
         let cfg = ZonePaymentConfig {
             enabled: true,
-            create_price: 2,
-            ..ZonePaymentConfig::default()
-        };
-        let v = Verifier::from_zone_config(&cfg);
-        assert_eq!(v.mint_filter.as_deref(), Some("testnut"));
-    }
-
-    #[test]
-    fn from_zone_config_empty_filter_is_none() {
-        let cfg = ZonePaymentConfig {
-            enabled: true,
+            mint_url: String::new(),
             mint_filter: String::new(),
+            mint_allowlist: vec![],
+            mint_denylist: vec![],
             ..ZonePaymentConfig::default()
         };
         let v = Verifier::from_zone_config(&cfg);
-        assert!(v.mint_filter.is_none());
+        assert!(v.mint_allowlist.is_empty());
+        assert!(v.mint_denylist.is_empty());
+    }
+
+    #[test]
+    fn from_zone_config_allowlist_overrides_mint_url() {
+        let cfg = ZonePaymentConfig {
+            enabled: true,
+            mint_url: "https://testnut.cashu.space".to_string(),
+            mint_allowlist: vec![
+                "https://minibits.cash".to_string(),
+                "https://kashu.me".to_string(),
+            ],
+            ..ZonePaymentConfig::default()
+        };
+        let v = Verifier::from_zone_config(&cfg);
+        assert_eq!(v.mint_allowlist.len(), 2);
+        assert!(v
+            .mint_allowlist
+            .contains(&"https://minibits.cash".to_string()));
+        assert!(v.mint_allowlist.contains(&"https://kashu.me".to_string()));
+    }
+
+    #[test]
+    fn from_zone_config_denylist_populated() {
+        let cfg = ZonePaymentConfig {
+            enabled: true,
+            mint_denylist: vec!["https://evil-mint.example.com".to_string()],
+            ..ZonePaymentConfig::default()
+        };
+        let v = Verifier::from_zone_config(&cfg);
+        assert_eq!(v.mint_denylist, vec!["https://evil-mint.example.com"]);
     }
 
     #[test]
