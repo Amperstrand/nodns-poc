@@ -21,7 +21,7 @@ use std::collections::HashSet;
 use nostr_sdk::prelude::*;
 use thiserror::Error;
 
-use nodns_protocol::{self, validate_dns_label, ValidationPolicy};
+use nodns_protocol::{self, ValidationPolicy};
 
 use crate::types::{
     is_dns_kind, ClaimRequest, Delegation, DeleteRequest, DnsRecord, LeaseInfo, ParsedEvent,
