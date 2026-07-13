@@ -500,12 +500,87 @@ pub fn parse_record_tag(
     let rec = nodns_protocol::parse_record(&normalized, &policy)
         .map_err(|e| ParserError::Validation(e.to_string()))?;
 
+    if rec.rtype.eq_ignore_ascii_case("TXT") && rec.name.ends_with("._bitcoin-payment") {
+        validate_bip353(&rec.rdata).map_err(|e| ParserError::Validation(e))?;
+    }
+
     Ok(DnsRecord {
         record_type: rec.rtype,
         name: rec.name,
         ttl: rec.ttl,
         rdata: rec.rdata,
     })
+}
+
+fn validate_bip353(rdata: &str) -> Result<(), String> {
+    const BITCOIN_PREFIX: &str = "bitcoin:";
+
+    let uri = rdata.trim();
+    if !uri.to_lowercase().starts_with(BITCOIN_PREFIX) {
+        return Err(format!(
+            "BIP-353 record must be a bitcoin: URI, got: {}",
+            &uri[..uri.len().min(30)]
+        ));
+    }
+
+    let after_prefix = &uri[BITCOIN_PREFIX.len()..];
+
+    if after_prefix.starts_with('?') {
+        let query = &after_prefix[1..];
+        for param in query.split('&') {
+            let (key, value) = match param.split_once('=') {
+                Some(kv) => kv,
+                None => continue,
+            };
+            match key {
+                "lno" => validate_bolt12_offer(value)?,
+                "sp" => validate_silent_payment(value)?,
+                _ => {}
+            }
+        }
+    } else if !after_prefix.is_empty() {
+        validate_bitcoin_address(after_prefix.split('?').next().unwrap_or(after_prefix))?;
+    }
+
+    Ok(())
+}
+
+fn validate_bolt12_offer(value: &str) -> Result<(), String> {
+    if !value.starts_with("lno1") {
+        return Err(format!(
+            "BOLT-12 offer must start with 'lno1', got: {}",
+            &value[..value.len().min(20)]
+        ));
+    }
+    bech32::decode(value).map_err(|e| format!("BOLT-12 offer bech32 invalid: {e}"))?;
+    Ok(())
+}
+
+fn validate_silent_payment(value: &str) -> Result<(), String> {
+    if !value.starts_with("sp1") {
+        return Err(format!(
+            "Silent Payment must start with 'sp1', got: {}",
+            &value[..value.len().min(20)]
+        ));
+    }
+    bech32::decode(value).map_err(|e| format!("Silent Payment bech32 invalid: {e}"))?;
+    Ok(())
+}
+
+fn validate_bitcoin_address(addr: &str) -> Result<(), String> {
+    if addr.starts_with("bc1") || addr.starts_with("BC1") {
+        bech32::decode(addr).map_err(|e| format!("Bitcoin address bech32 invalid: {e}"))?;
+    } else if addr.starts_with("1") || addr.starts_with("3") {
+        if addr.len() < 26 || addr.len() > 35 {
+            return Err(format!("Legacy address length invalid: {}", addr.len()));
+        }
+    } else {
+        return Err(format!(
+            "Unrecognized Bitcoin address format: {}",
+            &addr[..addr.len().min(20)]
+        ));
+    }
+    Ok(())
 }
 
 fn normalize_legacy_tag(tag: &[String]) -> Vec<String> {
@@ -1583,5 +1658,98 @@ mod tests {
         let err = classify_event(&event, &[], false, 0).unwrap_err();
         assert!(err.to_string().contains("expected kind 11111 or 31111"));
         assert!(err.to_string().contains("22222"));
+    }
+
+    #[test]
+    fn test_bip353_accepts_valid_bolt12() {
+        let valid_lno = bech32::encode("lno", Vec::new(), bech32::Variant::Bech32).unwrap();
+        let tag = vec![
+            "record".to_string(),
+            "TXT".to_string(),
+            "alice._bitcoin-payment".to_string(),
+            "3600".to_string(),
+            format!("bitcoin:?lno={valid_lno}"),
+        ];
+        let rec = parse_record_tag(&tag, &[], false, 512).unwrap();
+        assert_eq!(rec.name, "alice._bitcoin-payment");
+    }
+
+    #[test]
+    fn test_bip353_accepts_valid_silent_payment() {
+        let valid_sp = bech32::encode("sp", Vec::new(), bech32::Variant::Bech32m).unwrap();
+        let tag = vec![
+            "record".to_string(),
+            "TXT".to_string(),
+            "alice._bitcoin-payment".to_string(),
+            "3600".to_string(),
+            format!("bitcoin:?sp={valid_sp}"),
+        ];
+        let rec = parse_record_tag(&tag, &[], false, 512).unwrap();
+        assert_eq!(rec.name, "alice._bitcoin-payment");
+    }
+
+    #[test]
+    fn test_bip353_rejects_invalid_bolt12_prefix() {
+        let tag = vec![
+            "record".to_string(),
+            "TXT".to_string(),
+            "alice._bitcoin-payment".to_string(),
+            "3600".to_string(),
+            "bitcoin:?lno=bc1qinvalid".to_string(),
+        ];
+        let err = parse_record_tag(&tag, &[], false, 512).unwrap_err();
+        assert!(err.to_string().contains("must start with 'lno1'"));
+    }
+
+    #[test]
+    fn test_bip353_rejects_invalid_bech32_checksum() {
+        let tag = vec![
+            "record".to_string(),
+            "TXT".to_string(),
+            "alice._bitcoin-payment".to_string(),
+            "3600".to_string(),
+            "bitcoin:?lno=lno1qcp4u2n5q6qzngf0v3yINVALID".to_string(),
+        ];
+        let err = parse_record_tag(&tag, &[], false, 512).unwrap_err();
+        assert!(err.to_string().contains("bech32"));
+    }
+
+    #[test]
+    fn test_bip353_rejects_non_bitcoin_uri() {
+        let tag = vec![
+            "record".to_string(),
+            "TXT".to_string(),
+            "alice._bitcoin-payment".to_string(),
+            "3600".to_string(),
+            "lightning:lnbc100n1p4...".to_string(),
+        ];
+        let err = parse_record_tag(&tag, &[], false, 512).unwrap_err();
+        assert!(err.to_string().contains("must be a bitcoin: URI"));
+    }
+
+    #[test]
+    fn test_bip353_accepts_onchain_address() {
+        let tag = vec![
+            "record".to_string(),
+            "TXT".to_string(),
+            "alice._bitcoin-payment".to_string(),
+            "3600".to_string(),
+            "bitcoin:1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa".to_string(),
+        ];
+        let rec = parse_record_tag(&tag, &[], false, 512).unwrap();
+        assert_eq!(rec.rdata, "bitcoin:1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa");
+    }
+
+    #[test]
+    fn test_bip353_ignores_non_payment_txt() {
+        let tag = vec![
+            "record".to_string(),
+            "TXT".to_string(),
+            "alice".to_string(),
+            "3600".to_string(),
+            "just a regular txt record".to_string(),
+        ];
+        let rec = parse_record_tag(&tag, &[], false, 512).unwrap();
+        assert_eq!(rec.rdata, "just a regular txt record");
     }
 }
