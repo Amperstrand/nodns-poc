@@ -1744,26 +1744,26 @@ mod tests {
     }
 
     #[test]
-    fn test_bip353_accepts_valid_bolt12() {
+    fn test_bip353_accepts_valid_bech32_address() {
         let tag = vec![
             "record".to_string(),
             "TXT".to_string(),
             "alice._bitcoin-payment".to_string(),
             "3600".to_string(),
-            "bitcoin:?lno=lno1q5d".to_string(),
+            "bitcoin:BC1QW508D6QEJXTDG4Y5R3ZARVARY0C5XW7KV8F3T4".to_string(),
         ];
         let rec = parse_record_tag(&tag, &[], false, 512).unwrap();
         assert_eq!(rec.name, "alice._bitcoin-payment");
     }
 
     #[test]
-    fn test_bip353_accepts_valid_silent_payment() {
+    fn test_bip353_accepts_legacy_address() {
         let tag = vec![
             "record".to_string(),
             "TXT".to_string(),
             "alice._bitcoin-payment".to_string(),
             "3600".to_string(),
-            "bitcoin:?sp=sp1q7q".to_string(),
+            "bitcoin:1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa".to_string(),
         ];
         let rec = parse_record_tag(&tag, &[], false, 512).unwrap();
         assert_eq!(rec.name, "alice._bitcoin-payment");
@@ -1789,7 +1789,7 @@ mod tests {
             "TXT".to_string(),
             "alice._bitcoin-payment".to_string(),
             "3600".to_string(),
-            "bitcoin:?lno=lno1qcp4u2n5q6qzngf0v3yINVALID".to_string(),
+            "bitcoin:bc1qinvalidchecksum".to_string(),
         ];
         let err = parse_record_tag(&tag, &[], false, 512).unwrap_err();
         assert!(err.to_string().contains("bech32"));
