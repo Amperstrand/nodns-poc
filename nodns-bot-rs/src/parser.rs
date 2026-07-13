@@ -21,7 +21,7 @@ use std::collections::HashSet;
 use nostr_sdk::prelude::*;
 use thiserror::Error;
 
-use nodns_protocol::{self, ValidationPolicy};
+use nodns_protocol::{self, validate_dns_label, ValidationPolicy};
 
 use crate::types::{
     is_dns_kind, ClaimRequest, Delegation, DeleteRequest, DnsRecord, LeaseInfo, ParsedEvent,
@@ -497,12 +497,34 @@ pub fn parse_record_tag(
         max_txt_length,
     };
 
+    let rtype = normalized
+        .get(1)
+        .map(|s| s.to_ascii_uppercase())
+        .unwrap_or_default();
+    let raw_name = normalized.get(2).cloned().unwrap_or_default();
+
+    if rtype == "TXT" && raw_name.ends_with("._bitcoin-payment") {
+        validate_bip353(&normalized.get(4).cloned().unwrap_or_default())
+            .map_err(ParserError::Validation)?;
+
+        let user_label = &raw_name[..raw_name.len() - "._bitcoin-payment".len()];
+        validate_dns_label(user_label).map_err(|e| ParserError::Validation(e.to_string()))?;
+
+        let ttl: u32 = normalized
+            .get(3)
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(3600);
+
+        return Ok(DnsRecord {
+            record_type: "TXT".to_string(),
+            name: raw_name,
+            ttl,
+            rdata: normalized.get(4).cloned().unwrap_or_default(),
+        });
+    }
+
     let rec = nodns_protocol::parse_record(&normalized, &policy)
         .map_err(|e| ParserError::Validation(e.to_string()))?;
-
-    if rec.rtype.eq_ignore_ascii_case("TXT") && rec.name.ends_with("._bitcoin-payment") {
-        validate_bip353(&rec.rdata).map_err(ParserError::Validation)?;
-    }
 
     Ok(DnsRecord {
         record_type: rec.rtype,
