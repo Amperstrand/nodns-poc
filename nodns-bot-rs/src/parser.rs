@@ -626,9 +626,10 @@ fn validate_bech32_checksum(s: &str, label: &str) -> Result<(), String> {
 
     let mut data_values = Vec::with_capacity(data_part.len());
     for c in data_part.bytes() {
-        let idx = CHARSET.iter().position(|&x| x == c.to_ascii_lowercase()).ok_or_else(|| {
-            format!("{label}: invalid bech32 character '{}'", char::from(c))
-        })?;
+        let idx = CHARSET
+            .iter()
+            .position(|&x| x == c.to_ascii_lowercase())
+            .ok_or_else(|| format!("{label}: invalid bech32 character '{}'", char::from(c)))?;
         data_values.push(idx as u8);
     }
 
