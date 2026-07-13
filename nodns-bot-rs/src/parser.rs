@@ -1662,7 +1662,7 @@ mod tests {
     #[test]
     fn test_bip353_accepts_valid_bolt12() {
         let hrp = bech32::Hrp::parse("lno").unwrap();
-        let valid_lno = bech32::encode(&hrp, &[0u8]).unwrap();
+        let valid_lno = bech32::encode(hrp, &[0u8]).unwrap();
         let tag = vec![
             "record".to_string(),
             "TXT".to_string(),
@@ -1677,7 +1677,7 @@ mod tests {
     #[test]
     fn test_bip353_accepts_valid_silent_payment() {
         let hrp = bech32::Hrp::parse("sp").unwrap();
-        let valid_sp = bech32::encode(&hrp, &[0u8]).unwrap();
+        let valid_sp = bech32::encode(hrp, &[0u8]).unwrap();
         let tag = vec![
             "record".to_string(),
             "TXT".to_string(),
