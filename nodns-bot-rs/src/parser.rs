@@ -551,7 +551,8 @@ fn validate_bolt12_offer(value: &str) -> Result<(), String> {
             &value[..value.len().min(20)]
         ));
     }
-    bech32::decode(value).map_err(|e| format!("BOLT-12 offer bech32 invalid: {e}"))?;
+    let _: (bech32::Hrp, Vec<u8>) =
+        bech32::decode(value).map_err(|e| format!("BOLT-12 offer bech32 invalid: {e}"))?;
     Ok(())
 }
 
@@ -562,7 +563,8 @@ fn validate_silent_payment(value: &str) -> Result<(), String> {
             &value[..value.len().min(20)]
         ));
     }
-    bech32::decode(value).map_err(|e| format!("Silent Payment bech32 invalid: {e}"))?;
+    let _: (bech32::Hrp, Vec<u8>) =
+        bech32::decode(value).map_err(|e| format!("Silent Payment bech32 invalid: {e}"))?;
     Ok(())
 }
 
