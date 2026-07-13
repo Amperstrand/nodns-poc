@@ -501,7 +501,7 @@ pub fn parse_record_tag(
         .map_err(|e| ParserError::Validation(e.to_string()))?;
 
     if rec.rtype.eq_ignore_ascii_case("TXT") && rec.name.ends_with("._bitcoin-payment") {
-        validate_bip353(&rec.rdata).map_err(|e| ParserError::Validation(e))?;
+        validate_bip353(&rec.rdata).map_err(ParserError::Validation)?;
     }
 
     Ok(DnsRecord {
@@ -525,8 +525,7 @@ fn validate_bip353(rdata: &str) -> Result<(), String> {
 
     let after_prefix = &uri[BITCOIN_PREFIX.len()..];
 
-    if after_prefix.starts_with('?') {
-        let query = &after_prefix[1..];
+    if let Some(query) = after_prefix.strip_prefix('?') {
         for param in query.split('&') {
             let (key, value) = match param.split_once('=') {
                 Some(kv) => kv,
