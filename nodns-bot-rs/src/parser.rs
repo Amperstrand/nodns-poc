@@ -623,12 +623,13 @@ fn validate_bech32_checksum(s: &str, label: &str) -> Result<(), String> {
     }
 
     fn hrp_expand(hrp: &[u8]) -> Vec<u8> {
-        let mut result = Vec::with_capacity(hrp.len() * 2 + 1);
-        for &c in hrp {
+        let lower: Vec<u8> = hrp.iter().map(|&c| c.to_ascii_lowercase()).collect();
+        let mut result = Vec::with_capacity(lower.len() * 2 + 1);
+        for &c in &lower {
             result.push(c >> 5);
         }
         result.push(0);
-        for &c in hrp {
+        for &c in &lower {
             result.push(c & 31);
         }
         result
