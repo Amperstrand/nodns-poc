@@ -591,9 +591,9 @@ fn validate_bech32_checksum(s: &str, label: &str) -> Result<(), String> {
         for &v in values {
             let top = chk >> 25;
             chk = (chk & 0x1ffffff) << 5 ^ u32::from(v);
-            for i in 0..5 {
+            for (i, &gen_val) in GEN.iter().enumerate() {
                 if (top >> i) & 1 != 0 {
-                    chk ^= GEN[i];
+                    chk ^= gen_val;
                 }
             }
         }
@@ -617,7 +617,7 @@ fn validate_bech32_checksum(s: &str, label: &str) -> Result<(), String> {
         _ => return Err(format!("{label}: missing or invalid bech32 separator")),
     };
 
-    let hrp = s[..sep_pos].as_bytes();
+    let hrp = &s.as_bytes()[..sep_pos];
     let data_part = &s[sep_pos + 1..];
 
     if data_part.len() < 6 {
