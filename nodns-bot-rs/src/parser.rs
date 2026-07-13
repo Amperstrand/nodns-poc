@@ -551,8 +551,7 @@ fn validate_bolt12_offer(value: &str) -> Result<(), String> {
             &value[..value.len().min(20)]
         ));
     }
-    let _: (bech32::Hrp, Vec<u8>) =
-        bech32::decode(value).map_err(|e| format!("BOLT-12 offer bech32 invalid: {e}"))?;
+    validate_bech32_checksum(value, "BOLT-12 offer")?;
     Ok(())
 }
 
@@ -563,14 +562,13 @@ fn validate_silent_payment(value: &str) -> Result<(), String> {
             &value[..value.len().min(20)]
         ));
     }
-    let _: (bech32::Hrp, Vec<u8>) =
-        bech32::decode(value).map_err(|e| format!("Silent Payment bech32 invalid: {e}"))?;
+    validate_bech32_checksum(value, "Silent Payment")?;
     Ok(())
 }
 
 fn validate_bitcoin_address(addr: &str) -> Result<(), String> {
     if addr.starts_with("bc1") || addr.starts_with("BC1") {
-        bech32::decode(addr).map_err(|e| format!("Bitcoin address bech32 invalid: {e}"))?;
+        validate_bech32_checksum(addr, "Bitcoin address")?;
     } else if addr.starts_with("1") || addr.starts_with("3") {
         if addr.len() < 26 || addr.len() > 35 {
             return Err(format!("Legacy address length invalid: {}", addr.len()));
@@ -581,6 +579,67 @@ fn validate_bitcoin_address(addr: &str) -> Result<(), String> {
             &addr[..addr.len().min(20)]
         ));
     }
+    Ok(())
+}
+
+fn validate_bech32_checksum(s: &str, label: &str) -> Result<(), String> {
+    const CHARSET: &[u8] = b"qpzry9x8gf2tvdw0s3jn54khce6mua7l";
+    const GEN: [u32; 5] = [0x3b6a57b2, 0x26508e6d, 0x1ea119fa, 0x3d4233dd, 0x2a1462b3];
+
+    fn polymod(values: &[u8]) -> u32 {
+        let mut chk: u32 = 1;
+        for &v in values {
+            let top = chk >> 25;
+            chk = (chk & 0x1ffffff) << 5 ^ u32::from(v);
+            for i in 0..5 {
+                if (top >> i) & 1 != 0 {
+                    chk ^= GEN[i];
+                }
+            }
+        }
+        chk
+    }
+
+    fn hrp_expand(hrp: &[u8]) -> Vec<u8> {
+        let mut result = Vec::with_capacity(hrp.len() * 2 + 1);
+        for &c in hrp {
+            result.push(c >> 5);
+        }
+        result.push(0);
+        for &c in hrp {
+            result.push(c & 31);
+        }
+        result
+    }
+
+    let sep_pos = match s.rfind('1') {
+        Some(pos) if pos > 0 && pos + 7 <= s.len() => pos,
+        _ => return Err(format!("{label}: missing or invalid bech32 separator")),
+    };
+
+    let hrp = s[..sep_pos].as_bytes();
+    let data_part = &s[sep_pos + 1..];
+
+    if data_part.len() < 6 {
+        return Err(format!("{label}: too short for checksum"));
+    }
+
+    let mut data_values = Vec::with_capacity(data_part.len());
+    for c in data_part.bytes() {
+        let idx = CHARSET.iter().position(|&x| x == c.to_ascii_lowercase()).ok_or_else(|| {
+            format!("{label}: invalid bech32 character '{}'", char::from(c))
+        })?;
+        data_values.push(idx as u8);
+    }
+
+    let mut combined = hrp_expand(hrp);
+    combined.extend(&data_values);
+
+    let checksum = polymod(&combined);
+    if checksum != 1 {
+        return Err(format!("{label}: bech32 checksum failed"));
+    }
+
     Ok(())
 }
 
@@ -1663,14 +1722,12 @@ mod tests {
 
     #[test]
     fn test_bip353_accepts_valid_bolt12() {
-        let hrp = bech32::Hrp::parse("lno").unwrap();
-        let valid_lno = bech32::encode(hrp, &[0u8]).unwrap();
         let tag = vec![
             "record".to_string(),
             "TXT".to_string(),
             "alice._bitcoin-payment".to_string(),
             "3600".to_string(),
-            format!("bitcoin:?lno={valid_lno}"),
+            "bitcoin:?lno=lno1q5d".to_string(),
         ];
         let rec = parse_record_tag(&tag, &[], false, 512).unwrap();
         assert_eq!(rec.name, "alice._bitcoin-payment");
@@ -1678,14 +1735,12 @@ mod tests {
 
     #[test]
     fn test_bip353_accepts_valid_silent_payment() {
-        let hrp = bech32::Hrp::parse("sp").unwrap();
-        let valid_sp = bech32::encode(hrp, &[0u8]).unwrap();
         let tag = vec![
             "record".to_string(),
             "TXT".to_string(),
             "alice._bitcoin-payment".to_string(),
             "3600".to_string(),
-            format!("bitcoin:?sp={valid_sp}"),
+            "bitcoin:?sp=sp1q7q".to_string(),
         ];
         let rec = parse_record_tag(&tag, &[], false, 512).unwrap();
         assert_eq!(rec.name, "alice._bitcoin-payment");

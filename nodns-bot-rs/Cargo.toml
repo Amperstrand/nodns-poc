@@ -100,6 +100,3 @@ anyhow = "1"
 
 # CBOR encoding for NUT-18 payment requests (Cashu resolver service)
 ciborium = "0.2"
-
-# Bech32 decoding for BIP-353 BOLT-12/Silent Payment validation
-bech32 = "0.11"
