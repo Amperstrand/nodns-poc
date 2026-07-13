@@ -81,6 +81,23 @@ All operations use **kind 11111** events. The event type is determined by tags:
 
 Full spec: [docs/11-protocol-experimental-draft.md](docs/11-protocol-experimental-draft.md)
 
+### BIP-353 Bitcoin payment instructions
+
+Publish a BIP-353 DNS payment instruction so wallets can resolve `₿alice@nodns.shop`:
+
+```json
+{
+  "kind": 11111,
+  "tags": [
+    ["record", "TXT", "alice._bitcoin-payment", "bitcoin:?lno=lno1qcp4u2n5q6qzngf0v3y..."]
+  ]
+}
+```
+
+The bot validates the BOLT-12 offer (bech32 checksum), creates the DNS TXT record, and any BIP-353-compatible wallet (Sparrow, Phoenix) can resolve it. Silent Payments (`sp=sp1...`) are also supported.
+
+Attribution: concept inspired by [bencoin21/nodns_bip353](https://github.com/bencoin21/nodns_bip353_bolt12_silentpayment).
+
 ## Project Structure
 
 ```
@@ -250,6 +267,7 @@ path = "records.db"
 - **DNSSEC**: Zone signed with ECDSAP256SHA256, NSEC3 with 0 iterations (RFC 9276). DS record at registrar.
 - **TSIG**: DDNS updates authenticated via HMAC-SHA256. Bot connects from localhost only.
 - **Nostr signatures**: Every event cryptographically verified before processing.
+- **BIP-353**: Bitcoin payment instructions validated with full bech32 checksum (BOLT-12 offers + Silent Payments).
 - **Input validation**: Private IPs blocked, TXT length capped, record types whitelisted.
 - **Rate limiting**: Per-npub rate limits and record count caps.
 - **No secrets in git**: Config files with TSIG keys are gitignored. Pre-commit hook runs gitleaks.
