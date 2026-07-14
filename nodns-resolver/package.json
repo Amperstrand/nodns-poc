@@ -15,6 +15,7 @@
     "./parse": "./dist/parse.js",
     "./validation": "./dist/validation.js",
     "./notary": "./dist/notary.js",
+    "./api-client": "./dist/api-client.js",
     "./types": "./dist/types.js",
     "./resolver": "./dist/resolver.js"
   },

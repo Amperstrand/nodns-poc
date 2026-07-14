@@ -50,6 +50,15 @@ export {
 } from './zones.js';
 
 export {
+  createApiClient,
+  ApiError,
+  NetworkError,
+  TimeoutError,
+} from './api-client.js';
+
+export type { ApiClientConfig, ApiClient, RequestOptions } from './api-client.js';
+
+export {
   validateRecordName,
   validateRecordData,
   validateReservedTxt,
