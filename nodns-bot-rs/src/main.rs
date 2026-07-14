@@ -385,7 +385,27 @@ async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
 
                 let registrar_keys = nostr_sdk::Keys::parse(&cfg.registrar.nsec_hex)
                     .expect("registrar.nsec_hex must be a valid nostr secret key");
-                info!("registrar npub: {}", registrar_keys.public_key().to_hex());
+                let derived_npub = registrar_keys.public_key().to_hex();
+                info!("registrar npub: {}", derived_npub);
+
+                if let Ok(expected) = std::env::var("EXPECTED_NPUB") {
+                    if !expected.is_empty() && derived_npub != expected {
+                        warn!(
+                            "npub mismatch — got {}, expected {}",
+                            derived_npub, expected
+                        );
+                        if std::env::var("STRICT_NPUB_CHECK")
+                            .map(|v| v == "1")
+                            .unwrap_or(false)
+                        {
+                            return Err(format!(
+                                "npub mismatch (STRICT_NPUB_CHECK=1): got {}, expected {}",
+                                derived_npub, expected
+                            )
+                            .into());
+                        }
+                    }
+                }
 
                 let zone = cfg.nostr.zone.clone();
                 let derived_dnskey_b64 = base64_dnskey(&pub_hex);
