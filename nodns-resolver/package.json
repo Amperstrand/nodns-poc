@@ -14,6 +14,7 @@
     "./zones": "./dist/zones.js",
     "./parse": "./dist/parse.js",
     "./validation": "./dist/validation.js",
+    "./notary": "./dist/notary.js",
     "./types": "./dist/types.js",
     "./resolver": "./dist/resolver.js"
   },

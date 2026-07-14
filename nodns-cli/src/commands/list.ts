@@ -8,7 +8,7 @@ import {
   countLeadingZeroBits,
   DEFAULT_POW_DIFFICULTY,
   POB_PROOF_KIND,
-} from "../../../shared/pow.js";
+} from "@nodns/resolver";
 import type { DnsRecord } from "../lib/types.js";
 import { readRelays } from "../lib/constants.js";
 

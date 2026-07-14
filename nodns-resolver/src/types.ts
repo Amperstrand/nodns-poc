@@ -22,6 +22,33 @@ export const DEFAULT_READ_RELAYS: string[] = [
   'wss://relay.tollgate.me',
 ];
 
+export const READ_RELAYS = DEFAULT_READ_RELAYS;
+
+export const PUBLISH_RELAYS: string[] = [
+  'wss://relay.cashu.email',
+  'wss://relay.damus.io',
+  'wss://nos.lol',
+];
+
+export const DEFAULT_POW_DIFFICULTY = 20;
+
+export const POB_PROOF_KIND = 30021;
+
+export function countLeadingZeroBits(hexId: string): number {
+  let count = 0;
+  for (let i = 0; i < hexId.length; i++) {
+    const nibble = parseInt(hexId[i], 16);
+    if (isNaN(nibble)) break;
+    if (nibble === 0) {
+      count += 4;
+    } else {
+      count += Math.clz32(nibble) - 28;
+      break;
+    }
+  }
+  return count;
+}
+
 export const VALID_RECORD_TYPES: readonly string[] = ['A', 'AAAA', 'CNAME', 'TXT', 'MX'];
 
 export const DNS_TYPE_MAP: Record<number, string> = {

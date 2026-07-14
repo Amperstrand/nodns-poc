@@ -3,7 +3,7 @@ import {
   createBurnRequest,
   pollForProof,
   DEFAULT_NOTARY_URL,
-} from "../../../shared/notary";
+} from "@nodns/resolver";
 
 export function createBurnCommand() {
   return createCommand("burn")

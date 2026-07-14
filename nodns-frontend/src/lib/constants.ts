@@ -1,7 +1,7 @@
 export const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? '';
 
-import { PUBLISH_RELAYS as _PUBLISH, READ_RELAYS as _READ } from '../../../shared/relays';
-import { DEFAULT_POW_DIFFICULTY as _POW, countLeadingZeroBits as _countPow } from '../../../shared/pow';
+import { PUBLISH_RELAYS as _PUBLISH, READ_RELAYS as _READ } from '@nodns/resolver';
+import { DEFAULT_POW_DIFFICULTY as _POW, countLeadingZeroBits as _countPow } from '@nodns/resolver';
 
 export const RELAYS = _READ;
 export const PUBLISH_RELAYS = _PUBLISH;

@@ -1,7 +1,7 @@
 export const API_BASE = import.meta.env.VITE_API_BASE || "";
 
-import { PUBLISH_RELAYS as _PUBLISH, READ_RELAYS as _READ } from "../../../shared/relays";
-import { DEFAULT_POW_DIFFICULTY } from "../../../shared/pow";
+import { PUBLISH_RELAYS as _PUBLISH, READ_RELAYS as _READ } from "@nodns/resolver";
+import { DEFAULT_POW_DIFFICULTY } from "@nodns/resolver";
 
 export const RELAYS = _READ;
 export const PUBLISH_RELAYS = _PUBLISH;

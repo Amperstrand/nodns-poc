@@ -58,6 +58,19 @@ export {
   validateNsec,
 } from './validation.js';
 
+export {
+  createBurnRequest,
+  pollForProof,
+  verifyProof,
+  DEFAULT_NOTARY_URL,
+} from './notary.js';
+
+export type {
+  NotaryRequestParams,
+  NotaryInvoice,
+  NotaryProof,
+} from './notary.js';
+
 export type {
   DnsRecordType,
   ResolutionMode,
@@ -91,6 +104,12 @@ export {
   DEFAULT_ZONE,
   DEFAULT_API_BASE,
   DEFAULT_DOH_ENDPOINT,
+  DEFAULT_READ_RELAYS,
+  READ_RELAYS,
+  PUBLISH_RELAYS,
+  DEFAULT_POW_DIFFICULTY,
+  POB_PROOF_KIND,
+  countLeadingZeroBits,
   VALID_RECORD_TYPES,
   DNS_TYPE_MAP,
 } from './types.js';

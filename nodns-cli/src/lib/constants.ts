@@ -1,5 +1,4 @@
-import { PUBLISH_RELAYS, READ_RELAYS } from "../../../shared/relays";
-import { DEFAULT_POW_DIFFICULTY as _POW } from "../../../shared/pow";
+import { PUBLISH_RELAYS, READ_RELAYS, DEFAULT_POW_DIFFICULTY as _POW } from "@nodns/resolver";
 
 export const DEFAULT_RELAYS = PUBLISH_RELAYS;
 export const ALL_RELAYS = READ_RELAYS;
