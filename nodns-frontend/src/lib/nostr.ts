@@ -52,6 +52,9 @@ function minePowAsync(
 export { parseRecordsFromEvent } from '@nodns/resolver';
 export type { NostrDnsRecord } from '@nodns/resolver';
 
+import { buildRecordTag, buildCashuTag } from '@nodns/resolver';
+export { buildRecordTag, buildCashuTag };
+
 const pool = new SimplePool();
 
 export function generateEphemeralKeyPair(): KeyPair {
@@ -77,14 +80,6 @@ export function secretKeyToHex(sk: Uint8Array): string {
   return bytesToHex(sk);
 }
 
-export function buildRecordTag(type: string, name: string, rdata: string, ttl: number): string[] {
-  return ['record', type, name, rdata, '', '', '', '', '', '', String(ttl)];
-}
-
-export function buildCashuTag(token: string, mintUrl: string, amount: string): string[] {
-  return ['cashu', token, mintUrl, amount];
-}
-
 export async function publishDnsEvent(
   records: { type: string; name: string; value: string; ttl: number }[],
   secretKey: Uint8Array,
@@ -99,7 +94,7 @@ export async function publishDnsEvent(
   );
 
   if (cashuToken && mintUrl) {
-    tags.push(buildCashuTag(cashuToken, mintUrl, String(satAmount ?? 0)));
+    tags.push(buildCashuTag(cashuToken, mintUrl, satAmount ?? 0));
   }
 
   const template: EventTemplateData = {

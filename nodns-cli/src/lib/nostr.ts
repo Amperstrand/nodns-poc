@@ -1,80 +1,27 @@
 import {
-  generateSecretKey,
-  getPublicKey,
   finalizeEvent,
   type EventTemplate,
   type NostrEvent,
 } from "nostr-tools/pure";
-import { npubEncode, nsecEncode, decode as nip19Decode } from "nostr-tools/nip19";
+import { getPublicKey } from "nostr-tools/pure";
 import { minePow } from "nostr-tools/nip13";
 import { SimplePool } from "nostr-tools/pool";
-import { hexToBytes, bytesToHex } from "nostr-tools/utils";
+import { bytesToHex } from "nostr-tools/utils";
 import { RECORD_KIND, DEFAULT_POW_DIFFICULTY } from "./constants.js";
-import type { Keypair } from "./types.js";
+
+export {
+  generateKeypair,
+  decodeNsec,
+  decodeSec,
+  buildRecordTag,
+  buildDeleteTag,
+  buildCashuTag,
+  fetchEvents,
+} from "@nodns/resolver";
+
+export type { Keypair } from "@nodns/resolver";
 
 export { bytesToHex, DEFAULT_POW_DIFFICULTY };
-
-export function generateKeypair(): Keypair {
-  const sk = generateSecretKey();
-  const pk = getPublicKey(sk);
-  return {
-    secretKey: sk,
-    pubkey: pk,
-    nsec: nsecEncode(sk),
-    npub: npubEncode(pk),
-  };
-}
-
-export function decodeNsec(nsec: string): Keypair {
-  const decoded = nip19Decode(nsec);
-  if (decoded.type !== "nsec") throw new Error("Not a valid nsec");
-  const sk = decoded.data as Uint8Array;
-  const pk = getPublicKey(sk);
-  return {
-    secretKey: sk,
-    pubkey: pk,
-    nsec,
-    npub: npubEncode(pk),
-  };
-}
-
-export function decodeSec(sec: string): Keypair {
-  if (sec.startsWith("nsec1")) {
-    return decodeNsec(sec);
-  }
-  const sk = hexToBytes(sec);
-  const pk = getPublicKey(sk);
-  return {
-    secretKey: sk,
-    pubkey: pk,
-    nsec: nsecEncode(sk),
-    npub: npubEncode(pk),
-  };
-}
-
-export function buildRecordTag(
-  recordType: string,
-  name: string,
-  rdata: string,
-  ttl: number = 3600,
-): string[] {
-  return ["record", recordType.toUpperCase(), name, String(ttl), rdata];
-}
-
-export function buildDeleteTag(
-  recordType: string,
-  name: string,
-): string[] {
-  return ["record", recordType.toUpperCase(), name, "3600", ""];
-}
-
-export function buildCashuTag(
-  token: string,
-  mintUrl: string,
-  amount: number,
-): string[] {
-  return ["cashu", token, mintUrl, String(amount)];
-}
 
 export async function signAndPublish(
   secretKey: Uint8Array,
@@ -141,5 +88,3 @@ export async function signAndPublish(
 
   return event;
 }
-
-export { fetchEvents } from "@nodns/resolver";

@@ -23,7 +23,15 @@ export {
   queryAllRecentRecords,
   fetchEvents,
   pubkeyToNpub,
+  generateKeypair,
+  decodeNsec,
+  decodeSec,
+  buildRecordTag,
+  buildDeleteTag,
+  buildCashuTag,
 } from './nostr.js';
+
+export type { Keypair } from './nostr.js';
 
 export {
   fetchTripartiteRecords,

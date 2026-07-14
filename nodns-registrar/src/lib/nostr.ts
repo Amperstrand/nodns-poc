@@ -1,38 +1,19 @@
 import {
-  generateSecretKey,
   getPublicKey,
   finalizeEvent,
   type EventTemplate,
   type NostrEvent,
 } from "nostr-tools/pure";
-import { npubEncode, nsecEncode, decode as nip19Decode } from "nostr-tools/nip19";
 import { SimplePool } from "nostr-tools/pool";
 import { minePow } from "nostr-tools/nip13";
 import { RELAYS, PUBLISH_RELAYS, DEFAULT_POW_DIFFICULTY } from "./constants";
 
-export function generateKeypair() {
-  const sk = generateSecretKey();
-  const pk = getPublicKey(sk);
-  return {
-    secretKey: sk,
-    pubkey: pk,
-    nsec: nsecEncode(sk),
-    npub: npubEncode(pk),
-  };
-}
-
-export function decodeNsec(nsec: string) {
-  const decoded = nip19Decode(nsec);
-  if (decoded.type !== "nsec") throw new Error("Not a valid nsec");
-  const sk = decoded.data as Uint8Array;
-  const pk = getPublicKey(sk);
-  return {
-    secretKey: sk,
-    pubkey: pk,
-    nsec,
-    npub: npubEncode(pk),
-  };
-}
+export {
+  generateKeypair,
+  decodeNsec,
+  buildRecordTag,
+  buildCashuTag,
+} from "@nodns/resolver";
 
 export function isExtensionAvailable(): boolean {
   return typeof window !== "undefined" && !!window.nostr;
@@ -56,23 +37,6 @@ declare global {
 }
 
 const NOSTR_KIND = 11111;
-
-export function buildRecordTag(
-  recordType: string,
-  name: string,
-  rdata: string,
-  ttl: number = 3600,
-): string[] {
-  return ["record", recordType.toUpperCase(), name, String(ttl), rdata];
-}
-
-export function buildCashuTag(
-  token: string,
-  mintUrl: string,
-  amount: number,
-): string[] {
-  return ["cashu", token, mintUrl, String(amount)];
-}
 
 export async function signAndPublish(
   secretKey: Uint8Array | null,

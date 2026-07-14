@@ -1,8 +1,82 @@
 import { SimplePool } from 'nostr-tools/pool';
-import { decode, npubEncode } from 'nostr-tools/nip19';
+import { decode, npubEncode, nsecEncode } from 'nostr-tools/nip19';
+import { generateSecretKey, getPublicKey } from 'nostr-tools/pure';
 import type { NostrEvent, NostrDnsRecord } from './types.js';
 import { RECORD_KIND } from './types.js';
 import { parseRecordsFromEvent, deduplicateRecords } from './parse.js';
+
+export interface Keypair {
+  secretKey: Uint8Array;
+  pubkey: string;
+  nsec: string;
+  npub: string;
+}
+
+export function generateKeypair(): Keypair {
+  const sk = generateSecretKey();
+  const pk = getPublicKey(sk);
+  return {
+    secretKey: sk,
+    pubkey: pk,
+    nsec: nsecEncode(sk),
+    npub: npubEncode(pk),
+  };
+}
+
+export function decodeNsec(nsec: string): Keypair {
+  const decoded = decode(nsec);
+  if (decoded.type !== 'nsec') throw new Error('Not a valid nsec');
+  const sk = decoded.data as Uint8Array;
+  const pk = getPublicKey(sk);
+  return {
+    secretKey: sk,
+    pubkey: pk,
+    nsec,
+    npub: npubEncode(pk),
+  };
+}
+
+export function decodeSec(sec: string): Keypair {
+  if (sec.startsWith('nsec1')) {
+    return decodeNsec(sec);
+  }
+  const hexToBytes = (hex: string): Uint8Array => {
+    const bytes = new Uint8Array(hex.length / 2);
+    for (let i = 0; i < bytes.length; i++) {
+      bytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+    }
+    return bytes;
+  };
+  const sk = hexToBytes(sec);
+  const pk = getPublicKey(sk);
+  return {
+    secretKey: sk,
+    pubkey: pk,
+    nsec: nsecEncode(sk),
+    npub: npubEncode(pk),
+  };
+}
+
+export function buildRecordTag(
+  recordType: string,
+  name: string,
+  rdata: string,
+  ttl: number = 3600,
+): string[] {
+  return ['record', recordType.toUpperCase(), name, String(ttl), rdata];
+}
+
+export function buildDeleteTag(recordType: string, name: string): string[] {
+  return ['record', recordType.toUpperCase(), name, '3600', ''];
+}
+
+export function buildCashuTag(
+  token: string,
+  mintUrl: string,
+  amount: number,
+): string[] {
+  return ['cashu', token, mintUrl, String(amount)];
+}
 
 const DEFAULT_QUERY_LIMIT = 100;
 const QUERY_MAX_WAIT = 10_000;
