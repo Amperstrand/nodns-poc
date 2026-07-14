@@ -1683,7 +1683,9 @@ mod tests {
 
     #[test]
     fn test_bip353_accepts_valid_bech32_address() {
-        let valid_addr = bech32::encode("bc", &[0u8], bech32::Variant::Bech32).unwrap();
+        use bech32::{encode, u5, Variant};
+        let data: Vec<u5> = vec![u5::try_from_u8(0).unwrap()];
+        let valid_addr = encode("bc", data, Variant::Bech32).unwrap();
         let tag = vec![
             "record".to_string(),
             "TXT".to_string(),
