@@ -47,7 +47,7 @@ import {
   keyPairFromNsec,
   subscribeToDnsEvents,
 } from "@/lib/nostr";
-import { validateRecord } from "@/lib/validation";
+import { validateRecord } from "@nodns/resolver";
 import { getEncodedToken } from "coco-cashu-core";
 import type { ZonePricing, KeyPair } from "@/lib/types";
 import { SourceIndicator } from "@/components/source-indicator";

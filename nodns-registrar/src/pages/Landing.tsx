@@ -9,7 +9,7 @@ import {
   publishAndBroadcast,
 } from "@/lib/nostr";
 import { formatSats } from "@/lib/pricing";
-import { validateDomainName } from "@/lib/validation";
+import { validateDomainName } from "@nodns/resolver";
 import { DEFAULT_ZONE, DEFAULT_MINT_URL } from "@/lib/constants";
 import type { AvailabilityResult } from "@/lib/types";
 import { Button } from "@/components/ui/button";

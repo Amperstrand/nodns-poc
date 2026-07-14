@@ -1,7 +1,7 @@
 import { Command } from "commander";
 import { signAndPublish, buildRecordTag, buildCashuTag, decodeSec } from "../lib/nostr.js";
 import { checkZone } from "../lib/zones.js";
-import { validateRecord } from "../lib/validation.js";
+import { validateRecord } from "@nodns/resolver";
 import { createP2pkTokenWithRefund } from "../lib/p2pk.js";
 import { DEFAULT_MINT_URL, publishRelays } from "../lib/constants.js";
 import type { ZoneInfo } from "../lib/types.js";

@@ -13,6 +13,7 @@
     "./verify": "./dist/verify.js",
     "./zones": "./dist/zones.js",
     "./parse": "./dist/parse.js",
+    "./validation": "./dist/validation.js",
     "./types": "./dist/types.js",
     "./resolver": "./dist/resolver.js"
   },

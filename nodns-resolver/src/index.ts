@@ -41,6 +41,15 @@ export {
   checkZone,
 } from './zones.js';
 
+export {
+  validateRecordName,
+  validateRecordData,
+  validateReservedTxt,
+  validateRecord,
+  validateDomainName,
+  validateNsec,
+} from './validation.js';
+
 export type {
   DnsRecordType,
   ResolutionMode,

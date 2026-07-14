@@ -9,7 +9,7 @@ import {
 } from "@/lib/nostr";
 import { queryDoh } from "@/lib/dns";
 import { DEFAULT_ZONE, API_BASE } from "@/lib/constants";
-import { validateRecord } from "@/lib/validation";
+import { validateRecord } from "@nodns/resolver";
 import { type ZonePricing } from "@/lib/api";
 import { fetchPricing } from "@/lib/sources";
 import type { KeyPair, PendingRecord, DnsRecord, FeedbackType } from "@/lib/types";

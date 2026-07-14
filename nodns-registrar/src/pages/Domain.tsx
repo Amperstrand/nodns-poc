@@ -8,7 +8,7 @@ import {
   signAndPublish,
   subscribeToRecords,
 } from "@/lib/nostr";
-import { validateRecord } from "@/lib/validation";
+import { validateRecord } from "@nodns/resolver";
 import { calculatePrice, formatSats } from "@/lib/pricing";
 import { DNS_TYPES, DEFAULT_MINT_URL, DEFAULT_ZONE } from "@/lib/constants";
 import type { DnsRecord, PricingInfo } from "@/lib/types";
