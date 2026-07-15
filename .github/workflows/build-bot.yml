@@ -8,6 +8,7 @@ on:
       - 'nodns-connectors/**'
       - 'nodns-protocol/**'
       - 'nodns-epp/**'
+      - 'nodns-resolver/**'
       - 'Cargo.toml'
       - 'Cargo.lock'
       - 'nodns-cli/**'
