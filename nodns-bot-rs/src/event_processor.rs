@@ -12,7 +12,6 @@ use crate::config::{Config, OperatingMode};
 use crate::dns_cache::DnsEventCache;
 use crate::parser;
 use crate::payment;
-use crate::payment::Verifier;
 use crate::pob;
 use crate::pow;
 use crate::store::Store;
@@ -82,7 +81,6 @@ pub async fn process_nostr_event(
     updaters: &Arc<HashMap<String, Arc<dyn DnsConnector>>>,
     store: &Arc<Store>,
     authority: &auth::AuthorityChecker,
-    zone_verifiers: &HashMap<String, Verifier>,
     metrics: &Metrics,
     epp_pool: Option<&nodns_epp::EppPool>,
     client: &nostr_sdk::Client,
@@ -189,7 +187,6 @@ pub async fn process_nostr_event(
     if let Some(ref claim) = parsed.claim {
         process_claim(
             claim,
-            &parsed.payments,
             &event_id,
             &pubkey_hex,
             &npub,
@@ -197,7 +194,6 @@ pub async fn process_nostr_event(
             cfg,
             store,
             authority,
-            zone_verifiers,
             metrics,
         )
         .await;
@@ -206,14 +202,12 @@ pub async fn process_nostr_event(
     if let Some(ref renewal) = parsed.renewal {
         process_renewal(
             renewal,
-            &parsed.payments,
             &event_id,
             &pubkey_hex,
             &npub,
             created_at,
             cfg,
             store,
-            zone_verifiers,
             metrics,
         )
         .await;
@@ -260,7 +254,6 @@ pub async fn process_nostr_event(
             updaters,
             store,
             authority,
-            zone_verifiers,
             metrics,
             epp_pool,
             client,
@@ -497,7 +490,6 @@ fn registration_price(name: &str, base_price: u64) -> u64 {
 
 async fn process_claim(
     claim: &ClaimRequest,
-    payments: &[crate::types::Payment],
     event_id: &str,
     pubkey_hex: &str,
     npub: &str,
@@ -505,7 +497,6 @@ async fn process_claim(
     cfg: &Config,
     store: &Arc<Store>,
     authority: &auth::AuthorityChecker,
-    zone_verifiers: &HashMap<String, Verifier>,
     metrics: &Metrics,
 ) {
     let zone_name = &claim.zone;
@@ -519,6 +510,20 @@ async fn process_claim(
 
     if is_npub_name(&claim.name) {
         info!(event_id = %event_id, name = %claim.name, "npub claim detected, skipping (not yet implemented)");
+        metrics.events_rejected.fetch_add(1, Ordering::Relaxed);
+        return;
+    }
+
+    if !authority
+        .is_registrar(zone_name, pubkey_hex)
+        .unwrap_or(false)
+    {
+        warn!(
+            event_id = %event_id,
+            zone = %zone_name,
+            signer = %pubkey_hex,
+            "claim rejected: only registrar can create delegations (payment is now out-of-band via NIP-17 DM — see issue #106)"
+        );
         metrics.events_rejected.fetch_add(1, Ordering::Relaxed);
         return;
     }
@@ -562,55 +567,6 @@ async fn process_claim(
     }
 
     let base_price = zone_config.payment.create_price;
-    let price = registration_price(&claim.name, base_price) as i64;
-
-    if let Some(verifier) = zone_verifiers.get(zone_name) {
-        if price > 0 {
-            let total_paid: i64 = payments
-                .iter()
-                .filter(|p| p.method == "cashu")
-                .map(|p| p.amount)
-                .sum();
-
-            if total_paid < price {
-                warn!(
-                    event_id = %event_id,
-                    name = %claim.name,
-                    zone = %zone_name,
-                    required = price,
-                    paid = total_paid,
-                    "insufficient payment for claim"
-                );
-                metrics.events_rejected.fetch_add(1, Ordering::Relaxed);
-                return;
-            }
-
-            let mut verified_total: i64 = 0;
-            for p in payments.iter().filter(|p| p.method == "cashu") {
-                let remaining = price - verified_total;
-                match verifier.verify_payment(&p.token, remaining).await {
-                    Ok(amount) => verified_total += amount as i64,
-                    Err(e) => {
-                        warn!(event_id = %event_id, error = %e, "cashu verification failed for claim");
-                    }
-                }
-                if verified_total >= price {
-                    break;
-                }
-            }
-
-            if verified_total < price {
-                warn!(
-                    event_id = %event_id,
-                    required = price,
-                    verified = verified_total,
-                    "claim payment verification failed"
-                );
-                metrics.events_rejected.fetch_add(1, Ordering::Relaxed);
-                return;
-            }
-        }
-    }
 
     let Some(registrar_pubkey) = authority.get_registrar_pubkey(zone_name) else {
         warn!(event_id = %event_id, zone = %zone_name, "no registrar key configured for zone");
@@ -644,9 +600,8 @@ async fn process_claim(
         name = %claim.name,
         zone = %zone_name,
         npub = %npub,
-        price = price,
         renewal_price = base_price,
-        "claim processed — delegation created"
+        "claim processed — registrar created delegation (payment verified out-of-band)"
     );
     metrics.events_processed.fetch_add(1, Ordering::Relaxed);
 }
@@ -657,14 +612,12 @@ async fn process_claim(
 
 async fn process_renewal(
     renewal: &RenewalRequest,
-    payments: &[crate::types::Payment],
     event_id: &str,
     pubkey_hex: &str,
     npub: &str,
     created_at: i64,
     cfg: &Config,
     store: &Arc<Store>,
-    zone_verifiers: &HashMap<String, Verifier>,
     metrics: &Metrics,
 ) {
     let zone_name = &renewal.zone;
@@ -760,53 +713,6 @@ async fn process_renewal(
         }
     }
 
-    let required_price = delegation.renewal_price;
-    if required_price > 0 {
-        if let Some(verifier) = zone_verifiers.get(zone_name) {
-            let total_paid: i64 = payments
-                .iter()
-                .filter(|p| p.method == "cashu")
-                .map(|p| p.amount)
-                .sum();
-
-            if total_paid < required_price {
-                warn!(
-                    event_id = %event_id,
-                    required = required_price,
-                    paid = total_paid,
-                    "Payment of {} sats required, got {}", required_price, total_paid
-                );
-                metrics.events_rejected.fetch_add(1, Ordering::Relaxed);
-                return;
-            }
-
-            let mut verified_total: i64 = 0;
-            for p in payments.iter().filter(|p| p.method == "cashu") {
-                let remaining = required_price - verified_total;
-                match verifier.verify_payment(&p.token, remaining).await {
-                    Ok(amount) => verified_total += amount as i64,
-                    Err(e) => {
-                        warn!(event_id = %event_id, error = %e, "cashu verification failed for renewal");
-                    }
-                }
-                if verified_total >= required_price {
-                    break;
-                }
-            }
-
-            if verified_total < required_price {
-                warn!(
-                    event_id = %event_id,
-                    required = required_price,
-                    verified = verified_total,
-                    "Renewal payment verification failed"
-                );
-                metrics.events_rejected.fetch_add(1, Ordering::Relaxed);
-                return;
-            }
-        }
-    }
-
     let new_renew_by = renewal.new_valid_until - grace_period_secs;
 
     if let Err(e) = store.renew_delegation(
@@ -871,7 +777,6 @@ async fn process_dns_update(
     updaters: &Arc<HashMap<String, Arc<dyn DnsConnector>>>,
     store: &Arc<Store>,
     authority: &auth::AuthorityChecker,
-    zone_verifiers: &HashMap<String, Verifier>,
     metrics: &Metrics,
     epp_pool: Option<&nodns_epp::EppPool>,
     client: &nostr_sdk::Client,
@@ -914,55 +819,23 @@ async fn process_dns_update(
     // Update each record in each zone
     let mut all_ok = true;
     for (zone_name, updater) in updaters.iter() {
-        // Per-zone payment verification: skip this zone if payment fails,
-        // but allow other zones to proceed independently.
-        if mode != OperatingMode::Sync {
-            if let Some(v) = zone_verifiers.get(zone_name) {
-                if let Err(e) = payment::check_event_payment(
-                    &parsed.payments,
-                    npub,
-                    &parsed.records,
-                    zone_name,
-                    store,
-                    Some(v),
-                )
-                .await
-                {
-                    warn!(event_id = %event_id, zone = %zone_name, error = %e, "payment verification failed, skipping zone");
-                    metrics.events_rejected.fetch_add(1, Ordering::Relaxed);
-                    all_ok = false;
-                    continue;
-                }
-            }
-        }
-
         if zone_name == "cv" || zone_name.ends_with(".cv") {
             let domain = format!("{npub}.{zone_name}");
             if let Some(pool) = epp_pool {
                 if pool.is_simulated() {
                     info!(
                         event_id = %event_id, domain = %domain, zone = %zone_name,
-                        "SIMULATED: would send EPP domain:create — skipping Cashu claim"
+                        "SIMULATED: would send EPP domain:create — skipping"
                     );
                 } else {
                     match pool.domain_create(&domain, 1, &[], "", "").await {
                         Ok(_) => {
                             info!(event_id = %event_id, domain = %domain, "EPP domain:create succeeded");
-                            if let Some(p) = parsed.payments.first() {
-                                if let Err(e) =
-                                    crate::payment::claim_payment(&p.token, &p.mint_url).await
-                                {
-                                    warn!(
-                                        event_id = %event_id, domain = %domain, error = %e,
-                                        "Cashu claim failed — domain registered but payment not collected (manual reconciliation)"
-                                    );
-                                }
-                            }
                         }
                         Err(e) => {
                             warn!(
                                 event_id = %event_id, domain = %domain, error = %e,
-                                "EPP domain:create failed — NOT claiming Cashu (user keeps tokens), skipping zone"
+                                "EPP domain:create failed, skipping zone"
                             );
                             metrics.events_rejected.fetch_add(1, Ordering::Relaxed);
                             all_ok = false;
@@ -1005,82 +878,14 @@ async fn process_dns_update(
 
             match authority.check_authority(&fqdn, zone_name, pubkey_hex) {
                 Ok(()) => {}
-                Err(auth::AuthError::NoActiveDelegation { domain, .. }) => {
-                    if parsed.payments.is_empty() || !zone_verifiers.contains_key(zone_name) {
-                        warn!(
-                            event_id = %event_id,
-                            fqdn = %fqdn,
-                            "custom name requires payment — no valid Cashu token found"
-                        );
-                        all_ok = false;
-                        continue;
-                    }
-
-                    let now_secs = SystemTime::now()
-                        .duration_since(UNIX_EPOCH)
-                        .unwrap_or_default()
-                        .as_secs() as i64;
-
-                    let lease_days = cfg
-                        .dns
-                        .zones
-                        .iter()
-                        .find(|z| z.zone == *zone_name)
-                        .map(|z| z.lease.max_lease_days)
-                        .unwrap_or(365);
-
-                    let valid_until = now_secs + lease_days as i64 * 86400;
-
-                    if let Err(e) = store.save_delegation(
-                        event_id,
-                        &domain,
-                        zone_name,
-                        npub,
-                        pubkey_hex,
-                        now_secs,
-                        valid_until,
-                        valid_until,
-                        pubkey_hex,
-                    ) {
-                        error!(
-                            event_id = %event_id,
-                            fqdn = %fqdn,
-                            error = %e,
-                            "failed to save delegation for custom name registration"
-                        );
-                        all_ok = false;
-                        continue;
-                    }
-
-                    info!(
+                Err(auth::AuthError::NoActiveDelegation { .. }) => {
+                    warn!(
                         event_id = %event_id,
                         fqdn = %fqdn,
-                        npub = %npub,
-                        lease_days = lease_days,
-                        "custom name registered via Cashu payment (first-come-first-served)"
+                        "custom name requires delegation from registrar — payment is now out-of-band (NIP-17 DM, see issue #106)"
                     );
-
-                    let lease_tags = [
-                        vec!["d".to_string(), fqdn.clone()],
-                        vec!["lease_expires".to_string(), valid_until.to_string()],
-                        vec!["lease_npub".to_string(), npub.to_string()],
-                        vec!["lease_zone".to_string(), zone_name.to_string()],
-                    ];
-                    let builder = nostr_sdk::EventBuilder::new(nostr_sdk::Kind::Custom(31111), "")
-                        .tags(
-                            lease_tags
-                                .iter()
-                                .filter_map(|t| nostr_sdk::Tag::parse(t.clone()).ok())
-                                .collect::<Vec<_>>(),
-                        );
-                    match client.send_event_builder(builder).await {
-                        Ok(id) => {
-                            info!(lease_event_id = %id.to_hex(), fqdn = %fqdn, "lease event published to relays")
-                        }
-                        Err(e) => {
-                            warn!(error = %e, fqdn = %fqdn, "failed to publish lease event (non-fatal — delegation saved in SQLite)")
-                        }
-                    }
+                    all_ok = false;
+                    continue;
                 }
                 Err(e) => {
                     warn!(event_id = %event_id, fqdn = %fqdn, error = %e, "authority check failed");

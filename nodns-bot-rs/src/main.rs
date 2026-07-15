@@ -874,7 +874,6 @@ async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
     let ev_store = store.clone();
     let ev_auth = authority;
     let ev_updaters = updaters;
-    let ev_zone_verifiers = zone_verifiers;
     let ev_cfg = cfg;
     let ev_metrics = app_state.clone();
     let ev_epp_pool = epp_pool.clone();
@@ -888,7 +887,6 @@ async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
                     &ev_updaters,
                     &ev_store,
                     &ev_auth,
-                    &ev_zone_verifiers,
                     &ev_metrics.metrics,
                     ev_epp_pool.as_deref(),
                     &ev_client,
