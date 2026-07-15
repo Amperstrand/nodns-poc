@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { createApiClient, ApiError, NetworkError, TimeoutError } from './api-client.js';
+import { createApiClient, ApiError, NetworkError } from './api-client.js';
 
 const mockResponse = (status: number, body: unknown) => ({
   ok: status >= 200 && status < 300,
