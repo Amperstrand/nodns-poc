@@ -11,7 +11,6 @@ use crate::auth;
 use crate::config::{Config, OperatingMode};
 use crate::dns_cache::DnsEventCache;
 use crate::parser;
-use crate::payment;
 use crate::pob;
 use crate::pow;
 use crate::store::Store;
@@ -480,6 +479,7 @@ fn is_npub_name(name: &str) -> bool {
 }
 
 /// Length-based registration price for $string names.
+#[allow(dead_code)]
 fn registration_price(name: &str, base_price: u64) -> u64 {
     match name.len() {
         1..=3 => base_price * 100,
@@ -779,7 +779,7 @@ async fn process_dns_update(
     authority: &auth::AuthorityChecker,
     metrics: &Metrics,
     epp_pool: Option<&nodns_epp::EppPool>,
-    client: &nostr_sdk::Client,
+    _client: &nostr_sdk::Client,
     mode: OperatingMode,
 ) {
     if parsed.records.is_empty() {

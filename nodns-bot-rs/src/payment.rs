@@ -3,6 +3,12 @@
 //! Ported 1:1 from `nodns-bot/internal/payment/payment.go` and `cashu.go`.
 //!
 //! Anti-spam payment model: N sats per NEW DNS record, FREE to update existing
+
+// Functions preserved for Phase 3 (NIP-17 payment listener, issue #106).
+// After the two-component split, inline payment verification was removed
+// from the event pipeline, but the Verifier and check_event_payment
+// will be reused by the NIP-17 payment processor.
+#![allow(dead_code)]
 //! records (configurable). Cashu ecash tokens are verified against the mint's
 //! checkstate endpoint to ensure proofs are unspent.
 
