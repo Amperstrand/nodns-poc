@@ -135,6 +135,7 @@ pub enum PaymentError {
 /// - `mint_url`      → the Cashu mint URL payments must be from
 /// - `required_sats` → sats required per new DNS record (0 = disabled)
 /// - `update_free`   → if true, updates to existing records are free
+#[derive(Clone)]
 pub struct Verifier {
     mint_allowlist: Vec<String>,
     mint_denylist: Vec<String>,

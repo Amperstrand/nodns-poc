@@ -961,6 +961,37 @@ impl Store {
         Ok(count == 0)
     }
 
+    pub fn mark_dm_processed(
+        &self,
+        dm_event_id: &str,
+        sender_npub: &str,
+        name: &str,
+        zone: &str,
+        amount_paid: i64,
+        result: &str,
+    ) -> Result<(), StoreError> {
+        let conn = self.conn();
+        conn.execute(
+            "INSERT OR IGNORE INTO processed_dms (dm_event_id, sender_npub, name, zone, amount_paid, result)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![dm_event_id, sender_npub, name, zone, amount_paid, result],
+        )
+        .map_err(StoreError::ListAllRecords)?;
+        Ok(())
+    }
+
+    pub fn is_dm_processed(&self, dm_event_id: &str) -> Result<bool, StoreError> {
+        let conn = self.conn();
+        let count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM processed_dms WHERE dm_event_id = ?1",
+                params![dm_event_id],
+                |row| row.get(0),
+            )
+            .map_err(StoreError::ListAllRecords)?;
+        Ok(count > 0)
+    }
+
     /// Get all delegations that have passed their `valid_until` but are not yet expired.
     pub fn get_delegations_past_valid_until(&self) -> Result<Vec<DelegationRecord>, StoreError> {
         let now = SystemTime::now()
@@ -1584,6 +1615,16 @@ const SCHEMA: &str = r"
     );
 
     CREATE INDEX IF NOT EXISTS idx_resolver_expires ON resolver_subscriptions(expires_at);
+
+    CREATE TABLE IF NOT EXISTS processed_dms (
+        dm_event_id TEXT PRIMARY KEY,
+        sender_npub TEXT NOT NULL,
+        name TEXT NOT NULL,
+        zone TEXT NOT NULL,
+        amount_paid INTEGER NOT NULL,
+        result TEXT NOT NULL,
+        processed_at INTEGER NOT NULL DEFAULT (unixepoch())
+    );
 ";
 
 // ---------------------------------------------------------------------------

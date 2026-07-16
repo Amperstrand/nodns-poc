@@ -6,7 +6,7 @@ description = "NoDNS bot — resolves DNS records from Nostr events"
 
 [dependencies]
 # Nostr
-nostr-sdk = "0.44"
+nostr-sdk = { version = "0.44", features = ["nip44", "nip59"] }
 
 # Cashu (CDK) — no stable release available as of 2026-06; pin to RC and track for stable
 cdk = "0.17.0-rc.3"

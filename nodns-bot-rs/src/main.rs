@@ -12,6 +12,7 @@ mod handlers;
 mod nip05;
 mod parser;
 mod payment;
+mod payment_processor;
 mod pob;
 mod pow;
 #[cfg(test)]
@@ -849,6 +850,26 @@ async fn async_main() -> Result<(), Box<dyn std::error::Error>> {
     // ── Nostr subscriber ──
     let subscriber = Subscriber::with_client(nostr_client, &cfg.nostr, store.clone());
     let mut event_rx = subscriber.subscribe()?;
+
+    // ── NIP-17 payment processor ──
+    let pp_client = if cfg.registrar.nsec_hex.is_empty() {
+        nostr_sdk::Client::default()
+    } else {
+        let keys = nostr_sdk::Keys::parse(&cfg.registrar.nsec_hex)
+            .expect("registrar.nsec_hex must be a valid nostr secret key");
+        nostr_sdk::Client::new(keys)
+    };
+    for relay_url in &cfg.nostr.relays {
+        if let Err(e) = pp_client.add_relay(relay_url).await {
+            warn!(relay = %relay_url, error = %e, "payment processor: failed to add relay");
+        }
+    }
+    pp_client.connect().await;
+    let pp_processor =
+        payment_processor::PaymentProcessor::new(pp_client, Arc::new(cfg.clone()), store.clone());
+    tokio::spawn(async move {
+        pp_processor.run().await;
+    });
 
     // ── Lease expiry task ──
     {
