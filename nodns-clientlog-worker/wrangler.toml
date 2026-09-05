@@ -3,8 +3,8 @@ main = "src/index.ts"
 compatibility_date = "2025-06-01"
 
 [observability]
-enabled = true
-head_sampling_rate = 1.0
+enabled = false
+head_sampling_rate = 0
 
 # Custom domain: clientlog.nodns.shop
 # Configured via Cloudflare dashboard or:
