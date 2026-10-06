@@ -1,3 +1,11 @@
+# gitleaks config — allowlists for lockfile FP noise, EXTENDING the
+# default ruleset. A config without [extend] useDefault = true silently
+# REPLACES the built-in rules (this file had that bug: every scan using
+# it ran with zero detection rules). Found in the 2026-10-07 org sweep;
+# same fix as physical-router-test-automation#22.
+[extend]
+useDefault = true
+
 [allowlist]
 paths = [
     '''nodns-frontend/package-lock.json''',
