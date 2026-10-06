@@ -35,9 +35,14 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "16.2.7",
-    "shadcn": "4.10.0",
+    "eslint-config-next": "^16.3.8",
+    "shadcn": "1.0.0",
     "tailwindcss": "^4",
     "typescript": "^5"
+  },
+  "overrides": {
+    "braces": ">=3.0.3",
+    "micromatch": ">=4.0.8",
+    "fast-glob": ">=3.3.3"
   }
 }
