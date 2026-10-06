@@ -75,7 +75,7 @@ export async function fetchDnsTxt(
 function parsePricingTag(
   tags: string[][],
 ): ZonePricing | undefined {
-  const tag = tags.find((t) => t[0] === 'pricing');
+  const tag = tags.find((t: string[]) => t[0] === 'pricing');
   if (!tag) return undefined;
   let create = 0;
   let update = 0;
@@ -98,7 +98,7 @@ function parsePricingTag(
 function parseStatusTag(
   tags: string[][],
 ): { status: ZoneStatusLevel; reason?: string } {
-  const tag = tags.find((t) => t[0] === 'status' && t[1]);
+  const tag = tags.find((t: string[]) => t[0] === 'status' && t[1]);
   if (!tag || !tag[1]) return { status: 'unknown' };
   const value = tag[1].toLowerCase();
   if (value === 'testing' || value === 'preview' || value === 'production') {
@@ -109,16 +109,16 @@ function parseStatusTag(
 
 function eventToPartialZone(event: NostrEvent): DiscoveredZone | null {
   const tags = event.tags;
-  const zoneTag = tags.find((t) => t[0] === 'zone' && t[1]);
+  const zoneTag = tags.find((t: string[]) => t[0] === 'zone' && t[1]);
   if (!zoneTag) return null;
   const zone = zoneTag[1].toLowerCase();
   const pricing = parsePricingTag(tags);
   const { status, reason } = parseStatusTag(tags);
-  const testnet = tags.some((t) => t[0] === 'testnet');
-  const dnskeyHashTag = tags.find((t) => t[0] === 'dnskey_hash' && t[1]);
-  const dnskeyAlgTag = tags.find((t) => t[0] === 'dnskey_alg' && t[1]);
-  const mintTag = tags.find((t) => t[0] === 'mint' && t[1]);
-  const webTag = tags.find((t) => t[0] === 'web' && t[1]);
+  const testnet = tags.some((t: string[]) => t[0] === 'testnet');
+  const dnskeyHashTag = tags.find((t: string[]) => t[0] === 'dnskey_hash' && t[1]);
+  const dnskeyAlgTag = tags.find((t: string[]) => t[0] === 'dnskey_alg' && t[1]);
+  const mintTag = tags.find((t: string[]) => t[0] === 'mint' && t[1]);
+  const webTag = tags.find((t: string[]) => t[0] === 'web' && t[1]);
   return {
     zone,
     pubkey: event.pubkey,
@@ -168,9 +168,9 @@ export async function discoverZones(
 
   const byZone = new Map<string, { event: NostrEvent; ts: number }>();
   for (const event of events) {
-    const kTags = event.tags.filter((t) => t[0] === 'k').map((t) => t[1]);
+    const kTags = event.tags.filter((t: string[]) => t[0] === 'k').map((t: string[]) => t[1]);
     if (kTags.length > 0 && !kTags.includes('11111')) continue;
-    const zoneTag = event.tags.find((t) => t[0] === 'zone' && t[1]);
+    const zoneTag = event.tags.find((t: string[]) => t[0] === 'zone' && t[1]);
     if (!zoneTag) continue;
     const zone = zoneTag[1].toLowerCase();
     const existing = byZone.get(zone);
