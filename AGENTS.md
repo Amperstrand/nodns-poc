@@ -776,3 +776,24 @@ These are decided. Do not re-litigate without explicit instruction.
 5. After any deploy that touches logging, check Workers & Pages → Observability and the billing usage page; budget alerts are configured on the account.
 
 Workers deployed from this repo: nodns-clientlog
+
+## Local CI gate
+
+GitHub Actions is org-blocked; the per-PR gate is
+[`scripts/pr-verify.sh`](scripts/pr-verify.sh) (fleet pattern:
+Amperstrand/.github `workflow-templates/local-ci-gate.md`). From a review:
+
+```sh
+scripts/pr-verify.sh <PR-number>    # worktree checkout, legs, PR-comment stamp
+scripts/pr-verify.sh origin/main    # ref mode, table only
+```
+
+Legs: hygiene / fmt / clippy / tests (`cargo fmt --check`, `cargo clippy
+--workspace --all-targets -- -D warnings`, `cargo test --workspace`). Not
+covered: the Next.js frontend build, the TXT-registration script
+(`ci/register-txt.mjs` — talks to live DNS), deploys.
+
+## Bench touchpoints
+
+None. Host-built Rust workspace; the nameserver/relay side is deployed
+infrastructure, not lab bench.
