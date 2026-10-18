@@ -954,7 +954,7 @@ mod tests {
         ];
         assert!(!is_test_event(&tags_no_l));
 
-        let tags_no_L = vec![
+        let tags_no_l_test_tag = vec![
             vec!["l".into(), "test".into(), "net.nodns".into()],
             vec![
                 "record".into(),
@@ -964,7 +964,7 @@ mod tests {
                 "1.2.3.4".into(),
             ],
         ];
-        assert!(!is_test_event(&tags_no_L));
+        assert!(!is_test_event(&tags_no_l_test_tag));
     }
 
     #[test]
