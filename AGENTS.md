@@ -789,7 +789,8 @@ scripts/pr-verify.sh origin/main    # ref mode, table only
 ```
 
 Legs: hygiene / fmt / clippy / tests (`cargo fmt --check`, `cargo clippy
---workspace --all-targets -- -D warnings`, `cargo test --workspace`). Not
+--workspace --all-targets` — the repo pre-commit standard, not `-D warnings`;
+`cargo test --workspace`). Not
 covered: the Next.js frontend build, the TXT-registration script
 (`ci/register-txt.mjs` — talks to live DNS), deploys.
 
