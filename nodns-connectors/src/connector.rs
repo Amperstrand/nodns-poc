@@ -1,7 +1,5 @@
 use anyhow::Result;
 
-// async_trait adds #[must_use] to its Boxed-future method shims, which
-// double-must-uses against the Result outputs (async-trait#284 class).
 #[allow(clippy::double_must_use)]
 #[async_trait::async_trait]
 pub trait DnsConnector: Send + Sync {
