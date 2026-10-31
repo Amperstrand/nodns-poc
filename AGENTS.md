@@ -251,7 +251,7 @@ The schema is defined as a single `SCHEMA` constant in `store.rs` and applied vi
 
 ### Stack
 
-Next.js 16.2.7 (App Router, static export `output: 'export'`), React 19, Tailwind CSS v4, TypeScript strict. Hosted as a static site on GitHub Pages — no server runtime.
+Next.js 16.3.6 (App Router, static export `output: 'export'`), React 19, Tailwind CSS v4, TypeScript strict. Hosted as a static site on GitHub Pages — no server runtime.
 
 ### Design system
 
