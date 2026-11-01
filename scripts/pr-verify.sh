@@ -78,8 +78,17 @@ if [[ "$TARGET" =~ ^[0-9]+$ ]]; then
     echo "== head $HEAD_REF @ ${HEAD_OID:0:10} (base ${BASE_SHA:0:10})"
 else
     HEAD_REF="$TARGET"
+    case "$TARGET" in
+        origin/*)
+            # Refresh the tracking ref from the remote BEFORE resolving —
+            # resolving a stale local origin/main pins an outdated OID (#157).
+            git -C "$ROOT" fetch --quiet origin \
+                "+refs/heads/${TARGET#origin/}:refs/remotes/origin/${TARGET#origin/}" \
+                2>/dev/null || true
+            ;;
+    esac
     if HEAD_OID="$(git -C "$ROOT" rev-parse --verify --quiet "$TARGET^{commit}")"; then
-        echo "== ref $TARGET @ ${HEAD_OID:0:10} (already local)"
+        echo "== ref $TARGET @ ${HEAD_OID:0:10} (resolved after remote refresh)"
     else
         git -C "$ROOT" fetch --quiet origin "$TARGET" || die "cannot fetch '$TARGET' from origin"
         HEAD_OID="$(git -C "$ROOT" rev-parse --verify FETCH_HEAD^{commit})" || die "FETCH_HEAD did not resolve to a commit"
@@ -102,13 +111,31 @@ cleanup() {
 }
 trap cleanup EXIT
 
-git -C "$ROOT" fetch --quiet origin "$HEAD_REF" 2>/dev/null || true
+if [ -n "$PR_NUMBER" ]; then
+    # Fork PRs: headRefName lives in the contributor's repo — the base origin
+    # doesn't carry the branch. Fetch the pinned OID (GitHub serves exact SHAs
+    # of PR heads), falling back to GitHub's refs/pull/N/head (#157).
+    git -C "$ROOT" fetch --quiet origin "$HEAD_OID" 2>/dev/null \
+        || git -C "$ROOT" fetch --quiet origin "refs/pull/${PR_NUMBER}/head" 2>/dev/null \
+        || true
+else
+    git -C "$ROOT" fetch --quiet origin "$HEAD_REF" 2>/dev/null || true
+fi
 git -C "$ROOT" rev-parse --verify --quiet "${HEAD_OID}^{commit}" >/dev/null \
     || die "head commit $HEAD_OID is not local after fetch — rerun"
 git -C "$ROOT" worktree add --quiet --detach "$WT" "$HEAD_OID" || die "worktree add failed for $HEAD_OID"
 echo "== worktree: $WT"
 
-SCRIPT_ID="$(sha256sum "$WT/scripts/pr-verify.sh" 2>/dev/null | cut -c1-12)"
+# Hash the script that actually EXECUTES (the caller's copy), not the
+# worktree's — when the PR changes this script the two differ (#157).
+INVOKED="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
+hash_file() {
+    if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1"
+    elif command -v shasum >/dev/null 2>&1; then shasum -a 256 "$1"   # macOS
+    else return 1; fi
+}
+SCRIPT_ID="$(hash_file "$INVOKED" 2>/dev/null | cut -c1-12)"
+[ -n "$SCRIPT_ID" ] || SCRIPT_ID="no-hasher"  # explicit, never a silent empty stamp
 HOST="$(hostname -s 2>/dev/null || echo unknown)"
 
 leg_names=() leg_status=() leg_detail=() leg_secs=()
