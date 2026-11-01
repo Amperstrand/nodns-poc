@@ -965,6 +965,66 @@ async fn process_dns_update(
     }
 }
 
+// ---------------------------------------------------------------------------
+// process_dns_deletes
+// ---------------------------------------------------------------------------
+
+async fn process_dns_deletes(
+    parsed: &ParsedEvent,
+    event_id: &str,
+    pubkey_hex: &str,
+    npub: &str,
+    cfg: &Config,
+    updaters: &Arc<HashMap<String, Arc<dyn DnsConnector>>>,
+    store: &Arc<Store>,
+    authority: &auth::AuthorityChecker,
+    metrics: &Metrics,
+) {
+    for (zone_name, updater) in updaters.iter() {
+        let store_proofs = cfg
+            .dns
+            .zones
+            .iter()
+            .find(|z| z.zone == *zone_name)
+            .map(|z| z.store_proofs)
+            .unwrap_or(true);
+
+        for del in &parsed.deletes {
+            let fqdn = resolve_fqdn(npub, &del.name, zone_name, store);
+
+            if let Err(e) = authority.check_authority(&fqdn, zone_name, pubkey_hex) {
+                warn!(event_id = %event_id, fqdn = %fqdn, error = %e, "delete authority check failed");
+                continue;
+            }
+
+            let rt = record_type_to_u16(&del.record_type);
+
+            if let Err(e) = updater.delete_record(&fqdn, rt).await {
+                error!(event_id = %event_id, fqdn = %fqdn, r#type = %del.record_type, error = %e, "DDNS delete failed");
+                metrics.ddns_failures.fetch_add(1, Ordering::Relaxed);
+                continue;
+            }
+
+            info!(event_id = %event_id, fqdn = %fqdn, r#type = %del.record_type, "DDNS delete applied");
+            metrics.ddns_successes.fetch_add(1, Ordering::Relaxed);
+
+            if store_proofs {
+                let proof_fqdn = format!("_nodns.{fqdn}");
+                if let Err(e) = updater.delete_record(&proof_fqdn, 16).await {
+                    warn!(fqdn = %proof_fqdn, error = %e, "proof TXT delete failed (non-fatal)");
+                }
+            }
+
+            if let Err(e) =
+                store.delete_records_by_key(npub, &del.record_type, &del.name, zone_name)
+            {
+                error!(event_id = %event_id, error = %e, "failed to mark records deleted");
+            }
+        }
+    }
+    metrics.events_processed.fetch_add(1, Ordering::Relaxed);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1040,64 +1100,4 @@ mod tests {
         assert_eq!(parse_operator_expiry(&Some("2027-13-01".to_string())), None);
         assert_eq!(parse_operator_expiry(&Some("2027-06-32".to_string())), None);
     }
-}
-
-// ---------------------------------------------------------------------------
-// process_dns_deletes
-// ---------------------------------------------------------------------------
-
-async fn process_dns_deletes(
-    parsed: &ParsedEvent,
-    event_id: &str,
-    pubkey_hex: &str,
-    npub: &str,
-    cfg: &Config,
-    updaters: &Arc<HashMap<String, Arc<dyn DnsConnector>>>,
-    store: &Arc<Store>,
-    authority: &auth::AuthorityChecker,
-    metrics: &Metrics,
-) {
-    for (zone_name, updater) in updaters.iter() {
-        let store_proofs = cfg
-            .dns
-            .zones
-            .iter()
-            .find(|z| z.zone == *zone_name)
-            .map(|z| z.store_proofs)
-            .unwrap_or(true);
-
-        for del in &parsed.deletes {
-            let fqdn = resolve_fqdn(npub, &del.name, zone_name, store);
-
-            if let Err(e) = authority.check_authority(&fqdn, zone_name, pubkey_hex) {
-                warn!(event_id = %event_id, fqdn = %fqdn, error = %e, "delete authority check failed");
-                continue;
-            }
-
-            let rt = record_type_to_u16(&del.record_type);
-
-            if let Err(e) = updater.delete_record(&fqdn, rt).await {
-                error!(event_id = %event_id, fqdn = %fqdn, r#type = %del.record_type, error = %e, "DDNS delete failed");
-                metrics.ddns_failures.fetch_add(1, Ordering::Relaxed);
-                continue;
-            }
-
-            info!(event_id = %event_id, fqdn = %fqdn, r#type = %del.record_type, "DDNS delete applied");
-            metrics.ddns_successes.fetch_add(1, Ordering::Relaxed);
-
-            if store_proofs {
-                let proof_fqdn = format!("_nodns.{fqdn}");
-                if let Err(e) = updater.delete_record(&proof_fqdn, 16).await {
-                    warn!(fqdn = %proof_fqdn, error = %e, "proof TXT delete failed (non-fatal)");
-                }
-            }
-
-            if let Err(e) =
-                store.delete_records_by_key(npub, &del.record_type, &del.name, zone_name)
-            {
-                error!(event_id = %event_id, error = %e, "failed to mark records deleted");
-            }
-        }
-    }
-    metrics.events_processed.fetch_add(1, Ordering::Relaxed);
 }

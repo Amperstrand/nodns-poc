@@ -1,5 +1,6 @@
 use anyhow::Result;
 
+#[allow(clippy::double_must_use)]
 #[async_trait::async_trait]
 pub trait DnsConnector: Send + Sync {
     async fn update_record(
