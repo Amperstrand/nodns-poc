@@ -50,19 +50,32 @@ async function mintCashu(amount) {
 }
 
 async function publishEvent(event) {
-  const relays = ["wss://relay.damus.io", "wss://nos.lol"];
-  for (const url of relays) {
-    try {
-      const relay = await Relay.connect(url);
-      await relay.publish(event);
-      relay.close();
-      log(`Published to ${url}`);
-      return;
-    } catch (e) {
-      log(`Failed ${url}: ${e.message}`);
+  // Live public relays flake freely (2026-11-14 main-red: damus closed
+  // the socket, nos.lol publish timed out) — round-robin the pool with
+  // per-relay retries before giving up.
+  const relays = [
+    "wss://relay.damus.io",
+    "wss://nos.lol",
+    "wss://relay.nostr.band",
+    "wss://nostr.wine",
+  ];
+  const lastErrors = [];
+  for (let round = 1; round <= 3; round++) {
+    for (const url of relays) {
+      try {
+        const relay = await Relay.connect(url);
+        await relay.publish(event);
+        relay.close();
+        log(`Published to ${url} (round ${round})`);
+        return;
+      } catch (e) {
+        lastErrors.push(`${url}: ${e.message}`);
+        log(`Failed ${url} (round ${round}): ${e.message}`);
+      }
     }
+    await new Promise((r) => setTimeout(r, 3000 * round));
   }
-  throw new Error("Failed to publish to any relay");
+  throw new Error(`Failed to publish to any relay: ${lastErrors.join("; ")}`);
 }
 
 async function main() {
