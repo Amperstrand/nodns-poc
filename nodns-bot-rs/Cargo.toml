@@ -9,26 +9,26 @@ description = "NoDNS bot — resolves DNS records from Nostr events"
 nostr-sdk = { version = "0.44", features = ["nip44", "nip59"] }
 
 # Cashu (CDK) — no stable release available as of 2026-06; pin to RC and track for stable
-cdk = "0.17.0-rc.3"
-cashu = "0.17.0-rc.3"
+cdk = "0.18.1"
+cashu = "0.18.1"
 
 # DNS (DDNS + TSIG)
 hickory-client = "0.25"
-hickory-proto = "0.25"
+hickory-proto = "0.26"
 
 # IP network matching (CIDR validation)
 ipnet = "2"
 
 # Base64 decoding for TSIG secrets (Knot/BIND store HMAC keys base64-encoded
 # per RFC 4648; hickory's TSigner::new expects raw bytes, so we must decode).
-base64 = "0.22"
+base64 = "0.23"
 
 # SQLite
-rusqlite = { version = "0.34", features = ["bundled"] }
+rusqlite = { version = "0.41", features = ["bundled"] }
 
 # Config
 serde = { version = "1", features = ["derive"] }
-toml = "0.8"
+toml = "1.2"
 
 # Async runtime
 tokio = { version = "1", features = ["full"] }
@@ -49,11 +49,11 @@ clap = { version = "4", features = ["derive"] }
 thiserror = "2"
 
 # Key derivation
-hmac = "0.12"
-hkdf = "0.12"
-sha2 = "0.10"
-p256 = { version = "0.13", features = ["pkcs8", "ecdsa"] }
-pkcs8 = { version = "0.10", features = ["pem"] }
+hmac = "0.13"
+hkdf = "0.13"
+sha2 = "0.11"
+p256 = { version = "0.14", features = ["pkcs8", "ecdsa"] }
+pkcs8 = { version = "0.11", features = ["pem"] }
 
 # ACME (Let's Encrypt DNS-01)
 instant-acme = { version = "0.8", default-features = false, features = ["hyper-rustls", "ring"] }
@@ -62,7 +62,7 @@ instant-acme = { version = "0.8", default-features = false, features = ["hyper-r
 nodns-epp = { path = "../nodns-epp" }
 
 # Encryption at rest for ACME private keys
-aes-gcm = "0.10"
+aes-gcm = "0.11"
 
 # UUID generation for ACME order IDs
 uuid = { version = "1", features = ["v4"] }
@@ -80,7 +80,7 @@ rustls = { version = "0.23", default-features = false, features = ["ring", "logg
 tower_governor = { version = "0.8", features = ["axum"] }
 
 # Security response headers
-tower-http = { version = "0.6", features = ["set-header", "cors"] }
+tower-http = { version = "0.7", features = ["set-header", "cors"] }
 humantime = "2"
 hex = "0.4"
 url = "2"
@@ -102,4 +102,4 @@ anyhow = "1"
 ciborium = "0.2"
 
 # Bech32 encoding/decoding for BIP-353 validation (BOLT-12 offers, Silent Payments)
-bech32 = "0.9"
+bech32 = "0.11"
