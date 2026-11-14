@@ -5,7 +5,7 @@ edition = "2021"
 description = "NoDNS EPP client — .cv registry integration (RFC 5730-5734)"
 
 [dependencies]
-instant-epp = "0.4"
+instant-epp = "0.5"
 serde = { version = "1", features = ["derive"] }
 thiserror = "2"
 tokio = { version = "1", features = ["sync", "macros", "rt"] }
