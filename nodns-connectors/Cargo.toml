@@ -6,8 +6,8 @@ description = "NoDNS DNS connector trait and implementations (Knot DDNS, Cloudfl
 
 [dependencies]
 hickory-client = { version = "0.25", features = ["dnssec-ring"] }
-hickory-proto = { version = "0.25", features = ["dnssec-ring"] }
-base64 = "0.22"
+hickory-proto = { version = "0.26", features = ["dnssec-ring"] }
+base64 = "0.23"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 tokio = { version = "1", features = ["full"] }
 anyhow = "1"
