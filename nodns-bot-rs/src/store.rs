@@ -1725,7 +1725,9 @@ mod tests {
     #[test]
     fn encrypt_decrypt_roundtrip() {
         let key = derive_key("test-secret");
-        let plaintext = "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQC=\n-----END PRIVATE KEY-----";
+        // Synthetic PEM-shaped TEST FIXTURE (encrypt/decrypt roundtrip), not a
+        // real key — PR #149 review debt r4196785928.
+        let plaintext = "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQC=\n-----END PRIVATE KEY-----"; // gitleaks:allow
         let encrypted = encrypt_aes_gcm(&key, plaintext).unwrap();
         let decrypted = decrypt_aes_gcm(&key, &encrypted).unwrap();
         assert_eq!(decrypted, plaintext);
