@@ -6,8 +6,33 @@
 [extend]
 useDefault = true
 
-[allowlist]
+[[allowlists]]
+description = "Lockfile FP noise (dependency-hashed blobs trip entropy heuristics)"
 paths = [
     '''nodns-frontend/package-lock.json''',
     '''nodns-bot-rs/Cargo.lock''',
+]
+
+[[allowlists]]
+description = "Docs-example placeholders (fake nsec passwords, example curl creds) — API-shape documentation, not credentials. PR #149 review debt (r4196785928 class)"
+paths = [
+    '''docs/examples/ddclient\.conf''',
+    '''docs/34-backwards-compatible-apis\.md''',
+    '''docs/39-protocol-v2-design\.md''',
+    '''docs/48-nut24-reference\.md''',
+    '''docs/examples/integration-test\.sh''',
+]
+
+[[allowlists]]
+description = "Public test vectors / zone material: SLIP-10 standard test seeds+keys and the registrar's own published DNSKEY hash"
+paths = [
+    '''nodns-bot-rs/src/dnssec_derivation\.rs''',
+    '''nodns-registrar/scripts/publish-zone-announcement\.sh''',
+]
+
+[[allowlists]]
+description = "Synthetic PEM-shaped TEST FIXTURE in store.rs encrypt/decrypt roundtrip tests (historical commits 85a006fe7d896925a28fc59e6c230ad55a668fd8 / 702e787a0a765c25f9e6ca1f6fdfe3234ba9058e; the current tree also carries a same-line gitleaks:allow). Commit+path scoped: a future REAL private key committed to store.rs is a new commit and reports normally. PR #149 review debt r4196785928"
+commits = ["702e787a0a765c25f9e6ca1f6fdfe3234ba9058e", "85a006fe7d896925a28fc59e6c230ad55a668fd8"]
+paths = [
+    '''nodns-bot-rs/src/store\.rs''',
 ]
