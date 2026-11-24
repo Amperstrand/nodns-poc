@@ -14,7 +14,7 @@ cashu = "0.17.0-rc.3"
 
 # DNS (DDNS + TSIG)
 hickory-client = "0.25"
-hickory-proto = "0.25"
+hickory-proto = "0.26"
 
 # IP network matching (CIDR validation)
 ipnet = "2"
