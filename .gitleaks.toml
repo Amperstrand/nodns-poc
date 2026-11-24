@@ -18,6 +18,7 @@ description = "Docs-example placeholders (fake nsec passwords, example curl cred
 paths = [
     '''docs/examples/ddclient\.conf''',
     '''docs/34-backwards-compatible-apis\.md''',
+    '''docs/47-resolver-service\.md''',
     '''docs/39-protocol-v2-design\.md''',
     '''docs/48-nut24-reference\.md''',
     '''docs/examples/integration-test\.sh''',
